@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { IncidentGeneratorPage } from './pages/IncidentGeneratorPage'
+import { CrewGeneratorPage } from './pages/CrewGeneratorPage'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/equipment" element={<PlaceholderPage />} />
           <Route path="/documents" element={<PlaceholderPage />} />
           <Route path="/incident-generator" element={<IncidentGeneratorPage />} />
+          <Route path="/crew-generator" element={<CrewGeneratorPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

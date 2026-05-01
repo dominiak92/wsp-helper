@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   LogOut,
   ClipboardList,
+  UserCog,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Badge } from '../ui/Badge'
@@ -38,6 +39,7 @@ const navGroups = [
     label: 'NARZĘDZIA',
     items: [
       { label: 'Generator opisów', icon: ClipboardList, path: '/incident-generator' },
+      { label: 'Generator obsady', icon: UserCog, path: '/crew-generator' },
     ],
   },
 ]
@@ -66,7 +68,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
         </div>
         {!collapsed && (
           <div>
-            <p className="text-xs font-bold text-white leading-tight">Command Center</p>
+            <p className="text-xs font-bold text-white leading-tight">II Zmiana</p>
             <p className="text-[10px] text-slate-500 leading-tight">Wojskowa Straż Pożarna</p>
           </div>
         )}

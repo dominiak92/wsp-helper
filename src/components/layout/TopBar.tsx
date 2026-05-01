@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PanelLeftClose, PanelLeftOpen, Bell, Radio } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Radio } from 'lucide-react'
 import { useClock } from '../../hooks/useClock'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -57,23 +57,6 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
           {timeStr}
         </span>
         <span className="text-[10px] text-slate-500 capitalize">{dateStr}</span>
-      </div>
-
-      {/* Notifications */}
-      <Button variant="ghost" size="icon" className="relative text-slate-400">
-        <Bell className="w-4 h-4" />
-        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-alert-red rounded-full" />
-      </Button>
-
-      {/* User avatar */}
-      <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-        <div className="w-8 h-8 rounded-full bg-brand-700 flex items-center justify-center text-xs font-bold text-white">
-          SD
-        </div>
-        <div className="hidden md:block text-right leading-tight">
-          <p className="text-xs font-semibold text-slate-200">st. asp. Dominiak</p>
-          <p className="text-[10px] text-slate-500">nr. 4412</p>
-        </div>
       </div>
     </header>
   )

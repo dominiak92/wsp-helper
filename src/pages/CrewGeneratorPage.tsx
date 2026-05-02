@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, Zap, Pencil, X, Users } from 'lucide-react'
+import { RefreshCw, Zap, Pencil, X, Users, Plus } from 'lucide-react'
 import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
@@ -42,8 +42,13 @@ function AbsenceSelect({ value, onChange }: {
 
 // ── Personnel row ─────────────────────────────────────────────────────────────
 
-function PersonnelRow({ person, onUpdate }: { person: Person; onUpdate: (p: Person) => void }) {
-  const [editingRoles, setEditingRoles] = useState(false)
+function PersonnelRow({ person, onUpdate, onDelete }: {
+  person: Person
+  onUpdate: (p: Person) => void
+  onDelete: (id: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(person.name)
   const absent = !!person.absence
 
   function toggleRole(role: RoleType) {
@@ -53,45 +58,143 @@ function PersonnelRow({ person, onUpdate }: { person: Person; onUpdate: (p: Pers
     onUpdate({ ...person, roles })
   }
 
+  function handleSave() {
+    const trimmed = editName.trim()
+    if (!trimmed) return
+    onUpdate({ ...person, name: trimmed })
+    setEditing(false)
+  }
+
+  function handleCancel() {
+    setEditName(person.name)
+    setEditing(false)
+  }
+
   return (
-    <div className={cn('p-2 rounded-lg border border-slate-800 bg-surface-900', absent && 'opacity-50')}>
+    <div className={cn('p-2 rounded-lg border border-slate-800 bg-surface-900', absent && !editing && 'opacity-50')}>
       <div className="flex items-center gap-1.5">
-        <span className={cn('text-sm font-medium text-white flex-1 truncate', absent && 'line-through')}>
-          {person.name}
-        </span>
+        {editing ? (
+          <input
+            className="text-sm font-medium bg-surface-800 border border-slate-700 rounded px-1.5 py-0.5 text-white flex-1 min-w-0 outline-none focus:border-brand-500"
+            value={editName}
+            onChange={e => setEditName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel() }}
+            autoFocus
+          />
+        ) : (
+          <span className={cn('text-sm font-medium text-white flex-1 truncate', absent && 'line-through')}>
+            {person.name}
+          </span>
+        )}
         <button
-          onClick={() => setEditingRoles(v => !v)}
+          onClick={() => editing ? handleCancel() : setEditing(true)}
           className="text-slate-600 hover:text-slate-300 transition-colors shrink-0"
-          title="Edytuj role"
+          title={editing ? 'Anuluj' : 'Edytuj'}
         >
-          {editingRoles ? <X className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
+          {editing ? <X className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
         </button>
         <AbsenceSelect value={person.absence} onChange={v => onUpdate({ ...person, absence: v })} />
       </div>
       <div className="flex gap-1 flex-wrap mt-1.5">
         {person.roles.map(r => <RoleChip key={r} role={r} />)}
       </div>
-      {editingRoles && (
-        <div className="mt-2 pt-2 border-t border-slate-800 flex gap-1 flex-wrap">
-          {ALL_ROLES.map(role => {
-            const active = person.roles.includes(role)
-            return (
-              <button
-                key={role}
-                onClick={() => toggleRole(role)}
-                className={cn(
-                  'text-[10px] px-1.5 py-0.5 rounded border transition-colors',
-                  active
-                    ? ROLE_COLORS[role]
-                    : 'text-slate-600 border-slate-700 hover:text-slate-400 hover:border-slate-500'
-                )}
-              >
-                {ROLE_LABELS[role]}
-              </button>
-            )
-          })}
+      {editing && (
+        <div className="mt-2 pt-2 border-t border-slate-800 space-y-2">
+          <div className="flex gap-1 flex-wrap">
+            {ALL_ROLES.map(role => {
+              const active = person.roles.includes(role)
+              return (
+                <button
+                  key={role}
+                  onClick={() => toggleRole(role)}
+                  className={cn(
+                    'text-[10px] px-1.5 py-0.5 rounded border transition-colors',
+                    active
+                      ? ROLE_COLORS[role]
+                      : 'text-slate-600 border-slate-700 hover:text-slate-400 hover:border-slate-500'
+                  )}
+                >
+                  {ROLE_LABELS[role]}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => { if (confirm(`Usunąć ${person.name}?`)) onDelete(person.id) }}
+              className="text-[10px] text-red-700 hover:text-red-400 transition-colors"
+            >
+              Usuń osobę
+            </button>
+            <button
+              onClick={handleSave}
+              className="text-[10px] px-2 py-0.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors"
+            >
+              Zapisz
+            </button>
+          </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Add person form ───────────────────────────────────────────────────────────
+
+function AddPersonForm({ onAdd, onCancel }: {
+  onAdd: (name: string, roles: RoleType[]) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState('')
+  const [roles, setRoles] = useState<RoleType[]>(['RESCUER'])
+
+  function toggleRole(role: RoleType) {
+    const has = roles.includes(role)
+    if (has && roles.length === 1) return
+    setRoles(has ? roles.filter(r => r !== role) : [...roles, role])
+  }
+
+  return (
+    <div className="p-2 rounded-lg border border-brand-900 bg-surface-900 space-y-2">
+      <input
+        className="w-full text-sm bg-surface-800 border border-slate-700 rounded px-1.5 py-1 text-white outline-none focus:border-brand-500 placeholder:text-slate-600"
+        placeholder="Imię i nazwisko"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onAdd(name.trim(), roles); if (e.key === 'Escape') onCancel() }}
+        autoFocus
+      />
+      <div className="flex gap-1 flex-wrap">
+        {ALL_ROLES.map(role => {
+          const active = roles.includes(role)
+          return (
+            <button
+              key={role}
+              onClick={() => toggleRole(role)}
+              className={cn(
+                'text-[10px] px-1.5 py-0.5 rounded border transition-colors',
+                active
+                  ? ROLE_COLORS[role]
+                  : 'text-slate-600 border-slate-700 hover:text-slate-400 hover:border-slate-500'
+              )}
+            >
+              {ROLE_LABELS[role]}
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex items-center justify-between">
+        <button onClick={onCancel} className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors">
+          Anuluj
+        </button>
+        <button
+          onClick={() => { if (name.trim()) onAdd(name.trim(), roles) }}
+          disabled={!name.trim()}
+          className="text-[10px] px-2 py-0.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-40"
+        >
+          Dodaj
+        </button>
+      </div>
     </div>
   )
 }
@@ -241,6 +344,7 @@ export function CrewGeneratorPage() {
   })
 
   const [showPersonnel, setShowPersonnel] = useState(true)
+  const [addingPerson, setAddingPerson] = useState(false)
   const [dragSource, setDragSource] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
@@ -281,10 +385,29 @@ export function CrewGeneratorPage() {
     saveAssignment(generateCrew(personnel))
   }
 
+  function deletePerson(id: string) {
+    setPersonnel(prev => prev.filter(p => p.id !== id))
+    supabase.from('personnel').delete().eq('id', id)
+  }
+
+  function addPerson(name: string, roles: RoleType[]) {
+    const newPerson: Person = { id: crypto.randomUUID(), name, roles, absence: null }
+    setPersonnel(prev => [...prev, newPerson])
+    setAddingPerson(false)
+    supabase.from('personnel').insert({
+      id: newPerson.id,
+      name: newPerson.name,
+      roles: newPerson.roles,
+      preferred_vehicle_id: null,
+      absence: null,
+    })
+  }
+
   function handleReset() {
     if (!confirm('Zresetować dane personelu do domyślnych?')) return
     setPersonnel(DEFAULT_PERSONNEL)
     setAssignment(null)
+    setAddingPerson(false)
     localStorage.removeItem('wsp-crew-assignment')
     supabase.from('personnel').upsert(
       DEFAULT_PERSONNEL.map(p => ({
@@ -390,15 +513,26 @@ export function CrewGeneratorPage() {
               <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-600">
                 Stan osobowy
               </span>
-              <button
-                onClick={handleReset}
-                className="text-[10px] text-slate-700 hover:text-red-500 transition-colors"
-              >
-                Reset
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setAddingPerson(v => !v)}
+                  className="text-[10px] text-brand-500 hover:text-brand-300 transition-colors flex items-center gap-0.5"
+                >
+                  <Plus className="w-3 h-3" /> Dodaj
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="text-[10px] text-slate-700 hover:text-red-500 transition-colors"
+                >
+                  Reset
+                </button>
+              </div>
             </div>
+            {addingPerson && (
+              <AddPersonForm onAdd={addPerson} onCancel={() => setAddingPerson(false)} />
+            )}
             {personnel.map(person => (
-              <PersonnelRow key={person.id} person={person} onUpdate={updatePerson} />
+              <PersonnelRow key={person.id} person={person} onUpdate={updatePerson} onDelete={deletePerson} />
             ))}
           </aside>
         )}

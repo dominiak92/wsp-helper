@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RefreshCw, Zap, Pencil, X, Users } from 'lucide-react'
 import { cn } from '../lib/utils'
 import {
@@ -7,6 +7,7 @@ import {
   CREW_VEHICLE_NAMES, VEHICLE_SEATS,
   DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop,
 } from '../lib/crew'
+import { supabase } from '../lib/supabase'
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -225,14 +226,7 @@ function SpecialRoleCard({ title, personId, persons, colorClass, borderClass }: 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CrewGeneratorPage() {
-  const [personnel, setPersonnel] = useState<Person[]>(() => {
-    try {
-      const s = localStorage.getItem('wsp-crew-personnel')
-      return s ? JSON.parse(s) : DEFAULT_PERSONNEL
-    } catch {
-      return DEFAULT_PERSONNEL
-    }
-  })
+  const [personnel, setPersonnel] = useState<Person[]>(DEFAULT_PERSONNEL)
 
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(() => {
     try {
@@ -250,16 +244,36 @@ export function CrewGeneratorPage() {
   const [dragSource, setDragSource] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
+  useEffect(() => {
+    supabase
+      .from('personnel')
+      .select('*')
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setPersonnel(data.map(row => ({
+            id: row.id,
+            name: row.name,
+            roles: row.roles as RoleType[],
+            preferredVehicleId: row.preferred_vehicle_id ?? undefined,
+            absence: row.absence as AbsenceType | null,
+          })))
+        }
+      })
+  }, [])
+
   function saveAssignment(a: ShiftAssignment) {
     setAssignment(a)
     localStorage.setItem('wsp-crew-assignment', JSON.stringify(a))
   }
 
   function updatePerson(updated: Person) {
-    setPersonnel(prev => {
-      const next = prev.map(p => p.id === updated.id ? updated : p)
-      localStorage.setItem('wsp-crew-personnel', JSON.stringify(next))
-      return next
+    setPersonnel(prev => prev.map(p => p.id === updated.id ? updated : p))
+    supabase.from('personnel').upsert({
+      id: updated.id,
+      name: updated.name,
+      roles: updated.roles,
+      preferred_vehicle_id: updated.preferredVehicleId ?? null,
+      absence: updated.absence,
     })
   }
 
@@ -271,8 +285,16 @@ export function CrewGeneratorPage() {
     if (!confirm('Zresetować dane personelu do domyślnych?')) return
     setPersonnel(DEFAULT_PERSONNEL)
     setAssignment(null)
-    localStorage.removeItem('wsp-crew-personnel')
     localStorage.removeItem('wsp-crew-assignment')
+    supabase.from('personnel').upsert(
+      DEFAULT_PERSONNEL.map(p => ({
+        id: p.id,
+        name: p.name,
+        roles: p.roles,
+        preferred_vehicle_id: p.preferredVehicleId ?? null,
+        absence: p.absence,
+      }))
+    )
   }
 
   // DnD handlers

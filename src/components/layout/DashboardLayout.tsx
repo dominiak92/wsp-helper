@@ -1,10 +1,24 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, Navigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { useAuth } from '../../lib/auth'
 
 export function DashboardLayout() {
+  const { user, loading } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-surface-950">
+        <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
 
   return (
     <div className="flex h-screen bg-surface-950 overflow-hidden">

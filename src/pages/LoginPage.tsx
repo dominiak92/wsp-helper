@@ -1,33 +1,42 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { Shield, Eye, EyeOff, Lock, User } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { cn } from '../lib/utils'
+import { useAuth } from '../lib/auth'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const [serviceNumber, setServiceNumber] = useState('')
+  const { user, loading: authLoading, signIn } = useAuth()
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  function handleSubmit(e: FormEvent) {
+  if (!authLoading && user) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
 
-    if (!serviceNumber.trim() || !password.trim()) {
-      setError('Podaj numer służbowy i hasło.')
+    if (!login.trim() || !password.trim()) {
+      setError('Podaj login i hasło.')
       return
     }
 
     setLoading(true)
-    // Simulate async auth — replace with real logic
-    setTimeout(() => {
-      setLoading(false)
+    const err = await signIn(login, password)
+    setLoading(false)
+
+    if (err) {
+      setError(err)
+    } else {
       navigate('/dashboard')
-    }, 800)
+    }
   }
 
   return (
@@ -67,18 +76,16 @@ export function LoginPage() {
                 Autoryzacja dostępu
               </p>
 
-              {/* Service number */}
+              {/* Login */}
               <div className="space-y-1.5 mb-4">
-                <label className="text-xs font-medium text-slate-400">
-                  Numer służbowy / Email
-                </label>
+                <label className="text-xs font-medium text-slate-400">Login</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <Input
                     type="text"
-                    placeholder="np. 4412 lub jan.kowalski@wsop.mil.pl"
-                    value={serviceNumber}
-                    onChange={(e) => setServiceNumber(e.target.value)}
+                    placeholder="admin"
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
                     className="pl-9"
                     autoComplete="username"
                     autoFocus

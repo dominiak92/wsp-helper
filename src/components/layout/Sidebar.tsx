@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Badge } from '../ui/Badge'
+import { useAuth } from '../../lib/auth'
 
 const navGroups = [
   {
@@ -49,6 +50,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed }: SidebarProps) {
+  const { user, signOut } = useAuth()
+
   return (
     <aside
       className={cn(
@@ -117,19 +120,24 @@ export function Sidebar({ collapsed }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Bottom: logout */}
-      <div className="border-t border-slate-800 p-2">
-        <NavLink
-          to="/login"
+      {/* Bottom: user + logout */}
+      <div className="border-t border-slate-800 p-2 space-y-0.5">
+        {!collapsed && user && (
+          <p className="px-2 py-1 text-[10px] text-slate-600 truncate">
+            Zalogowany jako <span className="text-slate-400 font-medium">{user.login}</span>
+          </p>
+        )}
+        <button
+          onClick={() => signOut()}
           className={cn(
-            'flex items-center gap-3 px-2 py-2 rounded-md text-sm text-slate-500',
+            'w-full flex items-center gap-3 px-2 py-2 rounded-md text-sm text-slate-500',
             'hover:text-alert-red hover:bg-alert-red/10 transition-colors',
             collapsed && 'justify-center'
           )}
         >
           <LogOut className="w-4 h-4 flex-shrink-0" />
           {!collapsed && <span>Wyloguj się</span>}
-        </NavLink>
+        </button>
       </div>
     </aside>
   )

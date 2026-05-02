@@ -378,7 +378,7 @@ export function CrewGeneratorPage() {
       roles: updated.roles,
       preferred_vehicle_id: updated.preferredVehicleId ?? null,
       absence: updated.absence,
-    })
+    }).then(({ error }) => { if (error) console.error('[supabase] upsert personnel:', error) })
   }
 
   function handleGenerate() {
@@ -388,6 +388,7 @@ export function CrewGeneratorPage() {
   function deletePerson(id: string) {
     setPersonnel(prev => prev.filter(p => p.id !== id))
     supabase.from('personnel').delete().eq('id', id)
+      .then(({ error }) => { if (error) console.error('[supabase] delete personnel:', error) })
   }
 
   function addPerson(name: string, roles: RoleType[]) {
@@ -400,7 +401,7 @@ export function CrewGeneratorPage() {
       roles: newPerson.roles,
       preferred_vehicle_id: null,
       absence: null,
-    })
+    }).then(({ error }) => { if (error) console.error('[supabase] insert personnel:', error) })
   }
 
   function handleReset() {

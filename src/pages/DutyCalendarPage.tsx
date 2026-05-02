@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { supabase } from '../lib/supabase'
 
 // Reference: May 1, 2026 is a duty day
 const REF_UTC = Date.UTC(2026, 4, 1)
@@ -111,9 +113,11 @@ interface MonthProps {
   year: number
   month: number
   holidays: Record<string, HolidayEntry>
+  savedDates: Set<string>
+  onDutyDayClick: (key: string) => void
 }
 
-function MonthCalendar({ year, month, holidays }: MonthProps) {
+function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: MonthProps) {
   const firstDow = new Date(Date.UTC(year, month, 1)).getUTCDay()
   const startOffset = firstDow === 0 ? 6 : firstDow - 1 // Mon = 0
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
@@ -157,26 +161,34 @@ function MonthCalendar({ year, month, holidays }: MonthProps) {
           const colIdx = i % 7
           const isSat = colIdx === 5
           const isSun = colIdx === 6
+          const hasSavedAssignment = savedDates.has(key)
 
           return (
             <div
               key={key}
-              title={holiday ? holiday.name : undefined}
-              className={cn(
-                'relative flex items-center justify-center aspect-square text-[11px] rounded leading-none select-none cursor-default',
+              title={
                 duty
-                  ? 'bg-brand-600 text-white font-bold'
-                  : isSun
-                  ? 'text-red-400/60'
-                  : isSat
-                  ? 'text-slate-500'
-                  : 'text-slate-500',
+                  ? `${hasSavedAssignment ? '✓ Obsada zapisana · ' : ''}Kliknij aby otworzyć obsadę${holiday ? ` · ${holiday.name}` : ''}`
+                  : holiday?.name
+              }
+              onClick={duty ? () => onDutyDayClick(key) : undefined}
+              className={cn(
+                'relative flex items-center justify-center aspect-square text-[11px] rounded leading-none select-none',
+                duty
+                  ? 'bg-brand-600 text-white font-bold cursor-pointer hover:bg-brand-500 transition-colors'
+                  : 'cursor-default',
+                !duty && (isSun ? 'text-red-400/60' : isSat ? 'text-slate-500' : 'text-slate-500'),
                 !duty && holiday?.type === 'public' && 'text-amber-300',
                 !duty && holiday?.type === 'notable' && 'text-sky-300',
                 isToday && 'ring-2 ring-amber-400 ring-offset-[1.5px] ring-offset-surface-800 z-10',
               )}
             >
               {day}
+              {/* Saved assignment indicator */}
+              {duty && hasSavedAssignment && (
+                <span className="absolute top-[1px] right-[1px] w-[5px] h-[5px] rounded-full bg-emerald-400" />
+              )}
+              {/* Holiday dot */}
               {holiday && (
                 <span
                   className={cn(
@@ -197,8 +209,19 @@ function MonthCalendar({ year, month, holidays }: MonthProps) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function DutyCalendarPage() {
+  const navigate = useNavigate()
   const [year, setYear] = useState(2026)
+  const [savedDates, setSavedDates] = useState<Set<string>>(new Set())
   const holidays = useMemo(() => getHolidays(year), [year])
+
+  useEffect(() => {
+    supabase
+      .from('duty_assignments')
+      .select('duty_date')
+      .then(({ data }) => {
+        if (data) setSavedDates(new Set(data.map(r => r.duty_date as string)))
+      })
+  }, [])
 
   const { totalDutyDays, dutyOnHoliday } = useMemo(() => {
     let totalDutyDays = 0
@@ -229,7 +252,7 @@ export function DutyCalendarPage() {
           <p className="text-sm text-slate-500 mt-0.5">
             System 24/72h · {' '}
             <span className="text-brand-400 font-medium">{totalDutyDays} służb</span>{' '}
-            w roku {year}
+            w roku {year} · kliknij dzień służby aby zarządzać obsadą
           </p>
         </div>
 
@@ -261,13 +284,14 @@ export function DutyCalendarPage() {
           </p>
           <div className="flex flex-wrap gap-2">
             {dutyOnHoliday.map(({ key, entry }) => (
-              <span
+              <button
                 key={key}
+                onClick={() => navigate(`/crew-generator?date=${key}`)}
                 className={cn(
-                  'flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1 border',
+                  'flex items-center gap-1.5 text-xs rounded-md px-2.5 py-1 border transition-colors',
                   entry.type === 'public'
-                    ? 'bg-amber-950/30 border-amber-800/50 text-amber-200'
-                    : 'bg-sky-950/30 border-sky-800/50 text-sky-200',
+                    ? 'bg-amber-950/30 border-amber-800/50 text-amber-200 hover:bg-amber-950/60'
+                    : 'bg-sky-950/30 border-sky-800/50 text-sky-200 hover:bg-sky-950/60',
                 )}
               >
                 <span
@@ -280,7 +304,10 @@ export function DutyCalendarPage() {
                 </span>
                 <span className="opacity-40">—</span>
                 {entry.name}
-              </span>
+                {savedDates.has(key) && (
+                  <span className="w-[6px] h-[6px] rounded-full bg-emerald-400 ml-0.5" />
+                )}
+              </button>
             ))}
           </div>
         </div>
@@ -289,7 +316,14 @@ export function DutyCalendarPage() {
       {/* 12-month grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
         {Array.from({ length: 12 }, (_, m) => (
-          <MonthCalendar key={m} year={year} month={m} holidays={holidays} />
+          <MonthCalendar
+            key={m}
+            year={year}
+            month={m}
+            holidays={holidays}
+            savedDates={savedDates}
+            onDutyDayClick={key => navigate(`/crew-generator?date=${key}`)}
+          />
         ))}
       </div>
 
@@ -297,7 +331,14 @@ export function DutyCalendarPage() {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-500 pt-1 pb-3">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-brand-600 flex-shrink-0" />
-          <span>Dzień służby (24h)</span>
+          <span>Dzień służby (kliknij → obsada)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative w-4 h-4 flex-shrink-0">
+            <div className="w-4 h-4 rounded bg-brand-600" />
+            <span className="absolute top-[1px] right-[1px] w-[5px] h-[5px] rounded-full bg-emerald-400" />
+          </div>
+          <span>Obsada zapisana</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative w-4 h-4 flex-shrink-0 flex items-center justify-center">

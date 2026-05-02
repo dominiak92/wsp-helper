@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, Zap, Pencil, X, Users, Plus } from 'lucide-react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
+import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft } from 'lucide-react'
 import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
@@ -8,6 +9,16 @@ import {
   DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
+
+const POLISH_MONTHS = [
+  'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
+  'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',
+]
+
+function formatPolishDate(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  return `${d} ${POLISH_MONTHS[m - 1]} ${y}`
+}
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -329,9 +340,14 @@ function SpecialRoleCard({ title, personId, persons, colorClass, borderClass }: 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CrewGeneratorPage() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const dutyDate = searchParams.get('date') // e.g. "2026-05-01"
+
   const [personnel, setPersonnel] = useState<Person[]>(DEFAULT_PERSONNEL)
 
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(() => {
+    if (dutyDate) return null // loaded from Supabase in useEffect
     try {
       const s = localStorage.getItem('wsp-crew-assignment')
       if (!s) return null
@@ -365,9 +381,31 @@ export function CrewGeneratorPage() {
       })
   }, [])
 
+  useEffect(() => {
+    if (!dutyDate) return
+    supabase
+      .from('duty_assignments')
+      .select('assignment_json')
+      .eq('duty_date', dutyDate)
+      .single()
+      .then(({ data }) => {
+        if (data?.assignment_json) {
+          const parsed = data.assignment_json as ShiftAssignment
+          if (Array.isArray(parsed.dutyOfficerIds)) setAssignment(parsed)
+        }
+      })
+  }, [dutyDate])
+
   function saveAssignment(a: ShiftAssignment) {
     setAssignment(a)
-    localStorage.setItem('wsp-crew-assignment', JSON.stringify(a))
+    if (dutyDate) {
+      supabase.from('duty_assignments').upsert({
+        duty_date: dutyDate,
+        assignment_json: a,
+      }).then(({ error }) => { if (error) console.error('[supabase] upsert duty_assignment:', error) })
+    } else {
+      localStorage.setItem('wsp-crew-assignment', JSON.stringify(a))
+    }
   }
 
   function updatePerson(updated: Person) {
@@ -469,14 +507,25 @@ export function CrewGeneratorPage() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
-        <div>
-          <h1 className="text-lg font-bold text-white">Tworzenie obsady</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            <span className="text-emerald-500 font-medium">{availableCount}</span> dostępnych
-            {absentCount > 0 && (
-              <> · <span className="text-red-400 font-medium">{absentCount}</span> nieobecnych</>
-            )}
-          </p>
+        <div className="flex items-center gap-3">
+          {dutyDate && (
+            <button
+              onClick={() => navigate('/duty-calendar')}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
+              title="Wróć do kalendarza"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-lg font-bold text-white">Tworzenie obsady</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {dutyDate
+                ? <span className="text-brand-400 font-medium">Służba: {formatPolishDate(dutyDate)}</span>
+                : <><span className="text-emerald-500 font-medium">{availableCount}</span> dostępnych{absentCount > 0 && <> · <span className="text-red-400 font-medium">{absentCount}</span> nieobecnych</>}</>
+              }
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button

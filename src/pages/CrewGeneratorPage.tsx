@@ -5,10 +5,10 @@ import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS,
   CREW_VEHICLE_NAMES, VEHICLE_SEATS,
-  DEFAULT_PERSONNEL, generateCrew, resolveName,
+  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop,
 } from '../lib/crew'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Small helpers ─────────────────────────────────────────────────────────────
 
 function RoleChip({ role }: { role: RoleType }) {
   return (
@@ -18,7 +18,10 @@ function RoleChip({ role }: { role: RoleType }) {
   )
 }
 
-function AbsenceSelect({ value, onChange }: { value: AbsenceType | null; onChange: (v: AbsenceType | null) => void }) {
+function AbsenceSelect({ value, onChange }: {
+  value: AbsenceType | null
+  onChange: (v: AbsenceType | null) => void
+}) {
   return (
     <select
       value={value ?? ''}
@@ -50,7 +53,7 @@ function PersonnelRow({ person, onUpdate }: { person: Person; onUpdate: (p: Pers
   }
 
   return (
-    <div className={cn('p-2 rounded-lg border border-slate-800 bg-surface-900 transition-opacity', absent && 'opacity-50')}>
+    <div className={cn('p-2 rounded-lg border border-slate-800 bg-surface-900', absent && 'opacity-50')}>
       <div className="flex items-center gap-1.5">
         <span className={cn('text-sm font-medium text-white flex-1 truncate', absent && 'line-through')}>
           {person.name}
@@ -64,11 +67,9 @@ function PersonnelRow({ person, onUpdate }: { person: Person; onUpdate: (p: Pers
         </button>
         <AbsenceSelect value={person.absence} onChange={v => onUpdate({ ...person, absence: v })} />
       </div>
-
       <div className="flex gap-1 flex-wrap mt-1.5">
         {person.roles.map(r => <RoleChip key={r} role={r} />)}
       </div>
-
       {editingRoles && (
         <div className="mt-2 pt-2 border-t border-slate-800 flex gap-1 flex-wrap">
           {ALL_ROLES.map(role => {
@@ -79,7 +80,9 @@ function PersonnelRow({ person, onUpdate }: { person: Person; onUpdate: (p: Pers
                 onClick={() => toggleRole(role)}
                 className={cn(
                   'text-[10px] px-1.5 py-0.5 rounded border transition-colors',
-                  active ? ROLE_COLORS[role] : 'text-slate-600 border-slate-700 hover:text-slate-400 hover:border-slate-500'
+                  active
+                    ? ROLE_COLORS[role]
+                    : 'text-slate-600 border-slate-700 hover:text-slate-400 hover:border-slate-500'
                 )}
               >
                 {ROLE_LABELS[role]}
@@ -92,55 +95,84 @@ function PersonnelRow({ person, onUpdate }: { person: Person; onUpdate: (p: Pers
   )
 }
 
-// ── Slot row in vehicle card ───────────────────────────────────────────────────
+// ── Drag context ──────────────────────────────────────────────────────────────
 
-function SlotRow({
-  label,
-  personId,
-  persons,
-  highlight = false,
-  empty = false,
-}: {
+interface DragCtx {
+  dragSource: string | null
+  dropTarget: string | null
+  onDragStart: (key: string, e: React.DragEvent) => void
+  onDragEnd: () => void
+  onDragOver: (key: string, e: React.DragEvent) => void
+  onDragLeave: (e: React.DragEvent) => void
+  onDrop: (key: string, e: React.DragEvent) => void
+}
+
+// ── Slot row ──────────────────────────────────────────────────────────────────
+
+function SlotRow({ label, personId, slotKey, persons, highlight = false, empty = false, dnd }: {
   label: string
   personId: string | null
+  slotKey: string
   persons: Person[]
   highlight?: boolean
   empty?: boolean
+  dnd: DragCtx
 }) {
   const name = resolveName(persons, personId)
+  const isOver = dnd.dropTarget === slotKey
+  const isDragging = dnd.dragSource === slotKey
+
   return (
-    <div className="flex items-center gap-2 py-1.5">
+    <div
+      className={cn(
+        'flex items-center gap-2 py-1.5 px-1 rounded-md transition-all',
+        isOver && 'bg-brand-900/30 ring-1 ring-inset ring-brand-500/70',
+      )}
+      onDragOver={e => dnd.onDragOver(slotKey, e)}
+      onDragLeave={dnd.onDragLeave}
+      onDrop={e => dnd.onDrop(slotKey, e)}
+    >
       <span className="text-[10px] text-slate-600 w-20 shrink-0 uppercase tracking-wide">{label}</span>
-      <span className={cn(
-        'text-sm font-medium truncate',
-        empty || !personId ? 'text-slate-700 italic text-xs' : highlight ? 'text-brand-300' : 'text-white',
-      )}>
-        {empty ? 'brak' : name}
-      </span>
+      {personId ? (
+        <span
+          draggable
+          onDragStart={e => dnd.onDragStart(slotKey, e)}
+          onDragEnd={dnd.onDragEnd}
+          className={cn(
+            'text-sm font-medium truncate cursor-grab active:cursor-grabbing select-none transition-opacity',
+            highlight ? 'text-brand-300' : 'text-white',
+            isDragging && 'opacity-30',
+          )}
+        >
+          {name}
+        </span>
+      ) : (
+        <span className="text-[10px] text-slate-700 italic">{empty ? 'brak' : '—'}</span>
+      )}
     </div>
   )
 }
 
 // ── Vehicle card ──────────────────────────────────────────────────────────────
 
-function VehicleCard({
-  vehicleId, commanderId, driverId, rescuerIds, persons,
-}: {
+function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dnd }: {
   vehicleId: string
   commanderId: string | null
   driverId: string | null
   rescuerIds: string[]
   persons: Person[]
+  dnd: DragCtx
 }) {
   const vid = vehicleId as keyof typeof CREW_VEHICLE_NAMES
   const name = CREW_VEHICLE_NAMES[vid] ?? vehicleId
   const cap = VEHICLE_SEATS[vid as keyof typeof VEHICLE_SEATS] ?? 0
   const filled = (commanderId ? 1 : 0) + (driverId && driverId !== commanderId ? 1 : 0) + rescuerIds.length
   const full = filled >= cap
+  const pfx = `v:${vehicleId}`
 
   return (
     <div className={cn(
-      'flex-1 min-w-[180px] rounded-xl border p-4 bg-surface-800',
+      'flex-1 min-w-[190px] rounded-xl border p-4 bg-surface-800',
       full ? 'border-emerald-900' : 'border-amber-900/60'
     )}>
       <div className="flex items-center justify-between mb-1">
@@ -153,27 +185,29 @@ function VehicleCard({
         </span>
       </div>
 
-      <div className="divide-y divide-slate-800/80 mt-2">
+      <div className="mt-2">
         {commanderId && (
-          <SlotRow label="Ddca zast." personId={commanderId} persons={persons} highlight />
+          <SlotRow label="Ddca zast." slotKey={`${pfx}:commander`} personId={commanderId}
+            persons={persons} highlight dnd={dnd} />
         )}
-        <SlotRow label="Kierowca" personId={driverId} persons={persons} empty={!driverId} />
+        <SlotRow label="Kierowca" slotKey={`${pfx}:driver`} personId={driverId}
+          persons={persons} empty={!driverId} dnd={dnd} />
         {rescuerIds.map((id, i) => (
-          <SlotRow key={i} label="Ratownik" personId={id} persons={persons} />
+          <SlotRow key={i} label="Ratownik" slotKey={`${pfx}:rescuer:${i}`} personId={id}
+            persons={persons} dnd={dnd} />
         ))}
         {Array.from({ length: Math.max(0, cap - filled) }).map((_, i) => (
-          <SlotRow key={`e${i}`} label="Ratownik" personId={null} persons={persons} empty />
+          <SlotRow key={`e${i}`} label="Ratownik" slotKey={`${pfx}:rescuer:${rescuerIds.length + i}`}
+            personId={null} persons={persons} empty dnd={dnd} />
         ))}
       </div>
     </div>
   )
 }
 
-// ── Special role card ─────────────────────────────────────────────────────────
+// ── Special role card (read-only, no DnD) ────────────────────────────────────
 
-function SpecialRoleCard({
-  title, personId, persons, colorClass, borderClass,
-}: {
+function SpecialRoleCard({ title, personId, persons, colorClass, borderClass }: {
   title: string
   personId: string | null
   persons: Person[]
@@ -203,13 +237,23 @@ export function CrewGeneratorPage() {
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(() => {
     try {
       const s = localStorage.getItem('wsp-crew-assignment')
-      return s ? JSON.parse(s) : null
+      if (!s) return null
+      const parsed = JSON.parse(s)
+      if (!Array.isArray(parsed.dutyOfficerIds)) return null
+      return parsed
     } catch {
       return null
     }
   })
 
   const [showPersonnel, setShowPersonnel] = useState(true)
+  const [dragSource, setDragSource] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
+
+  function saveAssignment(a: ShiftAssignment) {
+    setAssignment(a)
+    localStorage.setItem('wsp-crew-assignment', JSON.stringify(a))
+  }
 
   function updatePerson(updated: Person) {
     setPersonnel(prev => {
@@ -220,9 +264,7 @@ export function CrewGeneratorPage() {
   }
 
   function handleGenerate() {
-    const result = generateCrew(personnel)
-    setAssignment(result)
-    localStorage.setItem('wsp-crew-assignment', JSON.stringify(result))
+    saveAssignment(generateCrew(personnel))
   }
 
   function handleReset() {
@@ -233,15 +275,56 @@ export function CrewGeneratorPage() {
     localStorage.removeItem('wsp-crew-assignment')
   }
 
+  // DnD handlers
+  function handleDragStart(key: string, e: React.DragEvent) {
+    e.dataTransfer.setData('text/plain', key)
+    e.dataTransfer.effectAllowed = 'move'
+    setDragSource(key)
+  }
+
+  function handleDragEnd() {
+    setDragSource(null)
+    setDropTarget(null)
+  }
+
+  function handleDragOver(key: string, e: React.DragEvent) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropTarget(key)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null)
+  }
+
+  function handleDrop(dstKey: string, e: React.DragEvent) {
+    e.preventDefault()
+    const srcKey = e.dataTransfer.getData('text/plain')
+    setDragSource(null)
+    setDropTarget(null)
+    if (!srcKey || srcKey === dstKey || !assignment) return
+    saveAssignment(applyDrop(assignment, srcKey, dstKey))
+  }
+
+  const dnd: DragCtx = {
+    dragSource, dropTarget,
+    onDragStart: handleDragStart,
+    onDragEnd: handleDragEnd,
+    onDragOver: handleDragOver,
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop,
+  }
+
   const absentCount = personnel.filter(p => p.absence).length
   const availableCount = personnel.length - absentCount
+  const isDragging = dragSource !== null
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
         <div>
-          <h1 className="text-lg font-bold text-white">Generator obsady</h1>
+          <h1 className="text-lg font-bold text-white">Tworzenie obsady</h1>
           <p className="text-xs text-slate-500 mt-0.5">
             <span className="text-emerald-500 font-medium">{availableCount}</span> dostępnych
             {absentCount > 0 && (
@@ -330,13 +413,27 @@ export function CrewGeneratorPage() {
                     colorClass="text-brand-400"
                     borderClass="border-brand-900"
                   />
-                  <SpecialRoleCard
-                    title="Dyżurny"
-                    personId={assignment.dutyOfficerId}
-                    persons={personnel}
-                    colorClass="text-amber-400"
-                    borderClass="border-amber-900"
-                  />
+                  {assignment.dutyOfficerIds.length > 0
+                    ? assignment.dutyOfficerIds.map(id => (
+                        <SpecialRoleCard
+                          key={id}
+                          title="Dyżurny"
+                          personId={id}
+                          persons={personnel}
+                          colorClass="text-amber-400"
+                          borderClass="border-amber-900"
+                        />
+                      ))
+                    : (
+                        <SpecialRoleCard
+                          title="Dyżurny"
+                          personId={null}
+                          persons={personnel}
+                          colorClass="text-amber-400"
+                          borderClass="border-amber-900"
+                        />
+                      )
+                  }
                 </div>
               </div>
 
@@ -354,27 +451,84 @@ export function CrewGeneratorPage() {
                       driverId={v.driverId}
                       rescuerIds={v.rescuerIds}
                       persons={personnel}
+                      dnd={dnd}
                     />
                   ))}
                 </div>
               </div>
 
-              {/* Unassigned */}
-              {assignment.unassignedIds.length > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-3">
-                    Nieprzydzieleni ({assignment.unassignedIds.length})
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {assignment.unassignedIds.map(id => (
-                      <span
-                        key={id}
-                        className="text-sm px-3 py-1.5 rounded-lg bg-surface-800 border border-slate-700 text-slate-400"
+              {/* Rezerwa + Nieobecni */}
+              {(assignment.unassignedIds.length > 0 || isDragging || personnel.some(p => p.absence)) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Rezerwa drop zone — always visible while dragging */}
+                  {(assignment.unassignedIds.length > 0 || isDragging) && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-3">
+                        Rezerwa / dyżur ({assignment.unassignedIds.length})
+                      </p>
+                      <div
+                        className={cn(
+                          'flex flex-wrap gap-2 min-h-[3rem] p-2 rounded-lg border border-dashed transition-colors',
+                          dropTarget === 'unassigned'
+                            ? 'border-brand-500 bg-brand-900/20'
+                            : 'border-slate-700 bg-surface-900/30'
+                        )}
+                        onDragOver={e => { e.preventDefault(); setDropTarget('unassigned') }}
+                        onDragLeave={e => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null)
+                        }}
+                        onDrop={e => {
+                          e.preventDefault()
+                          const srcKey = e.dataTransfer.getData('text/plain')
+                          setDragSource(null)
+                          setDropTarget(null)
+                          if (!srcKey || !assignment) return
+                          saveAssignment(applyDrop(assignment, srcKey, 'unassigned'))
+                        }}
                       >
-                        {resolveName(personnel, id)}
-                      </span>
-                    ))}
-                  </div>
+                        {assignment.unassignedIds.map(id => (
+                          <span
+                            key={id}
+                            draggable
+                            onDragStart={e => handleDragStart(`unassigned:${id}`, e)}
+                            onDragEnd={handleDragEnd}
+                            className={cn(
+                              'text-sm px-3 py-1.5 rounded-lg bg-surface-800 border border-slate-700 text-slate-400',
+                              'cursor-grab active:cursor-grabbing select-none transition-opacity',
+                              dragSource === `unassigned:${id}` && 'opacity-30'
+                            )}
+                          >
+                            {resolveName(personnel, id)}
+                          </span>
+                        ))}
+                        {assignment.unassignedIds.length === 0 && (
+                          <span className="text-xs text-slate-700 italic self-center px-1">
+                            Upuść tutaj aby usunąć z obsady
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nieobecni */}
+                  {personnel.some(p => p.absence) && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-3">
+                        Nieobecni ({personnel.filter(p => p.absence).length})
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {personnel.filter(p => p.absence).map(p => (
+                          <span
+                            key={p.id}
+                            className="text-sm px-3 py-1.5 rounded-lg bg-surface-800 border border-red-900/40 text-slate-500 flex items-center gap-2"
+                          >
+                            <span className="line-through">{p.name}</span>
+                            <span className="text-[10px] text-red-500">{ABSENCE_LABELS[p.absence!]}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

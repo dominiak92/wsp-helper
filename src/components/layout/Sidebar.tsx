@@ -9,6 +9,7 @@ import {
   LogOut,
   ClipboardList,
   UserCog,
+  CalendarDays,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Badge } from '../ui/Badge'
@@ -31,7 +32,6 @@ const navGroups = [
   {
     label: 'ZASOBY',
     items: [
-      { label: 'Sprzęt i pojazdy', icon: Wrench, path: '/equipment' },
       { label: 'Dokumentacja', icon: FileText, path: '/documents' },
     ],
   },
@@ -39,7 +39,8 @@ const navGroups = [
     label: 'NARZĘDZIA',
     items: [
       { label: 'Generator opisów', icon: ClipboardList, path: '/incident-generator' },
-      { label: 'Generator obsady', icon: UserCog, path: '/crew-generator' },
+      { label: 'Tworzenie obsady', icon: UserCog, path: '/crew-generator' },
+      { label: 'Kalendarz służb', icon: CalendarDays, path: '/duty-calendar' },
     ],
   },
 ]

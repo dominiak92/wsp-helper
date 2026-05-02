@@ -5,7 +5,6 @@ const labels: Record<string, string> = {
   '/personal': 'Stan osobowy',
   '/deployments': 'Wyjazdy / Alarmy',
   '/readiness': 'Gotowość bojowa',
-  '/equipment': 'Sprzęt i pojazdy',
   '/documents': 'Dokumentacja',
 }
 

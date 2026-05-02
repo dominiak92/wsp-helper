@@ -72,7 +72,6 @@ export const DEFAULT_PERSONNEL: Person[] = [
   { id: 'pawel_t', name: 'Paweł T.', roles: ['RESCUER'], absence: null },
   { id: 'waldemar_w', name: 'Waldemar W.', roles: ['RESCUER'], absence: null },
   { id: 'maciej_sz', name: 'Maciej Sz.', roles: ['RESCUER'], absence: null },
-  { id: 'maciej_sk', name: 'Maciej Sk.', roles: ['RESCUER'], absence: null },
   { id: 'zbigniew_c', name: 'Zbigniew C.', roles: ['RESCUER'], absence: null },
   { id: 'jaroslaw_k', name: 'Jarosław K.', roles: ['DRIVER_RESCUER'], preferredVehicleId: 'gcba1060', absence: null },
   { id: 'aleksander_k', name: 'Aleksander K.', roles: ['DRIVER_RESCUER'], absence: null },
@@ -89,7 +88,7 @@ export interface VehicleAssignment {
 
 export interface ShiftAssignment {
   shiftCommanderId: string | null
-  dutyOfficerId: string | null
+  dutyOfficerIds: string[]
   vehicles: VehicleAssignment[]
   unassignedIds: string[]
 }
@@ -111,15 +110,13 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
     return shuffle(available.filter(p => !assigned.has(p.id) && p.roles.includes(role)))
   }
 
-  // Pure duty-officer check — people whose ONLY role is DUTY_OFFICER never go to vehicles
   const isPureDuty = (p: Person) => p.roles.length === 1 && p.roles[0] === 'DUTY_OFFICER'
 
-  // 1. Duty officer (stays at station, never in a vehicle)
-  const dutyOfficer = pool('DUTY_OFFICER')[0] ?? null
-  if (dutyOfficer) assigned.add(dutyOfficer.id)
+  // 1. All duty officers stay at station — assign every available DUTY_OFFICER
+  const dutyOfficers = pool('DUTY_OFFICER')
+  dutyOfficers.forEach(p => assigned.add(p.id))
 
-  // 2. Shift commander — prefer the person whose ONLY role is SHIFT_COMMANDER (Łukasz S.)
-  //    If he's absent, fall back to someone with SHIFT_COMMANDER + VEHICLE_COMMANDER
+  // 2. Shift commander — prefer pure SHIFT_COMMANDER (Łukasz S. when present)
   const shiftPool = pool('SHIFT_COMMANDER')
   const shiftCommander =
     shiftPool.find(p => !p.roles.includes('VEHICLE_COMMANDER')) ?? shiftPool[0] ?? null
@@ -134,7 +131,7 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
     if (driver) { driverMap[vid] = driver.id; assigned.add(driver.id) }
   }
 
-  // 4. Vehicle commanders: shift commander → GBA; optional 2nd → GCBA 5/32
+  // 4. Vehicle commanders: GBA → shift commander; then fill GCBA 5/32 and GCBA 10/60 if available
   const cmdMap: Partial<Record<CrewVehicleId, string>> = {}
   if (shiftCommander) {
     cmdMap['gba'] = shiftCommander.id
@@ -144,8 +141,10 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
   }
   const secondCdr = pool('VEHICLE_COMMANDER')[0] ?? null
   if (secondCdr) { cmdMap['gcba532'] = secondCdr.id; assigned.add(secondCdr.id) }
+  const thirdCdr = pool('VEHICLE_COMMANDER')[0] ?? null
+  if (thirdCdr) { cmdMap['gcba1060'] = thirdCdr.id; assigned.add(thirdCdr.id) }
 
-  // 5. Fill remaining seats — pure duty officers never go into vehicles
+  // 5. Fill remaining seats — pure duty officers never ride in vehicles
   const fillPool = shuffle(available.filter(p => !assigned.has(p.id) && !isPureDuty(p)))
 
   const vehicles: VehicleAssignment[] = CREW_VEHICLE_IDS.map(vid => {
@@ -166,7 +165,7 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
 
   return {
     shiftCommanderId: shiftCommander?.id ?? null,
-    dutyOfficerId: dutyOfficer?.id ?? null,
+    dutyOfficerIds: dutyOfficers.map(p => p.id),
     vehicles,
     unassignedIds: available.filter(p => !assigned.has(p.id)).map(p => p.id),
   }
@@ -175,4 +174,67 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
 export function resolveName(persons: Person[], id: string | null): string {
   if (!id) return '—'
   return persons.find(p => p.id === id)?.name ?? '—'
+}
+
+// ── Drag-and-drop helpers ─────────────────────────────────────────────────────
+// Slot key format:
+//   "v:{vehicleId}:commander"
+//   "v:{vehicleId}:driver"
+//   "v:{vehicleId}:rescuer:{index}"
+//   "unassigned:{personId}"  (source — specific unassigned person)
+//   "unassigned"             (target — the unassigned drop zone)
+
+function getPersonAtSlot(a: ShiftAssignment, key: string): string | null {
+  if (key === 'unassigned') return null
+  const [ns, vid, role, idxStr] = key.split(':')
+  if (ns === 'unassigned') return vid // 'unassigned:personId'
+  if (ns !== 'v') return null
+  const v = a.vehicles.find(x => x.vehicleId === vid)
+  if (!v) return null
+  if (role === 'commander') return v.commanderId
+  if (role === 'driver') return v.driverId
+  if (role === 'rescuer') return v.rescuerIds[Number(idxStr)] ?? null
+  return null
+}
+
+function setPersonAtSlot(a: ShiftAssignment, key: string, personId: string | null): ShiftAssignment {
+  if (key === 'unassigned') {
+    if (!personId) return a
+    return { ...a, unassignedIds: [...a.unassignedIds, personId] }
+  }
+  const [ns, vid, role, idxStr] = key.split(':')
+  if (ns === 'unassigned') {
+    // 'unassigned:personId' — replace that specific entry or remove it
+    const oldId = vid
+    if (personId === null)
+      return { ...a, unassignedIds: a.unassignedIds.filter(id => id !== oldId) }
+    return { ...a, unassignedIds: a.unassignedIds.map(id => id === oldId ? personId : id) }
+  }
+  if (ns !== 'v') return a
+  const vehicles = a.vehicles.map(v => {
+    if (v.vehicleId !== vid) return v
+    if (role === 'commander') return { ...v, commanderId: personId }
+    if (role === 'driver') return { ...v, driverId: personId }
+    if (role === 'rescuer') {
+      const idx = Number(idxStr)
+      if (personId === null)
+        return { ...v, rescuerIds: v.rescuerIds.filter((_, i) => i !== idx) }
+      const rescuerIds = [...v.rescuerIds]
+      if (idx < rescuerIds.length) rescuerIds[idx] = personId
+      else rescuerIds.push(personId)
+      return { ...v, rescuerIds }
+    }
+    return v
+  })
+  return { ...a, vehicles }
+}
+
+export function applyDrop(a: ShiftAssignment, srcKey: string, dstKey: string): ShiftAssignment {
+  if (srcKey === dstKey) return a
+  const srcPerson = getPersonAtSlot(a, srcKey)
+  if (!srcPerson) return a
+  const dstPerson = getPersonAtSlot(a, dstKey)
+  let next = setPersonAtSlot(a, srcKey, dstPerson)
+  next = setPersonAtSlot(next, dstKey, srcPerson)
+  return next
 }

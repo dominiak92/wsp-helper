@@ -25,7 +25,7 @@ export function MobileLayout() {
             <Shield className="w-4 h-4 text-white" />
           </div>
           <div>
-            <p className="text-xs font-bold text-white leading-tight">WSP Command Center</p>
+            <p className="text-xs font-bold text-white leading-tight">WSP - System Przebiegu Służby</p>
             <p className="text-[10px] text-slate-500 leading-tight">{user.displayName}</p>
           </div>
         </div>

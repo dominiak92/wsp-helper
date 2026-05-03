@@ -45,6 +45,21 @@ interface AnnouncementInsert {
   updated_by?: string | null
 }
 
+interface DutyMessageRow {
+  id: string
+  sender_login: string
+  sender_name: string | null
+  message: string
+  created_at: string
+  read_at: string | null
+}
+
+interface DutyMessageInsert {
+  sender_login: string
+  sender_name?: string | null
+  message: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -62,6 +77,11 @@ export interface Database {
         Row: AnnouncementRow
         Insert: AnnouncementInsert
         Update: Partial<AnnouncementInsert>
+      }
+      duty_messages: {
+        Row: DutyMessageRow
+        Insert: DutyMessageInsert
+        Update: Partial<DutyMessageInsert>
       }
     }
   }

@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +103,10 @@ export function MobileHomePage() {
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
   const [loading, setLoading] = useState(true)
   const [announcement, setAnnouncement] = useState<string | null>(null)
+  const [showMsgForm, setShowMsgForm] = useState(false)
+  const [msgText, setMsgText] = useState('')
+  const [sendingMsg, setSendingMsg] = useState(false)
+  const [msgSentOk, setMsgSentOk] = useState(false)
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
 
@@ -190,6 +194,23 @@ export function MobileHomePage() {
   }
   upcomingAbsences.sort()
 
+  async function sendDutyMessage() {
+    if (!user || !msgText.trim()) return
+    setSendingMsg(true)
+    const { error } = await supabase.from('duty_messages').insert({
+      sender_login: user.login,
+      sender_name: user.displayName,
+      message: msgText.trim(),
+    })
+    setSendingMsg(false)
+    if (!error) {
+      setMsgText('')
+      setMsgSentOk(true)
+      setShowMsgForm(false)
+      setTimeout(() => setMsgSentOk(false), 4000)
+    }
+  }
+
   return (
     <div className="px-3 sm:px-5 py-4 space-y-5 pb-8">
 
@@ -254,6 +275,55 @@ export function MobileHomePage() {
           )}
         </div>
       )}
+
+      {/* Informacja dla dyżurnego */}
+      <div>
+        <button
+          onClick={() => setShowMsgForm(v => !v)}
+          className="w-full flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <Send className="w-4 h-4 text-brand-400 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-white">Informacja dla dyżurnego</p>
+              <p className="text-[11px] text-slate-500">Stan licznika, zmiana w służbach, inne</p>
+            </div>
+          </div>
+          {showMsgForm
+            ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+            : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
+        </button>
+
+        {msgSentOk && (
+          <div className="mt-2 flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            <p className="text-sm text-emerald-300">Wiadomość wysłana do dyżurnego</p>
+          </div>
+        )}
+
+        {showMsgForm && (
+          <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-2">
+            <textarea
+              className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
+              rows={3}
+              value={msgText}
+              onChange={e => setMsgText(e.target.value)}
+              placeholder="Np. stan licznika GBA 101: 45231 km, zmiana: Kowalski ↔ Nowak..."
+              autoFocus
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={sendDutyMessage}
+                disabled={sendingMsg || !msgText.trim()}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
+              >
+                <Send className="w-3 h-3" />
+                {sendingMsg ? 'Wysyłanie…' : 'Wyślij'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Crew counter */}
       <div>

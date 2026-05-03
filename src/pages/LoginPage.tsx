@@ -58,7 +58,7 @@ export function LoginPage() {
             <Shield className="w-8 h-8 text-brand-200" />
           </div>
           <div className="text-center">
-            <h1 className="text-xl font-bold text-slate-100 tracking-tight">WSP Command Center</h1>
+            <h1 className="text-xl font-bold text-slate-100 tracking-tight">System Przebiegu Służby</h1>
             <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest">
               Wojskowa Straż Pożarna
             </p>

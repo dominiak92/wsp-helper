@@ -94,7 +94,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
       <div className="border-t border-slate-800 p-2 space-y-0.5">
         {!collapsed && user && (
           <p className="px-2 py-1 text-[10px] text-slate-600 truncate">
-            Zalogowany jako <span className="text-slate-400 font-medium">{user.login}</span>
+            <span className="text-slate-400 font-medium">{user.displayName}</span>
           </p>
         )}
         <button

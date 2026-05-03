@@ -6,6 +6,7 @@ export interface AuthUser {
   id: string
   login: string
   role: 'admin' | 'user'
+  displayName: string
 }
 
 interface AuthContextType {
@@ -17,7 +18,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-function toAuthUser(session: Session | null): AuthUser | null {
+function baseFromSession(session: Session | null): Omit<AuthUser, 'displayName'> | null {
   if (!session?.user) return null
   const u = session.user
   return {
@@ -27,18 +28,34 @@ function toAuthUser(session: Session | null): AuthUser | null {
   }
 }
 
+async function resolveDisplayName(login: string): Promise<string> {
+  const { data } = await supabase
+    .from('personnel')
+    .select('name')
+    .eq('login', login)
+    .maybeSingle()
+  return data?.name ?? login
+}
+
+async function buildUser(session: Session | null): Promise<AuthUser | null> {
+  const base = baseFromSession(session)
+  if (!base) return null
+  const displayName = await resolveDisplayName(base.login)
+  return { ...base, displayName }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(toAuthUser(session))
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setUser(await buildUser(session))
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(toAuthUser(session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(await buildUser(session))
     })
 
     return () => subscription.unsubscribe()

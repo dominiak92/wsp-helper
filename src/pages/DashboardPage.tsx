@@ -56,6 +56,7 @@ export function DashboardPage() {
   const [editingNote, setEditingNote] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -96,13 +97,18 @@ export function DashboardPage() {
 
   async function saveAnnouncement() {
     setSavingNote(true)
+    setSaveError(null)
     const msg = noteText.trim() || null
-    await supabase
+    const { error } = await supabase
       .from('announcements')
       .upsert({ id: 1, message: msg, updated_by: user?.login ?? null })
+    setSavingNote(false)
+    if (error) {
+      setSaveError('Błąd zapisu: ' + error.message)
+      return
+    }
     setAnnouncement(msg)
     setEditingNote(false)
-    setSavingNote(false)
   }
 
   if (loading) {
@@ -209,9 +215,12 @@ export function DashboardPage() {
                     placeholder="Treść notatki widoczna dla wszystkich użytkowników..."
                     autoFocus
                   />
+                  {saveError && (
+                    <p className="text-[11px] text-red-400">{saveError}</p>
+                  )}
                   <div className="flex items-center justify-end gap-2">
                     <button
-                      onClick={() => setEditingNote(false)}
+                      onClick={() => { setEditingNote(false); setSaveError(null) }}
                       className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 px-2 py-1.5 rounded transition-colors"
                     >
                       <X className="w-3 h-3" /> Anuluj

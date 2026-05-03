@@ -121,7 +121,7 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
                 {data?.fireThreatForecast && (
                   <>
                     <span className="text-[11px] text-slate-600">→</span>
-                    <span className="text-[11px] text-slate-400">{data.fireThreatForecast}</span>
+                    <span className="text-[11px] text-slate-400">{data.fireThreatForecast} <span className="text-slate-600">(prognoza)</span></span>
                   </>
                 )}
               </div>

@@ -32,7 +32,7 @@ export function DutyAssignmentView({ personnel, assignment, loading }: Props) {
   }
 
   return (
-    <div className="space-y-3 px-4 pb-6">
+    <div className="px-3 sm:px-4 pb-6 pt-3 space-y-3">
       {/* Special roles */}
       <Card label="Role specjalne" labelColor="text-slate-400">
         <Row label="Dowódca zmiany" value={name(personnel, assignment.shiftCommanderId)} valueColor="text-brand-300" />
@@ -41,27 +41,29 @@ export function DutyAssignmentView({ personnel, assignment, loading }: Props) {
         ))}
       </Card>
 
-      {/* Vehicles */}
-      {assignment.vehicles.map(v => {
-        const rows: { label: string; id: string | null }[] = []
-        if (v.commanderId) rows.push({ label: 'Ddca zast.', id: v.commanderId })
-        if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId })
-        v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id }))
-        if (!rows.length) return null
-        const vehicleName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
-        return (
-          <Card key={v.vehicleId} label={vehicleName} labelColor="text-emerald-400">
-            {rows.map((r, i) => (
-              <Row key={i} label={r.label} value={name(personnel, r.id)} />
-            ))}
-          </Card>
-        )
-      })}
+      {/* Vehicles — 2-col grid on sm+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {assignment.vehicles.map(v => {
+          const rows: { label: string; id: string | null }[] = []
+          if (v.commanderId) rows.push({ label: 'Ddca zast.', id: v.commanderId })
+          if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId })
+          v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id }))
+          if (!rows.length) return null
+          const vehicleName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
+          return (
+            <Card key={v.vehicleId} label={vehicleName} labelColor="text-emerald-400">
+              {rows.map((r, i) => (
+                <Row key={i} label={r.label} value={name(personnel, r.id)} />
+              ))}
+            </Card>
+          )
+        })}
+      </div>
 
       {/* Reserve */}
       {assignment.unassignedIds.length > 0 && (
         <Card label="Rezerwa / Dyżur" labelColor="text-slate-400">
-          <div className="flex flex-wrap gap-2 px-4 py-3">
+          <div className="flex flex-wrap gap-2 px-3 py-3">
             {assignment.unassignedIds.map(id => (
               <span key={id} className="text-sm text-slate-300 bg-surface-900 rounded-lg px-3 py-1.5 border border-slate-700">
                 {name(personnel, id)}
@@ -82,7 +84,7 @@ function Card({ label, labelColor, children }: {
   return (
     <div className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
       <div className="px-4 py-2.5 border-b border-slate-800">
-        <p className={cn('text-[10px] font-semibold uppercase tracking-widest', labelColor)}>{label}</p>
+        <p className={cn('text-[10px] font-semibold uppercase tracking-widest truncate', labelColor)}>{label}</p>
       </div>
       <div className="divide-y divide-slate-800/60">{children}</div>
     </div>
@@ -95,9 +97,9 @@ function Row({ label, value, valueColor = 'text-white' }: {
   valueColor?: string
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className={cn('text-sm font-semibold', valueColor)}>{value}</span>
+    <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+      <span className="text-xs text-slate-500 shrink-0">{label}</span>
+      <span className={cn('text-sm font-semibold truncate text-right', valueColor)}>{value}</span>
     </div>
   )
 }

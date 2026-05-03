@@ -17,7 +17,7 @@ export function MobileLayout() {
   if (!user) return <Navigate to="/login" replace />
 
   return (
-    <div className="flex flex-col h-screen bg-surface-950 max-w-md mx-auto relative">
+    <div className="flex flex-col h-screen bg-surface-950 overflow-x-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-surface-900 shrink-0">
         <div className="flex items-center gap-2.5">
@@ -37,9 +37,11 @@ export function MobileLayout() {
         </button>
       </header>
 
-      {/* Content */}
+      {/* Content — centered on wide screens */}
       <main className="flex-1 overflow-y-auto">
-        <Outlet />
+        <div className="max-w-2xl mx-auto w-full">
+          <Outlet />
+        </div>
       </main>
 
       {/* Bottom navigation */}

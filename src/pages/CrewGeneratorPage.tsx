@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft } from 'lucide-react'
+import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft, Save, Check } from 'lucide-react'
 import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
@@ -365,6 +365,9 @@ export function CrewGeneratorPage() {
   const [addingPerson, setAddingPerson] = useState(false)
   const [dragSource, setDragSource] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedOk, setSavedOk] = useState(false)
 
   useEffect(() => {
     supabase
@@ -385,43 +388,70 @@ export function CrewGeneratorPage() {
 
   useEffect(() => {
     if (!dutyDate) return
+    // order by created_at desc + limit 1 handles any duplicate rows from past bugs
     supabase
       .from('duty_assignments')
       .select('id, assignment_json')
       .eq('duty_date', dutyDate)
-      .maybeSingle()
+      .order('created_at', { ascending: false })
+      .limit(1)
       .then(({ data }) => {
-        if (data?.assignment_json) {
-          const parsed = data.assignment_json as ShiftAssignment
+        const row = data?.[0]
+        if (row?.assignment_json) {
+          const parsed = row.assignment_json as ShiftAssignment
           if (Array.isArray(parsed.dutyOfficerIds)) {
             setAssignment(parsed)
-            assignmentIdRef.current = data.id
+            assignmentIdRef.current = row.id
           }
         }
       })
   }, [dutyDate])
 
-  function saveAssignment(a: ShiftAssignment) {
-    setAssignment(a)
-    if (dutyDate) {
+  // Persist to Supabase — called explicitly via "Zapisz" button or after generate
+  async function persistToSupabase(a: ShiftAssignment) {
+    if (!dutyDate) return
+    setSaving(true)
+    setSavedOk(false)
+    try {
       const currentId = assignmentIdRef.current
       if (currentId) {
-        supabase.from('duty_assignments')
+        const { error } = await supabase
+          .from('duty_assignments')
           .update({ assignment_json: a })
           .eq('id', currentId)
-          .then(({ error }) => { if (error) console.error('[supabase] update duty_assignment:', error) })
+        if (error) throw error
       } else {
-        supabase.from('duty_assignments')
+        // Delete any stale duplicate rows first, then insert fresh
+        await supabase.from('duty_assignments').delete().eq('duty_date', dutyDate)
+        const { data: inserted, error } = await supabase
+          .from('duty_assignments')
           .insert({ duty_date: dutyDate, assignment_json: a })
           .select('id')
           .single()
-          .then(({ data, error }) => {
-            if (error) console.error('[supabase] insert duty_assignment:', error)
-            else if (data?.id) assignmentIdRef.current = data.id
-          })
+        if (error) throw error
+        if (inserted?.id) assignmentIdRef.current = inserted.id
       }
-    } else {
+      setIsDirty(false)
+      setSavedOk(true)
+      setTimeout(() => setSavedOk(false), 2500)
+    } catch (err) {
+      console.error('[supabase] save duty_assignment:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function applyAssignment(a: ShiftAssignment, autoSave = false) {
+    setAssignment(a)
+    if (!dutyDate) {
       localStorage.setItem('wsp-crew-assignment', JSON.stringify(a))
+      return
+    }
+    if (autoSave) {
+      persistToSupabase(a)
+    } else {
+      setIsDirty(true)
+      setSavedOk(false)
     }
   }
 
@@ -437,7 +467,7 @@ export function CrewGeneratorPage() {
   }
 
   function handleGenerate() {
-    saveAssignment(generateCrew(personnel))
+    applyAssignment(generateCrew(personnel), true)
   }
 
   function deletePerson(id: string) {
@@ -504,7 +534,7 @@ export function CrewGeneratorPage() {
     setDragSource(null)
     setDropTarget(null)
     if (!srcKey || srcKey === dstKey || !assignment) return
-    saveAssignment(applyDrop(assignment, srcKey, dstKey))
+    applyAssignment(applyDrop(assignment, srcKey, dstKey))
   }
 
   const dnd: DragCtx = {
@@ -550,16 +580,37 @@ export function CrewGeneratorPage() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white text-xs transition-colors"
           >
             <Users className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">{showPersonnel ? 'Ukryj' : 'Personel'}</span>
+            <span className="hidden sm:inline">{showPersonnel ? 'Ukryj' : 'Personel'}</span>
           </button>
           {assignment && (
             <button
               onClick={handleGenerate}
-              title="Reroll — nowe losowanie"
+              title="Nowe losowanie"
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 hover:text-white text-sm transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
+          )}
+          {dutyDate && assignment && isDirty && (
+            <button
+              onClick={() => persistToSupabase(assignment)}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 text-white text-sm font-medium transition-colors"
+            >
+              {saving ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : savedOk ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">{saving ? 'Zapisuję…' : 'Zapisz'}</span>
+            </button>
+          )}
+          {dutyDate && savedOk && !isDirty && (
+            <span className="flex items-center gap-1 text-xs text-emerald-400 px-2">
+              <Check className="w-3.5 h-3.5" /> Zapisano
+            </span>
           )}
           <button
             onClick={handleGenerate}
@@ -707,7 +758,7 @@ export function CrewGeneratorPage() {
                           setDragSource(null)
                           setDropTarget(null)
                           if (!srcKey || !assignment) return
-                          saveAssignment(applyDrop(assignment, srcKey, 'unassigned'))
+                          applyAssignment(applyDrop(assignment, srcKey, 'unassigned'))
                         }}
                       >
                         {assignment.unassignedIds.map(id => (

@@ -49,10 +49,12 @@ export function MobileCalendarPage() {
       .from('duty_assignments')
       .select('assignment_json')
       .eq('duty_date', selectedDate)
-      .single()
+      .order('created_at', { ascending: false })
+      .limit(1)
       .then(({ data }) => {
-        if (data?.assignment_json) {
-          const parsed = data.assignment_json as ShiftAssignment
+        const row = data?.[0]
+        if (row?.assignment_json) {
+          const parsed = row.assignment_json as ShiftAssignment
           if (Array.isArray(parsed.dutyOfficerIds)) setAssignment(parsed)
         }
         setAssignmentLoading(false)
@@ -83,79 +85,97 @@ export function MobileCalendarPage() {
   }, [year, month])
 
   return (
-    <div>
-      {/* Month navigation */}
-      <div className="flex items-center justify-between px-4 py-4">
-        <button onClick={prevMonth} className="p-2 rounded-lg text-slate-400 active:bg-surface-800 transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <h2 className="text-base font-bold text-white">{MONTH_NAMES[month]} {year}</h2>
-        <button onClick={nextMonth} className="p-2 rounded-lg text-slate-400 active:bg-surface-800 transition-colors">
-          <ChevronRight className="w-5 h-5" />
-        </button>
+    // On sm+ screens: side-by-side layout (calendar | assignment)
+    <div className="flex flex-col sm:flex-row sm:items-start min-h-full">
+
+      {/* Calendar column */}
+      <div className="w-full sm:w-72 sm:shrink-0 sm:sticky sm:top-0">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between px-4 py-4">
+          <button onClick={prevMonth} className="p-2 rounded-lg text-slate-400 active:bg-surface-800 transition-colors">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h2 className="text-base font-bold text-white">{MONTH_NAMES[month]} {year}</h2>
+          <button onClick={nextMonth} className="p-2 rounded-lg text-slate-400 active:bg-surface-800 transition-colors">
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Calendar grid */}
+        <div className="px-3 pb-4">
+          <div className="grid grid-cols-7 mb-1">
+            {DAY_ABBR.map((d, i) => (
+              <span key={d} className={cn('text-center text-[10px] font-medium py-1',
+                i >= 5 ? 'text-slate-600' : 'text-slate-700')}>
+                {d}
+              </span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-y-1.5">
+            {cells.map((day, i) => {
+              if (day === null) return <div key={`e${i}`} />
+              const key = ymdKey(year, month, day)
+              const duty = isDutyDay(year, month, day)
+              const hasSaved = savedDates.has(key)
+              const isToday = key === todayK
+              const isSelected = key === selectedDate
+              const isSun = (i % 7) === 6
+              return (
+                <button
+                  key={key}
+                  disabled={!duty}
+                  onClick={() => setSelectedDate(isSelected ? null : key)}
+                  className={cn(
+                    'relative flex items-center justify-center aspect-square text-[13px] rounded-xl leading-none font-medium transition-all',
+                    duty
+                      ? isSelected
+                        ? 'bg-brand-500 text-white font-bold shadow-lg shadow-brand-900/50'
+                        : 'bg-brand-800/70 text-brand-200 font-bold active:bg-brand-600'
+                      : isSun ? 'text-slate-700' : 'text-slate-700',
+                    isToday && !isSelected && 'ring-2 ring-amber-400 ring-offset-1 ring-offset-surface-950',
+                  )}
+                >
+                  {day}
+                  {duty && hasSaved && !isSelected && (
+                    <span className="absolute top-[3px] right-[3px] w-[5px] h-[5px] rounded-full bg-emerald-400" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Hint on sm+ when nothing selected */}
+        {!selectedDate && (
+          <p className="hidden sm:block text-xs text-slate-600 text-center px-4 pb-4">
+            Wybierz dzień służby
+          </p>
+        )}
       </div>
 
-      {/* Calendar grid */}
-      <div className="px-3">
-        <div className="grid grid-cols-7 mb-1">
-          {DAY_ABBR.map((d, i) => (
-            <span key={d} className={cn('text-center text-[10px] font-medium py-1',
-              i >= 5 ? 'text-slate-600' : 'text-slate-700')}>
-              {d}
-            </span>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-y-1.5">
-          {cells.map((day, i) => {
-            if (day === null) return <div key={`e${i}`} />
-            const key = ymdKey(year, month, day)
-            const duty = isDutyDay(year, month, day)
-            const hasSaved = savedDates.has(key)
-            const isToday = key === todayK
-            const isSelected = key === selectedDate
-            const isSun = (i % 7) === 6
-            return (
-              <button
-                key={key}
-                disabled={!duty}
-                onClick={() => setSelectedDate(isSelected ? null : key)}
-                className={cn(
-                  'relative flex items-center justify-center aspect-square text-[13px] rounded-xl leading-none font-medium transition-all',
-                  duty
-                    ? isSelected
-                      ? 'bg-brand-500 text-white font-bold shadow-lg shadow-brand-900/50'
-                      : 'bg-brand-800/70 text-brand-200 font-bold active:bg-brand-600'
-                    : isSun ? 'text-slate-700' : 'text-slate-700',
-                  isToday && !isSelected && 'ring-2 ring-amber-400 ring-offset-1 ring-offset-surface-950',
-                )}
-              >
-                {day}
-                {duty && hasSaved && !isSelected && (
-                  <span className="absolute top-[3px] right-[3px] w-[5px] h-[5px] rounded-full bg-emerald-400" />
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      {/* Divider on sm+ */}
+      <div className="hidden sm:block w-px bg-slate-800 self-stretch" />
 
       {/* Assignment panel */}
-      {selectedDate ? (
-        <div className="mt-5 border-t border-slate-800">
-          <div className="px-4 pt-4 pb-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-0.5">Obsada</p>
-            <h3 className="text-lg font-bold text-white">{formatDateShort(selectedDate)}</h3>
-            <p className="text-xs text-slate-500">{formatDateLong(selectedDate)}</p>
+      <div className="flex-1 min-w-0">
+        {selectedDate ? (
+          <>
+            <div className="px-4 pt-4 pb-2 border-b border-slate-800 sm:border-b-0">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-0.5">Obsada</p>
+              <h3 className="text-lg font-bold text-white">{formatDateShort(selectedDate)}</h3>
+              <p className="text-xs text-slate-500">{formatDateLong(selectedDate)}</p>
+            </div>
+            <DutyAssignmentView personnel={personnel} assignment={assignment} loading={assignmentLoading} />
+          </>
+        ) : (
+          <div className="flex items-center justify-center py-10 px-6 sm:pt-20">
+            <p className="text-xs text-slate-600 text-center">
+              Dotknij dnia służby (niebieski) aby zobaczyć obsadę
+            </p>
           </div>
-          <DutyAssignmentView personnel={personnel} assignment={assignment} loading={assignmentLoading} />
-        </div>
-      ) : (
-        <div className="flex items-center justify-center py-10 px-6 mt-2">
-          <p className="text-xs text-slate-600 text-center">
-            Dotknij dnia służby (niebieski) aby zobaczyć obsadę
-          </p>
-        </div>
-      )}
+        )}
+      </div>
+
     </div>
   )
 }

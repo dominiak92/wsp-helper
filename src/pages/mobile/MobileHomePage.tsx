@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,117 @@ function nextDutyKeys(count: number): string[] {
   return keys
 }
 
+// ── weather helpers ───────────────────────────────────────────────────────────
+
+interface WeatherData {
+  moisture: string | null
+  temperature: string | null
+  humidity: string | null
+  precipitation: string | null
+  windSpeed: string | null
+  windDir: string | null
+  fireThreat: string | null
+  fireThreatForecast: string | null
+  updatedAt: string | null
+}
+
+const FIRE_STYLES: Record<number, { text: string; bg: string; border: string }> = {
+  0: { text: 'text-slate-400',   bg: 'bg-surface-700/50',  border: 'border-slate-700/40'   },
+  1: { text: 'text-emerald-400', bg: 'bg-emerald-950/40',  border: 'border-emerald-900/50' },
+  2: { text: 'text-amber-400',   bg: 'bg-amber-950/40',    border: 'border-amber-900/50'   },
+  3: { text: 'text-orange-400',  bg: 'bg-orange-950/40',   border: 'border-orange-900/50'  },
+  4: { text: 'text-red-400',     bg: 'bg-red-950/40',      border: 'border-red-900/50'     },
+  5: { text: 'text-red-300',     bg: 'bg-red-950/60',      border: 'border-red-800/60'     },
+}
+
+function parseFireLevel(threat: string | null): number {
+  if (!threat) return 0
+  const m = threat.match(/^(\d)/)
+  return m ? Math.min(5, Math.max(0, parseInt(m[1]))) : 0
+}
+
+function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loading: boolean }) {
+  const [open, setOpen] = useState(false)
+  const level = parseFireLevel(data?.fireThreat ?? null)
+  const ls = FIRE_STYLES[level]
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={cn(
+          'w-full flex items-center justify-between bg-surface-800 rounded-xl border px-4 py-3 text-left transition-colors hover:border-opacity-80',
+          ls.border,
+        )}
+      >
+        <div className="flex items-center gap-2.5">
+          <Flame className={cn('w-4 h-4 shrink-0', ls.text)} />
+          <div>
+            <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
+            <p className={cn('text-[11px] font-semibold', ls.text)}>
+              {loading ? 'Ładowanie…' : (data?.fireThreat ?? 'Brak danych')}
+            </p>
+          </div>
+        </div>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3">
+          {!data ? (
+            <p className="text-xs text-slate-600 text-center py-2">Brak danych pogodowych</p>
+          ) : (
+            <>
+              {data.fireThreatForecast && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Prognoza</span>
+                  <span className="text-sm text-slate-300">{data.fireThreatForecast}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                  <Thermometer className="w-3.5 h-3.5 text-red-400 mx-auto mb-0.5" />
+                  <p className="text-sm font-bold text-white tabular-nums">
+                    {data.temperature ? `${data.temperature}°` : '—'}
+                  </p>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
+                </div>
+                <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                  <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
+                  <p className="text-sm font-bold text-white tabular-nums">{data.moisture ?? '—'}</p>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
+                </div>
+                <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                  <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
+                  <p className="text-sm font-bold text-white tabular-nums">
+                    {data.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
+                  </p>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
+                <span className="flex items-center gap-1">
+                  <Wind className="w-3 h-3 text-slate-600" />
+                  <span className="text-slate-400">{data.windSpeed ?? '—'} m/s {data.windDir ?? ''}</span>
+                </span>
+                <span>Opady: <span className="text-slate-400">{data.precipitation ?? '0'} mm</span></span>
+              </div>
+
+              {data.updatedAt && (
+                <p className="text-[10px] text-slate-700 text-right">akt. {data.updatedAt}</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── sub-components ────────────────────────────────────────────────────────────
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -110,6 +221,9 @@ export function MobileHomePage() {
   const [msgError, setMsgError] = useState<string | null>(null)
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
+
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(true)
 
   useEffect(() => {
     const upcomingKeys = nextDutyKeys(16) // next 16 duty days
@@ -166,6 +280,13 @@ export function MobileHomePage() {
       setLoading(false)
     })
   }, [dutyDate])
+
+  useEffect(() => {
+    fetch('/.netlify/functions/weather')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { setWeather(data); setWeatherLoading(false) })
+      .catch(() => setWeatherLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -405,6 +526,9 @@ export function MobileHomePage() {
           )}
         </div>
       )}
+
+      {/* Zagrożenie pożarowe */}
+      <WeatherCollapsible data={weather} loading={weatherLoading} />
 
       {/* Full assignment summary (collapsed but accessible) */}
       {assignment && (

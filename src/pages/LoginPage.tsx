@@ -16,7 +16,7 @@ export function LoginPage() {
   const [error, setError] = useState('')
 
   if (!authLoading && user) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to={user.role === 'user' ? '/mobile' : '/dashboard'} replace />
   }
 
   async function handleSubmit(e: FormEvent) {

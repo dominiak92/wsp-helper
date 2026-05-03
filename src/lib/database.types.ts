@@ -6,6 +6,7 @@ interface PersonnelRow {
   roles: string[]
   preferred_vehicle_id: string | null
   absence: string | null
+  login: string | null
   created_at: string
 }
 
@@ -15,6 +16,7 @@ interface PersonnelInsert {
   roles: string[]
   preferred_vehicle_id?: string | null
   absence?: string | null
+  login?: string | null
 }
 
 interface DutyAssignmentRow {

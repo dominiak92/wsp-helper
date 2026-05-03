@@ -16,9 +16,8 @@ export function DashboardLayout() {
     )
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'user') return <Navigate to="/mobile" replace />
 
   return (
     <div className="flex h-screen bg-surface-950 overflow-hidden">

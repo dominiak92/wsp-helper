@@ -1,5 +1,5 @@
 import type { Person, ShiftAssignment } from '../lib/crew'
-import { CREW_VEHICLE_NAMES } from '../lib/crew'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS } from '../lib/crew'
 import { cn } from '../lib/utils'
 
 function name(personnel: Person[], id: string | null): string {
@@ -70,6 +70,20 @@ export function DutyAssignmentView({ personnel, assignment, loading }: Props) {
               </span>
             ))}
           </div>
+        </Card>
+      )}
+
+      {/* Absent personnel */}
+      {personnel.filter(p => p.absence).length > 0 && (
+        <Card label={`Nieobecni (${personnel.filter(p => p.absence).length})`} labelColor="text-red-400">
+          {personnel.filter(p => p.absence).map(p => (
+            <div key={p.id} className="flex items-center justify-between gap-2 px-4 py-2.5">
+              <span className="text-sm text-slate-500 line-through truncate">{p.name}</span>
+              <span className="text-[11px] font-medium text-red-400 shrink-0 bg-red-950/40 px-2 py-0.5 rounded border border-red-900/40">
+                {ABSENCE_LABELS[p.absence!]}
+              </span>
+            </div>
+          ))}
         </Card>
       )}
     </div>

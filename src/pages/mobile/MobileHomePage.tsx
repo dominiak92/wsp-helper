@@ -107,6 +107,7 @@ export function MobileHomePage() {
   const [msgText, setMsgText] = useState('')
   const [sendingMsg, setSendingMsg] = useState(false)
   const [msgSentOk, setMsgSentOk] = useState(false)
+  const [msgError, setMsgError] = useState<string | null>(null)
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
 
@@ -197,13 +198,16 @@ export function MobileHomePage() {
   async function sendDutyMessage() {
     if (!user || !msgText.trim()) return
     setSendingMsg(true)
+    setMsgError(null)
     const { error } = await supabase.from('duty_messages').insert({
       sender_login: user.login,
       sender_name: user.displayName,
       message: msgText.trim(),
     })
     setSendingMsg(false)
-    if (!error) {
+    if (error) {
+      setMsgError('Błąd wysyłania: ' + error.message)
+    } else {
       setMsgText('')
       setMsgSentOk(true)
       setShowMsgForm(false)
@@ -308,9 +312,12 @@ export function MobileHomePage() {
               rows={3}
               value={msgText}
               onChange={e => setMsgText(e.target.value)}
-              placeholder="Np. stan licznika GBA 101: 45231 km, zmiana: Kowalski ↔ Nowak..."
+              placeholder="Np. stan licznika GBA 2,5/16: 45231 km, zmiana kierowcy/ratownika: Kowalski ↔ Nowak..."
               autoFocus
             />
+            {msgError && (
+              <p className="text-[11px] text-red-400">{msgError}</p>
+            )}
             <div className="flex justify-end">
               <button
                 onClick={sendDutyMessage}

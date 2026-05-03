@@ -24,7 +24,7 @@ const BAYS: Bay[] = [
   { number: 2, brand: 'SCANIA',     model: 'GCBA 5/32',   callsign: '25', vehicleId: 'gcba532',  type: 'gcba' },
   { number: 3, brand: 'SCANIA',     model: 'GCBA 10/60',  callsign: '26', vehicleId: 'gcba1060', type: 'gcba' },
   { number: 4, brand: 'SCANIA',     model: 'GCBA 8/50',   callsign: '35', vehicleId: null,       type: 'gcba', note: 'Lotniskowy' },
-  { number: 5, brand: 'Mitsubishi', model: 'GLBM 0.3',    callsign: null, vehicleId: null,       type: 'glbm' },
+  { number: 5, brand: 'Mitsubishi', model: 'GLBM 0.3',    callsign: '20', vehicleId: null,       type: 'glbm' },
 ]
 
 const TYPE_STYLES: Record<VehicleType, { door: string; callsign: string; border: string }> = {

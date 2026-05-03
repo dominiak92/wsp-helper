@@ -5,6 +5,7 @@ import {
   ClipboardList,
   CalendarDays,
   Truck,
+  BookOpen,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
@@ -22,6 +23,7 @@ const navGroups = [
       { label: 'Generator opisów', icon: ClipboardList, path: '/incident-generator' },
       { label: 'Kalendarz służb', icon: CalendarDays, path: '/duty-calendar' },
       { label: 'Garaż', icon: Truck, path: '/garage' },
+      { label: 'Vademecum', icon: BookOpen, path: '/vademecum' },
     ],
   },
 ]

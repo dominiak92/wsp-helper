@@ -1,6 +1,6 @@
-// ISO-8859-2 → Unicode map for chars that differ from ISO-8859-1.
-// latin1 decode maps bytes 0x00-0xFF directly to Unicode codepoints,
-// so we only need to remap the positions that ISO-8859-2 assigns differently.
+import https from 'https'
+
+// ISO-8859-2 → Unicode remap (latin1 decode + fix extended chars)
 const ISO88592 = new Map([
   [0xA1,'Ą'],[0xA2,'˘'],[0xA3,'Ł'],[0xA4,'¤'],
   [0xA5,'Ľ'],[0xA6,'Ś'],[0xA7,'§'],[0xA8,'¨'],
@@ -28,10 +28,17 @@ const ISO88592 = new Map([
   [0xFD,'ý'],[0xFE,'ţ'],[0xFF,'˙'],
 ])
 
-// latin1 is always available in Node.js; remap extended chars for ISO-8859-2.
 function decodeISO88592(buf) {
-  const s = new TextDecoder('latin1').decode(buf)
-  return s.replace(/[\x80-\xFF]/g, ch => ISO88592.get(ch.charCodeAt(0)) ?? ch)
+  let s = ''
+  for (let i = 0; i < buf.length; i++) {
+    const b = buf[i]
+    if (b < 0x80) {
+      s += String.fromCharCode(b)
+    } else {
+      s += ISO88592.get(b) ?? String.fromCharCode(b)
+    }
+  }
+  return s
 }
 
 function windDirLabel(deg) {
@@ -39,20 +46,39 @@ function windDirLabel(deg) {
   return dirs[Math.round(Number(deg) / 45) % 8]
 }
 
+function fetchPage() {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      'https://www.traxelektronik.pl/pogoda/las/zbiorcza.php',
+      {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; wsp-helper)' },
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        const chunks = []
+        res.on('data', chunk => chunks.push(chunk))
+        res.on('end', () => {
+          const total = chunks.reduce((n, c) => n + c.length, 0)
+          const out = new Uint8Array(total)
+          let off = 0
+          for (const c of chunks) { out.set(c, off); off += c.length }
+          resolve(out)
+        })
+        res.on('error', reject)
+      },
+    )
+    req.on('error', reject)
+    req.setTimeout(12000, () => {
+      req.destroy()
+      reject(new Error('Request timeout'))
+    })
+  })
+}
+
 export const handler = async () => {
   try {
-    const res = await fetch('https://www.traxelektronik.pl/pogoda/las/zbiorcza.php', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; wsp-helper)' },
-    })
-    if (!res.ok) {
-      return {
-        statusCode: 502,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: `Upstream ${res.status}` }),
-      }
-    }
-
-    const html = decodeISO88592(await res.arrayBuffer())
+    const buf = await fetchPage()
+    const html = decodeISO88592(buf)
 
     // Rzepin LBL station ID 1946
     const rowMatch = html.match(
@@ -97,7 +123,7 @@ export const handler = async () => {
       }),
     }
   } catch (err) {
-    console.error('[weather]', err)
+    console.error('[weather]', err?.cause ?? err)
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },

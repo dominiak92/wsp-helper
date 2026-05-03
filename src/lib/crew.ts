@@ -45,6 +45,7 @@ export interface Person {
   roles: RoleType[]
   preferredVehicleId?: string
   absence: AbsenceType | null
+  login?: string | null
 }
 
 export const CREW_VEHICLE_IDS = ['gba', 'gcba532', 'gcba1060'] as const

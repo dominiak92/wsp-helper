@@ -1,22 +1,130 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { currentOrNextDutyDate, todayYmdKey, formatDateShort, formatDateLong } from '../../lib/duty'
-import { DutyAssignmentView } from '../../components/DutyAssignmentView'
+import {
+  currentOrNextDutyDate, todayYmdKey, isDutyDay, ymdKey,
+  formatDateShort, formatDateLong,
+} from '../../lib/duty'
+import { useAuth } from '../../lib/auth'
+import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS } from '../../lib/crew'
+import { UserCircle, Truck, UserX, CalendarX } from 'lucide-react'
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+interface MyRole {
+  label: string
+  vehicle: string | null
+  colorClass: string
+  borderClass: string
+}
+
+function resolveMyRole(assignment: ShiftAssignment, personId: string): MyRole | null {
+  if (assignment.shiftCommanderId === personId)
+    return { label: 'Dowódca zmiany', vehicle: null, colorClass: 'text-brand-300', borderClass: 'border-brand-800' }
+
+  if (assignment.dutyOfficerIds.includes(personId))
+    return { label: 'Dyżurny', vehicle: null, colorClass: 'text-amber-300', borderClass: 'border-amber-800' }
+
+  for (const v of assignment.vehicles) {
+    const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
+    if (v.commanderId === personId)
+      return { label: 'Dowódca zastępu', vehicle: vName, colorClass: 'text-purple-300', borderClass: 'border-purple-800' }
+    if (v.driverId === personId)
+      return { label: 'Kierowca-ratownik', vehicle: vName, colorClass: 'text-emerald-300', borderClass: 'border-emerald-800' }
+    if (v.rescuerIds.includes(personId))
+      return { label: 'Ratownik', vehicle: vName, colorClass: 'text-sky-300', borderClass: 'border-sky-800' }
+  }
+
+  if (assignment.unassignedIds.includes(personId))
+    return { label: 'Rezerwa / Dyżur', vehicle: null, colorClass: 'text-slate-400', borderClass: 'border-slate-700' }
+
+  return null // absent from this duty
+}
+
+function isPersonInAssignment(a: ShiftAssignment, id: string): boolean {
+  if (a.shiftCommanderId === id) return true
+  if (a.dutyOfficerIds.includes(id)) return true
+  if (a.unassignedIds.includes(id)) return true
+  return a.vehicles.some(v =>
+    v.commanderId === id || v.driverId === id || v.rescuerIds.includes(id)
+  )
+}
+
+// next N duty day keys starting from today
+function nextDutyKeys(count: number): string[] {
+  const keys: string[] = []
+  const d = new Date()
+  for (let i = 0; keys.length < count && i < 400; i++) {
+    const nd = new Date(d)
+    nd.setDate(d.getDate() + i)
+    if (isDutyDay(nd.getFullYear(), nd.getMonth(), nd.getDate()))
+      keys.push(ymdKey(nd.getFullYear(), nd.getMonth(), nd.getDate()))
+  }
+  return keys
+}
+
+// ── sub-components ────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600 mb-2">{children}</p>
+  )
+}
+
+function StatCard({ value, label, sub, accent = 'slate' }: {
+  value: string | number
+  label: string
+  sub?: string
+  accent?: 'green' | 'red' | 'slate'
+}) {
+  const colors = {
+    green: 'text-emerald-400',
+    red: 'text-red-400',
+    slate: 'text-white',
+  }
+  return (
+    <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-4 flex flex-col gap-1">
+      <span className={cn('text-2xl font-bold tabular-nums', colors[accent])}>{value}</span>
+      <span className="text-xs font-medium text-slate-400">{label}</span>
+      {sub && <span className="text-[11px] text-slate-600">{sub}</span>}
+    </div>
+  )
+}
+
+// ── main page ─────────────────────────────────────────────────────────────────
 
 export function MobileHomePage() {
+  const { user } = useAuth()
   const dutyDate = currentOrNextDutyDate()
   const isToday = dutyDate === todayYmdKey()
 
   const [personnel, setPersonnel] = useState<Person[]>([])
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
   const [loading, setLoading] = useState(true)
+  // Map of dutyKey → has saved assignment (for upcoming absence scan)
+  const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
 
   useEffect(() => {
+    const upcomingKeys = nextDutyKeys(16) // next 16 duty days
+    const [firstKey, ...restKeys] = upcomingKeys
+
     Promise.all([
       supabase.from('personnel').select('*'),
-      supabase.from('duty_assignments').select('assignment_json').eq('duty_date', dutyDate).single(),
-    ]).then(([{ data: pData }, { data: aData }]) => {
+      // current/next duty assignment
+      supabase
+        .from('duty_assignments')
+        .select('assignment_json')
+        .eq('duty_date', firstKey ?? dutyDate)
+        .order('created_at', { ascending: false })
+        .limit(1),
+      // upcoming saved assignments for absence detection
+      supabase
+        .from('duty_assignments')
+        .select('duty_date, assignment_json')
+        .in('duty_date', restKeys)
+        .order('duty_date', { ascending: true }),
+    ]).then(([{ data: pData }, { data: aData }, { data: futureData }]) => {
       if (pData) {
         setPersonnel(pData.map(row => ({
           id: row.id,
@@ -24,20 +132,65 @@ export function MobileHomePage() {
           roles: row.roles as RoleType[],
           preferredVehicleId: row.preferred_vehicle_id ?? undefined,
           absence: row.absence as AbsenceType | null,
+          login: row.login ?? null,
         })))
       }
-      if (aData?.assignment_json) {
-        const parsed = aData.assignment_json as ShiftAssignment
+
+      const row = aData?.[0]
+      if (row?.assignment_json) {
+        const parsed = row.assignment_json as ShiftAssignment
         if (Array.isArray(parsed.dutyOfficerIds)) setAssignment(parsed)
       }
+
+      if (futureData) {
+        const m = new Map<string, ShiftAssignment>()
+        for (const r of futureData) {
+          if (r.assignment_json) {
+            const parsed = r.assignment_json as ShiftAssignment
+            if (Array.isArray(parsed.dutyOfficerIds))
+              m.set(r.duty_date as string, parsed)
+          }
+        }
+        setSavedMap(m)
+      }
+
       setLoading(false)
     })
   }, [dutyDate])
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  const myPerson = user ? personnel.find(p => p.login === user.login) ?? null : null
+  const myRole = (assignment && myPerson) ? resolveMyRole(assignment, myPerson.id) : null
+  const isAbsentNow = myPerson?.absence != null
+
+  const availableCount = personnel.filter(p => !p.absence).length
+  const absentPersonnel = personnel.filter(p => p.absence)
+  const total = personnel.length
+
+  // Upcoming duties where user is absent (saved assignment exists but user not in it)
+  const upcomingAbsences: string[] = []
+  if (myPerson) {
+    for (const [date, a] of savedMap.entries()) {
+      if (!isPersonInAssignment(a, myPerson.id)) {
+        upcomingAbsences.push(date)
+        if (upcomingAbsences.length >= 3) break
+      }
+    }
+  }
+  upcomingAbsences.sort()
+
   return (
-    <div>
+    <div className="px-3 sm:px-5 py-4 space-y-5 pb-8">
+
       {/* Date header */}
-      <div className="px-4 pt-5 pb-4 border-b border-slate-800">
+      <div className="border-b border-slate-800 pb-4">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
           {isToday ? 'Dzisiejsza służba' : 'Następna służba'}
         </p>
@@ -45,7 +198,216 @@ export function MobileHomePage() {
         <p className="text-xs text-slate-500 mt-0.5">{formatDateLong(dutyDate)}</p>
       </div>
 
-      <DutyAssignmentView personnel={personnel} assignment={assignment} loading={loading} />
+      {/* My assignment */}
+      {myPerson && (
+        <div>
+          <SectionLabel>Moje przydzielenie</SectionLabel>
+          {!assignment ? (
+            <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-4 flex items-center gap-3">
+              <UserCircle className="w-8 h-8 text-slate-600 shrink-0" />
+              <p className="text-sm text-slate-500">Obsada nie została jeszcze wygenerowana</p>
+            </div>
+          ) : isAbsentNow ? (
+            <div className="bg-surface-800 rounded-xl border border-red-900/40 p-4 flex items-center gap-3">
+              <UserX className="w-8 h-8 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-400">Nieobecny</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {ABSENCE_LABELS[myPerson.absence!]}
+                </p>
+              </div>
+            </div>
+          ) : myRole ? (
+            <div className={cn('bg-surface-800 rounded-xl border p-4 flex items-center gap-4', myRole.borderClass)}>
+              {myRole.vehicle ? (
+                <Truck className="w-7 h-7 text-slate-500 shrink-0" />
+              ) : (
+                <UserCircle className="w-7 h-7 text-slate-500 shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className={cn('text-base font-bold truncate', myRole.colorClass)}>{myRole.label}</p>
+                {myRole.vehicle && (
+                  <p className="text-xs text-slate-400 mt-0.5">{myRole.vehicle}</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-4 flex items-center gap-3">
+              <UserX className="w-8 h-8 text-slate-600 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-slate-400">Nieobecny tej służby</p>
+                <p className="text-xs text-slate-600 mt-0.5">Nie figurujesz w aktywnej obsadzie</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Crew counter */}
+      <div>
+        <SectionLabel>Stan obsady</SectionLabel>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            value={availableCount}
+            label="Dostępnych"
+            sub={`z ${total} ogółem`}
+            accent="green"
+          />
+          <StatCard
+            value={absentPersonnel.length}
+            label="Nieobecnych"
+            accent={absentPersonnel.length > 0 ? 'red' : 'slate'}
+          />
+        </div>
+        {/* progress bar */}
+        {total > 0 && (
+          <div className="mt-2 h-1.5 rounded-full bg-surface-700 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all"
+              style={{ width: `${(availableCount / total) * 100}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Absent personnel */}
+      {absentPersonnel.length > 0 && (
+        <div>
+          <SectionLabel>Nieobecni ({absentPersonnel.length})</SectionLabel>
+          <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
+            {absentPersonnel.map(p => (
+              <div key={p.id} className="flex items-center justify-between px-4 py-2.5 gap-2">
+                <span className="text-sm text-slate-300 truncate">{p.name}</span>
+                <span className="text-[11px] font-medium text-red-400 shrink-0 bg-red-950/40 px-2 py-0.5 rounded-md border border-red-900/40">
+                  {ABSENCE_LABELS[p.absence!]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming absences for logged-in user */}
+      {myPerson && (
+        <div>
+          <SectionLabel>Twoje nadchodzące nieobecności</SectionLabel>
+          {upcomingAbsences.length === 0 ? (
+            <div className="flex items-center gap-2.5 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
+              <CalendarX className="w-4 h-4 text-slate-600 shrink-0" />
+              <p className="text-xs text-slate-600">
+                Brak zaplanowanych nieobecności w zapisanych służbach
+              </p>
+            </div>
+          ) : (
+            <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
+              {upcomingAbsences.map(date => (
+                <div key={date} className="flex items-center gap-3 px-4 py-3">
+                  <CalendarX className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">{formatDateShort(date)}</p>
+                    <p className="text-[11px] text-slate-500">{formatDateLong(date)}</p>
+                  </div>
+                  <span className="ml-auto text-[10px] text-slate-600 shrink-0">nieobecny</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Full assignment summary (collapsed but accessible) */}
+      {assignment && (
+        <FullAssignmentCollapsible personnel={personnel} assignment={assignment} />
+      )}
+    </div>
+  )
+}
+
+// ── Collapsible full assignment ───────────────────────────────────────────────
+
+function FullAssignmentCollapsible({ personnel, assignment }: {
+  personnel: Person[]
+  assignment: ShiftAssignment
+}) {
+  const [open, setOpen] = useState(false)
+
+  function name(id: string | null) {
+    if (!id) return '—'
+    return personnel.find(p => p.id === id)?.name ?? '—'
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between text-left py-1"
+      >
+        <SectionLabelInline>Pełna obsada służby</SectionLabelInline>
+        <span className="text-[10px] text-slate-600">{open ? 'Zwiń ▲' : 'Rozwiń ▼'}</span>
+      </button>
+
+      {open && (
+        <div className="space-y-2 mt-1">
+          {/* Special roles */}
+          <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
+            <RowInline label="Dowódca zmiany" value={name(assignment.shiftCommanderId)} />
+            {assignment.dutyOfficerIds.map(id => (
+              <RowInline key={id} label="Dyżurny" value={name(id)} />
+            ))}
+          </div>
+
+          {/* Vehicles */}
+          {assignment.vehicles.map(v => {
+            const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
+            const rows: { label: string; id: string | null }[] = []
+            if (v.commanderId) rows.push({ label: 'Ddca zast.', id: v.commanderId })
+            if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId })
+            v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id }))
+            if (!rows.length) return null
+            return (
+              <div key={v.vehicleId} className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 px-4 py-2 border-b border-slate-800">
+                  {vName}
+                </p>
+                <div className="divide-y divide-slate-800/60">
+                  {rows.map((r, i) => <RowInline key={i} label={r.label} value={name(r.id)} />)}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Reserve */}
+          {assignment.unassignedIds.length > 0 && (
+            <div className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 px-4 py-2 border-b border-slate-800">
+                Rezerwa / Dyżur
+              </p>
+              <div className="flex flex-wrap gap-2 px-4 py-3">
+                {assignment.unassignedIds.map(id => (
+                  <span key={id} className="text-sm text-slate-300 bg-surface-900 rounded-lg px-3 py-1.5 border border-slate-700">
+                    {name(id)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SectionLabelInline({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600">{children}</p>
+  )
+}
+
+function RowInline({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+      <span className="text-xs text-slate-500 shrink-0">{label}</span>
+      <span className="text-sm font-semibold text-white truncate text-right">{value}</span>
     </div>
   )
 }

@@ -6,8 +6,9 @@ import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS,
-  CREW_VEHICLE_NAMES, VEHICLE_SEATS,
-  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, removePersonFromAssignment,
+  CREW_VEHICLE_NAMES, VEHICLE_SEATS, ROLE_SORT_ORDER,
+  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop,
+  removePersonFromAssignment, isPersonInAssignment,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
 
@@ -54,10 +55,11 @@ function AbsenceSelect({ value, onChange }: {
 
 // ── Personnel row ─────────────────────────────────────────────────────────────
 
-function PersonnelRow({ person, onUpdate, onDelete }: {
+function PersonnelRow({ person, onUpdate, onDelete, notAssigned }: {
   person: Person
   onUpdate: (p: Person) => void
   onDelete: (id: string) => void
+  notAssigned?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(person.name)
@@ -83,7 +85,10 @@ function PersonnelRow({ person, onUpdate, onDelete }: {
   }
 
   return (
-    <div className={cn('p-2 rounded-lg border border-slate-800 bg-surface-900', absent && !editing && 'opacity-50')}>
+    <div className={cn(
+      'p-2 rounded-lg border bg-surface-900',
+      absent && !editing ? 'border-slate-800 opacity-50' : notAssigned ? 'border-amber-900/50' : 'border-slate-800'
+    )}>
       <div className="flex items-center gap-1.5">
         {editing ? (
           <input
@@ -97,6 +102,9 @@ function PersonnelRow({ person, onUpdate, onDelete }: {
           <span className={cn('text-sm font-medium text-white flex-1 truncate', absent && 'line-through')}>
             {person.name}
           </span>
+        )}
+        {notAssigned && !editing && (
+          <span className="text-[10px] font-medium text-amber-600 shrink-0">poza obsadą</span>
         )}
         <button
           onClick={() => editing ? handleCancel() : setEditing(true)}
@@ -773,8 +781,21 @@ export function CrewGeneratorPage() {
             {addingPerson && (
               <AddPersonForm onAdd={addPerson} onCancel={() => setAddingPerson(false)} />
             )}
-            {personnel.map(person => (
-              <PersonnelRow key={person.id} person={person} onUpdate={updatePerson} onDelete={deletePerson} />
+            {[...personnel].sort((a, b) => {
+              const aAbsent = a.absence !== null ? 2 : (!assignment || isPersonInAssignment(assignment, a.id)) ? 0 : 1
+              const bAbsent = b.absence !== null ? 2 : (!assignment || isPersonInAssignment(assignment, b.id)) ? 0 : 1
+              if (aAbsent !== bAbsent) return aAbsent - bAbsent
+              const aP = Math.min(...a.roles.map(r => ROLE_SORT_ORDER[r]))
+              const bP = Math.min(...b.roles.map(r => ROLE_SORT_ORDER[r]))
+              return aP - bP
+            }).map(person => (
+              <PersonnelRow
+                key={person.id}
+                person={person}
+                onUpdate={updatePerson}
+                onDelete={deletePerson}
+                notAssigned={!person.absence && !!assignment && !isPersonInAssignment(assignment, person.id)}
+              />
             ))}
           </aside>
         )}

@@ -194,6 +194,23 @@ export function removePersonFromAssignment(a: ShiftAssignment, personId: string)
   }
 }
 
+export const ROLE_SORT_ORDER: Record<RoleType, number> = {
+  SHIFT_COMMANDER: 0,
+  VEHICLE_COMMANDER: 1,
+  DUTY_OFFICER: 2,
+  DRIVER_RESCUER: 3,
+  RESCUER: 4,
+}
+
+export function isPersonInAssignment(a: ShiftAssignment, personId: string): boolean {
+  if (a.shiftCommanderId === personId) return true
+  if (a.dutyOfficerIds.includes(personId)) return true
+  if (a.unassignedIds.includes(personId)) return true
+  return a.vehicles.some(v =>
+    v.commanderId === personId || v.driverId === personId || v.rescuerIds.includes(personId)
+  )
+}
+
 export function resolveName(persons: Person[], id: string | null): string {
   if (!id) return '—'
   return persons.find(p => p.id === id)?.name ?? '—'

@@ -18,44 +18,50 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-function baseFromSession(session: Session | null): Omit<AuthUser, 'displayName'> | null {
+function baseFromSession(session: Session | null): AuthUser | null {
   if (!session?.user) return null
   const u = session.user
+  const login = (u.user_metadata?.login as string) ?? u.email?.split('@')[0] ?? 'unknown'
   return {
     id: u.id,
-    login: (u.user_metadata?.login as string) ?? u.email?.split('@')[0] ?? 'unknown',
+    login,
     role: (u.user_metadata?.role as 'admin' | 'user') ?? 'user',
+    displayName: login, // fallback — replaced async below
   }
-}
-
-async function resolveDisplayName(login: string): Promise<string> {
-  const { data } = await supabase
-    .from('personnel')
-    .select('name')
-    .eq('login', login)
-    .maybeSingle()
-  return data?.name ?? login
-}
-
-async function buildUser(session: Session | null): Promise<AuthUser | null> {
-  const base = baseFromSession(session)
-  if (!base) return null
-  const displayName = await resolveDisplayName(base.login)
-  return { ...base, displayName }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Fetch real name from personnel and patch user state (non-blocking)
+  function hydrateDisplayName(base: AuthUser) {
+    supabase
+      .from('personnel')
+      .select('name')
+      .eq('login', base.login)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.name) {
+          setUser(prev =>
+            prev?.id === base.id ? { ...prev, displayName: data.name! } : prev
+          )
+        }
+      })
+  }
+
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(await buildUser(session))
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = baseFromSession(session)
+      setUser(u)
       setLoading(false)
+      if (u) hydrateDisplayName(u)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(await buildUser(session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = baseFromSession(session)
+      setUser(u)
+      if (u) hydrateDisplayName(u)
     })
 
     return () => subscription.unsubscribe()

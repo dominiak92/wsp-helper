@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Pencil, X, Check, RefreshCw, MessageSquare, Bell, Trash2, Flame, Wind, Thermometer, Droplets } from 'lucide-react'
+import { ChevronRight, Pencil, X, Check, RefreshCw, MessageSquare, Bell, Trash2, Flame, Wind, Thermometer, Droplets, Leaf } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
   currentOrNextDutyDate,
@@ -129,26 +129,28 @@ function WeatherWidget({
               <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
             </div>
             <div className="text-center bg-surface-700/30 rounded-lg py-2">
-              <Wind className="w-3.5 h-3.5 text-sky-400 mx-auto mb-0.5" />
+              <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
               <p className="text-sm font-bold text-white tabular-nums">
-                {data.windSpeed ?? '—'}
-                <span className="text-[9px] font-normal text-slate-500"> m/s</span>
+                {data.moisture ?? '—'}
               </p>
-              <p className="text-[9px] text-slate-600 uppercase tracking-wide">{data.windDir ?? '—'}</p>
+              <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
             </div>
             <div className="text-center bg-surface-700/30 rounded-lg py-2">
               <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
               <p className="text-sm font-bold text-white tabular-nums">
-                {data.precipitation ?? '0'}
-                <span className="text-[9px] font-normal text-slate-500"> mm</span>
+                {data.humidity ?? '—'}
+                <span className="text-[9px] font-normal text-slate-500">%</span>
               </p>
-              <p className="text-[9px] text-slate-600 uppercase tracking-wide">opady</p>
+              <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/60">
-            <span>Wilg.: <span className="text-slate-400">{data.humidity ?? '—'}%</span></span>
-            <span>Ściółka: <span className="text-slate-400">{data.moisture ?? '—'}</span></span>
+            <span className="flex items-center gap-1">
+              <Wind className="w-3 h-3 text-slate-600" />
+              <span className="text-slate-400">{data.windSpeed ?? '—'} m/s {data.windDir ?? ''}</span>
+            </span>
+            <span>Opady: <span className="text-slate-400">{data.precipitation ?? '0'} mm</span></span>
           </div>
 
           {data.updatedAt && (

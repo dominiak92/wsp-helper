@@ -1,17 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import {
-  Users,
-  Truck,
-  FileText,
   LayoutDashboard,
-  ShieldAlert,
   LogOut,
   ClipboardList,
   UserCog,
   CalendarDays,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
-import { Badge } from '../ui/Badge'
 import { useAuth } from '../../lib/auth'
 
 const navGroups = [
@@ -19,20 +14,6 @@ const navGroups = [
     label: 'GŁÓWNE',
     items: [
       { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { label: 'Stan osobowy', icon: Users, path: '/personal', badge: '18' },
-    ],
-  },
-  {
-    label: 'OPERACJE',
-    items: [
-      { label: 'Wyjazdy / Alarmy', icon: Truck, path: '/deployments', badge: '2' },
-      { label: 'Gotowość bojowa', icon: ShieldAlert, path: '/readiness' },
-    ],
-  },
-  {
-    label: 'ZASOBY',
-    items: [
-      { label: 'Dokumentacja', icon: FileText, path: '/documents' },
     ],
   },
   {
@@ -102,16 +83,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
                     title={collapsed ? item.label : undefined}
                   >
                     <item.icon className="w-4 h-4 flex-shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1">{item.label}</span>
-                        {item.badge && (
-                          <Badge variant="info" className="text-[10px] px-1.5 py-0">
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </>
-                    )}
+                    {!collapsed && <span className="flex-1">{item.label}</span>}
                   </NavLink>
                 </li>
               ))}

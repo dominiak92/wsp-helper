@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   LogOut,
   ClipboardList,
-  UserCog,
   CalendarDays,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -20,7 +19,6 @@ const navGroups = [
     label: 'NARZĘDZIA',
     items: [
       { label: 'Generator opisów', icon: ClipboardList, path: '/incident-generator' },
-      { label: 'Tworzenie obsady', icon: UserCog, path: '/crew-generator' },
       { label: 'Kalendarz służb', icon: CalendarDays, path: '/duty-calendar' },
     ],
   },

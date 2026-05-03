@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -102,6 +102,7 @@ export function MobileHomePage() {
   const [personnel, setPersonnel] = useState<Person[]>([])
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
   const [loading, setLoading] = useState(true)
+  const [announcement, setAnnouncement] = useState<string | null>(null)
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
 
@@ -124,7 +125,9 @@ export function MobileHomePage() {
         .select('duty_date, assignment_json')
         .in('duty_date', restKeys)
         .order('duty_date', { ascending: true }),
-    ]).then(([{ data: pData }, { data: aData }, { data: futureData }]) => {
+      // announcement
+      supabase.from('announcements').select('message').eq('id', 1).maybeSingle(),
+    ]).then(([{ data: pData }, { data: aData }, { data: futureData }, { data: noteData }]) => {
       if (pData) {
         setPersonnel(pData.map(row => ({
           id: row.id,
@@ -154,6 +157,7 @@ export function MobileHomePage() {
         setSavedMap(m)
       }
 
+      if (noteData?.message) setAnnouncement(noteData.message)
       setLoading(false)
     })
   }, [dutyDate])
@@ -188,6 +192,14 @@ export function MobileHomePage() {
 
   return (
     <div className="px-3 sm:px-5 py-4 space-y-5 pb-8">
+
+      {/* Announcement */}
+      {announcement && (
+        <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl px-4 py-3 flex gap-3">
+          <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-100 leading-relaxed whitespace-pre-wrap">{announcement}</p>
+        </div>
+      )}
 
       {/* Date header */}
       <div className="border-b border-slate-800 pb-4">

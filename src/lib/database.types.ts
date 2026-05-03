@@ -32,6 +32,19 @@ interface DutyAssignmentInsert {
   assignment_json: Json
 }
 
+interface AnnouncementRow {
+  id: number
+  message: string | null
+  updated_at: string
+  updated_by: string | null
+}
+
+interface AnnouncementInsert {
+  id?: number
+  message?: string | null
+  updated_by?: string | null
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -44,6 +57,11 @@ export interface Database {
         Row: DutyAssignmentRow
         Insert: DutyAssignmentInsert
         Update: Partial<DutyAssignmentInsert>
+      }
+      announcements: {
+        Row: AnnouncementRow
+        Insert: AnnouncementInsert
+        Update: Partial<AnnouncementInsert>
       }
     }
   }

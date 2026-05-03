@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft, Save, Check } from 'lucide-react'
+import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft, Save, Check, History } from 'lucide-react'
+import { previousDutyDate, formatDateShort } from '../lib/duty'
 import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
@@ -337,6 +338,66 @@ function SpecialRoleCard({ title, personId, persons, colorClass, borderClass }: 
   )
 }
 
+// ── Previous duty compact view ────────────────────────────────────────────────
+
+function PrevDutyCompact({ assignment, personnel }: {
+  assignment: ShiftAssignment | null
+  personnel: Person[]
+}) {
+  function n(id: string | null) {
+    if (!id) return null
+    return personnel.find(p => p.id === id)?.name ?? null
+  }
+
+  if (!assignment) {
+    return (
+      <p className="px-4 sm:px-6 py-3 text-xs text-slate-600 italic">
+        Brak zapisanej obsady dla tej służby.
+      </p>
+    )
+  }
+
+  return (
+    <div className="px-4 sm:px-6 py-3 space-y-2">
+      {/* Special roles + reserve on one line */}
+      <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-xs">
+        {assignment.shiftCommanderId && (
+          <span className="text-slate-500">
+            Ddca: <span className="text-brand-300 font-semibold">{n(assignment.shiftCommanderId)}</span>
+          </span>
+        )}
+        {assignment.dutyOfficerIds.map(id => (
+          <span key={id} className="text-slate-500">
+            Dyżurny: <span className="text-amber-300 font-semibold">{n(id)}</span>
+          </span>
+        ))}
+        {assignment.unassignedIds.length > 0 && (
+          <span className="text-slate-500">
+            Rezerwa: <span className="text-slate-400">{assignment.unassignedIds.map(id => n(id)).filter(Boolean).join(', ')}</span>
+          </span>
+        )}
+      </div>
+      {/* One line per vehicle */}
+      <div className="space-y-1">
+        {assignment.vehicles.map(v => {
+          const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
+          const members: string[] = []
+          if (v.commanderId) { const nm = n(v.commanderId); if (nm) members.push(nm) }
+          if (v.driverId && v.driverId !== v.commanderId) { const nm = n(v.driverId); if (nm) members.push(nm) }
+          v.rescuerIds.forEach(id => { const nm = n(id); if (nm) members.push(nm) })
+          if (!members.length) return null
+          return (
+            <div key={v.vehicleId} className="flex items-baseline gap-3 text-xs">
+              <span className="text-emerald-400 font-semibold shrink-0 w-24">{vName}</span>
+              <span className="text-slate-300">{members.join(' · ')}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CrewGeneratorPage() {
@@ -368,6 +429,8 @@ export function CrewGeneratorPage() {
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
+  const [showPrevDuty, setShowPrevDuty] = useState(false)
+  const [prevAssignment, setPrevAssignment] = useState<ShiftAssignment | null>(null)
 
   useEffect(() => {
     supabase
@@ -403,6 +466,22 @@ export function CrewGeneratorPage() {
             setAssignment(parsed)
             assignmentIdRef.current = row.id
           }
+        }
+      })
+
+    // Fetch previous duty assignment for reference panel
+    const prevDate = previousDutyDate(dutyDate)
+    supabase
+      .from('duty_assignments')
+      .select('assignment_json')
+      .eq('duty_date', prevDate)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        const row = data?.[0]
+        if (row?.assignment_json) {
+          const parsed = row.assignment_json as ShiftAssignment
+          if (Array.isArray(parsed.dutyOfficerIds)) setPrevAssignment(parsed)
         }
       })
   }, [dutyDate])
@@ -575,6 +654,21 @@ export function CrewGeneratorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {dutyDate && (
+            <button
+              onClick={() => setShowPrevDuty(v => !v)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs transition-colors',
+                showPrevDuty
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white',
+              )}
+              title="Obsada poprzedniej służby"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Poprzednia służba</span>
+            </button>
+          )}
           <button
             onClick={() => setShowPersonnel(v => !v)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white text-xs transition-colors"
@@ -622,6 +716,19 @@ export function CrewGeneratorPage() {
           </button>
         </div>
       </div>
+
+      {/* Previous duty reference panel */}
+      {dutyDate && showPrevDuty && (
+        <div className="shrink-0 border-b border-slate-800 bg-surface-900/40">
+          <div className="px-4 sm:px-6 pt-3 pb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              Obsada poprzedniej służby —{' '}
+              <span className="text-brand-400">{formatDateShort(previousDutyDate(dutyDate))}</span>
+            </p>
+          </div>
+          <PrevDutyCompact assignment={prevAssignment} personnel={personnel} />
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">

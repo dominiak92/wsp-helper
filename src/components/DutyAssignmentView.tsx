@@ -11,9 +11,10 @@ interface Props {
   personnel: Person[]
   assignment: ShiftAssignment | null
   loading: boolean
+  hideAbsent?: boolean
 }
 
-export function DutyAssignmentView({ personnel, assignment, loading }: Props) {
+export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent = false }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -74,7 +75,7 @@ export function DutyAssignmentView({ personnel, assignment, loading }: Props) {
       )}
 
       {/* Absent personnel */}
-      {personnel.filter(p => p.absence).length > 0 && (
+      {!hideAbsent && personnel.filter(p => p.absence).length > 0 && (
         <Card label={`Nieobecni (${personnel.filter(p => p.absence).length})`} labelColor="text-red-400">
           {personnel.filter(p => p.absence).map(p => (
             <div key={p.id} className="flex items-center justify-between gap-2 px-4 py-2.5">

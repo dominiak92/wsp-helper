@@ -5,7 +5,7 @@ import { ReadinessPanel } from '../components/dashboard/ReadinessPanel'
 
 export function DashboardPage() {
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6 max-w-7xl p-3 sm:p-6">
       {/* Page header */}
       <div>
         <h1 className="text-xl font-bold text-slate-100">Przegląd dyżuru</h1>

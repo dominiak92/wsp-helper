@@ -241,7 +241,7 @@ export function DutyCalendarPage() {
   }, [year, holidays])
 
   return (
-    <div className="flex flex-col gap-5 p-6 h-full overflow-y-auto">
+    <div className="flex flex-col gap-4 p-3 sm:p-6 h-full overflow-y-auto">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
@@ -250,9 +250,8 @@ export function DutyCalendarPage() {
             Kalendarz służb
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            System 24/72h · {' '}
-            <span className="text-brand-400 font-medium">{totalDutyDays} służb</span>{' '}
-            w roku {year} · kliknij dzień służby aby zarządzać obsadą
+            System 24/72h · <span className="text-brand-400 font-medium">{totalDutyDays} służb</span> w {year}
+            <span className="hidden sm:inline"> · kliknij dzień służby aby zarządzać obsadą</span>
           </p>
         </div>
 

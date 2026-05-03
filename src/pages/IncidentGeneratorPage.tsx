@@ -407,7 +407,7 @@ export function IncidentGeneratorPage() {
   const isMON = form.category === 'MON'
 
   return (
-    <div className="max-w-7xl space-y-4">
+    <div className="max-w-7xl space-y-4 p-3 sm:p-6">
       {/* header */}
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex-1">

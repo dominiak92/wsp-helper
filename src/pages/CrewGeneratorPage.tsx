@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -287,7 +287,7 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
 
   return (
     <div className={cn(
-      'flex-1 min-w-[190px] rounded-xl border p-4 bg-surface-800',
+      'w-full sm:flex-1 sm:min-w-[190px] rounded-xl border p-3 sm:p-4 bg-surface-800',
       full ? 'border-emerald-900' : 'border-amber-900/60'
     )}>
       <div className="flex items-center justify-between mb-1">
@@ -359,7 +359,9 @@ export function CrewGeneratorPage() {
     }
   })
 
-  const [showPersonnel, setShowPersonnel] = useState(true)
+  const assignmentIdRef = useRef<string | null>(null)
+
+  const [showPersonnel, setShowPersonnel] = useState(false)
   const [addingPerson, setAddingPerson] = useState(false)
   const [dragSource, setDragSource] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
@@ -385,13 +387,16 @@ export function CrewGeneratorPage() {
     if (!dutyDate) return
     supabase
       .from('duty_assignments')
-      .select('assignment_json')
+      .select('id, assignment_json')
       .eq('duty_date', dutyDate)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data?.assignment_json) {
           const parsed = data.assignment_json as ShiftAssignment
-          if (Array.isArray(parsed.dutyOfficerIds)) setAssignment(parsed)
+          if (Array.isArray(parsed.dutyOfficerIds)) {
+            setAssignment(parsed)
+            assignmentIdRef.current = data.id
+          }
         }
       })
   }, [dutyDate])
@@ -399,10 +404,22 @@ export function CrewGeneratorPage() {
   function saveAssignment(a: ShiftAssignment) {
     setAssignment(a)
     if (dutyDate) {
-      supabase.from('duty_assignments').upsert({
-        duty_date: dutyDate,
-        assignment_json: a,
-      }).then(({ error }) => { if (error) console.error('[supabase] upsert duty_assignment:', error) })
+      const currentId = assignmentIdRef.current
+      if (currentId) {
+        supabase.from('duty_assignments')
+          .update({ assignment_json: a })
+          .eq('id', currentId)
+          .then(({ error }) => { if (error) console.error('[supabase] update duty_assignment:', error) })
+      } else {
+        supabase.from('duty_assignments')
+          .insert({ duty_date: dutyDate, assignment_json: a })
+          .select('id')
+          .single()
+          .then(({ data, error }) => {
+            if (error) console.error('[supabase] insert duty_assignment:', error)
+            else if (data?.id) assignmentIdRef.current = data.id
+          })
+      }
     } else {
       localStorage.setItem('wsp-crew-assignment', JSON.stringify(a))
     }
@@ -506,8 +523,8 @@ export function CrewGeneratorPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
           {dutyDate && (
             <button
               onClick={() => navigate('/duty-calendar')}
@@ -517,9 +534,9 @@ export function CrewGeneratorPage() {
               <ArrowLeft className="w-4 h-4" />
             </button>
           )}
-          <div>
-            <h1 className="text-lg font-bold text-white">Tworzenie obsady</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-bold text-white">Tworzenie obsady</h1>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">
               {dutyDate
                 ? <span className="text-brand-400 font-medium">Służba: {formatPolishDate(dutyDate)}</span>
                 : <><span className="text-emerald-500 font-medium">{availableCount}</span> dostępnych{absentCount > 0 && <> · <span className="text-red-400 font-medium">{absentCount}</span> nieobecnych</>}</>
@@ -527,13 +544,13 @@ export function CrewGeneratorPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowPersonnel(v => !v)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white text-xs transition-colors"
           >
             <Users className="w-3.5 h-3.5" />
-            {showPersonnel ? 'Ukryj' : 'Personel'}
+            <span className="hidden xs:inline">{showPersonnel ? 'Ukryj' : 'Personel'}</span>
           </button>
           {assignment && (
             <button
@@ -546,19 +563,20 @@ export function CrewGeneratorPage() {
           )}
           <button
             onClick={handleGenerate}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium transition-colors"
           >
             <Zap className="w-4 h-4" />
-            {assignment ? 'Nowe losowanie' : 'Generuj obsadę'}
+            <span className="hidden sm:inline">{assignment ? 'Nowe losowanie' : 'Generuj obsadę'}</span>
+            <span className="sm:hidden">{assignment ? 'Losuj' : 'Generuj'}</span>
           </button>
         </div>
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
         {/* Personnel sidebar */}
         {showPersonnel && (
-          <aside className="w-80 shrink-0 border-r border-slate-800 overflow-y-auto p-3 space-y-1.5">
+          <aside className="w-full sm:w-72 shrink-0 border-b sm:border-b-0 sm:border-r border-slate-800 overflow-y-auto p-3 space-y-1.5 max-h-56 sm:max-h-none">
             <div className="flex items-center justify-between px-1 mb-2">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-600">
                 Stan osobowy
@@ -588,7 +606,7 @@ export function CrewGeneratorPage() {
         )}
 
         {/* Assignment board */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6">
           {!assignment ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-700 gap-4 pb-16">
               <Zap className="w-12 h-12 opacity-20" />

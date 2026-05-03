@@ -1,12 +1,19 @@
-import { useState } from 'react'
-import { Outlet, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Outlet, Navigate, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { useAuth } from '../../lib/auth'
+import { cn } from '../../lib/utils'
 
 export function DashboardLayout() {
   const { user, loading } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const location = useLocation()
+
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
 
   if (loading) {
     return (
@@ -19,17 +26,41 @@ export function DashboardLayout() {
   if (!user) return <Navigate to="/login" replace />
   if (user.role === 'user') return <Navigate to="/mobile" replace />
 
+  function handleToggle() {
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setMobileOpen(v => !v)
+    } else {
+      setCollapsed(v => !v)
+    }
+  }
+
   return (
     <div className="flex h-screen bg-surface-950 overflow-hidden">
-      <Sidebar collapsed={collapsed} />
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed overlay on mobile, inline on desktop */}
+      <div
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 transition-transform duration-300',
+          'md:relative md:inset-auto md:z-auto md:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <Sidebar collapsed={collapsed} />
+      </div>
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
           sidebarCollapsed={collapsed}
-          onToggleSidebar={() => setCollapsed((c) => !c)}
+          onToggleSidebar={handleToggle}
         />
-
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>

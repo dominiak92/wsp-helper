@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { IncidentGeneratorPage } from './pages/IncidentGeneratorPage'
 import { CrewGeneratorPage } from './pages/CrewGeneratorPage'
 import { DutyCalendarPage } from './pages/DutyCalendarPage'
+import { GaragePage } from './pages/GaragePage'
 import { MobileHomePage } from './pages/mobile/MobileHomePage'
 import { MobileCalendarPage } from './pages/mobile/MobileCalendarPage'
 
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/incident-generator" element={<IncidentGeneratorPage />} />
             <Route path="/crew-generator" element={<CrewGeneratorPage />} />
             <Route path="/duty-calendar" element={<DutyCalendarPage />} />
+            <Route path="/garage" element={<GaragePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

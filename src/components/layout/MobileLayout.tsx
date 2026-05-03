@@ -26,7 +26,7 @@ export function MobileLayout() {
           </div>
           <div>
             <p className="text-xs font-bold text-white leading-tight">WSP Command Center</p>
-            <p className="text-[10px] text-slate-500 leading-tight">{user.login}</p>
+            <p className="text-[10px] text-slate-500 leading-tight">{user.displayName}</p>
           </div>
         </div>
         <button

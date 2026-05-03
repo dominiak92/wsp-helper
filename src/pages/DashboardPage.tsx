@@ -240,7 +240,7 @@ export function DashboardPage() {
               ) : announcement ? (
                 <div className="bg-surface-800 rounded-xl border border-amber-900/40 px-4 py-3 flex gap-3">
                   <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{announcement}</p>
+                  <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{announcement}</p>
                 </div>
               ) : isAdmin ? (
                 <button

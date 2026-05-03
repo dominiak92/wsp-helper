@@ -197,7 +197,7 @@ export function MobileHomePage() {
       {announcement && (
         <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl px-4 py-3 flex gap-3">
           <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-100 leading-relaxed whitespace-pre-wrap">{announcement}</p>
+          <p className="text-sm text-amber-100 leading-relaxed whitespace-pre-wrap break-words">{announcement}</p>
         </div>
       )}
 

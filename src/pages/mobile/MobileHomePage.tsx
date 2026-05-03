@@ -111,9 +111,21 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
           <Flame className={cn('w-4 h-4 shrink-0', ls.text)} />
           <div>
             <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
-            <p className={cn('text-[11px] font-semibold', ls.text)}>
-              {loading ? 'Ładowanie…' : (data?.fireThreat ?? 'Brak danych')}
-            </p>
+            {loading ? (
+              <p className="text-[11px] text-slate-500">Ładowanie…</p>
+            ) : (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={cn('text-[11px] font-semibold', ls.text)}>
+                  {data?.fireThreat ?? 'Brak danych'}
+                </span>
+                {data?.fireThreatForecast && (
+                  <>
+                    <span className="text-[11px] text-slate-600">→</span>
+                    <span className="text-[11px] text-slate-400">{data.fireThreatForecast}</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
         {open
@@ -127,13 +139,6 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             <p className="text-xs text-slate-600 text-center py-2">Brak danych pogodowych</p>
           ) : (
             <>
-              {data.fireThreatForecast && (
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Prognoza</span>
-                  <span className="text-sm text-slate-300">{data.fireThreatForecast}</span>
-                </div>
-              )}
-
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center bg-surface-700/30 rounded-lg py-2">
                   <Thermometer className="w-3.5 h-3.5 text-red-400 mx-auto mb-0.5" />

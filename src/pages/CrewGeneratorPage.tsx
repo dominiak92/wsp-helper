@@ -7,7 +7,7 @@ import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS,
   CREW_VEHICLE_NAMES, VEHICLE_SEATS,
-  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop,
+  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, removePersonFromAssignment,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
 
@@ -536,6 +536,22 @@ export function CrewGeneratorPage() {
 
   function updatePerson(updated: Person) {
     setPersonnel(prev => prev.map(p => p.id === updated.id ? updated : p))
+
+    // Keep assignment in sync with absence changes so the person doesn't appear
+    // in both the roster and the absent list simultaneously.
+    if (assignment) {
+      let next = assignment
+      if (updated.absence !== null) {
+        next = removePersonFromAssignment(next, updated.id)
+        next = { ...next, absenceMap: { ...(next.absenceMap ?? {}), [updated.id]: updated.absence } }
+      } else {
+        const newMap = { ...(next.absenceMap ?? {}) }
+        delete newMap[updated.id]
+        next = { ...next, absenceMap: Object.keys(newMap).length > 0 ? newMap : undefined }
+      }
+      if (next !== assignment) applyAssignment(next, !!dutyDate)
+    }
+
     supabase.from('personnel').upsert({
       id: updated.id,
       name: updated.name,

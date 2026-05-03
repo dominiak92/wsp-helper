@@ -92,6 +92,7 @@ export interface ShiftAssignment {
   dutyOfficerIds: string[]
   vehicles: VehicleAssignment[]
   unassignedIds: string[]
+  absenceMap?: Record<string, AbsenceType> // personId → absence type for this specific duty date
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -164,11 +165,32 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
     return { vehicleId: vid, commanderId, driverId, rescuerIds }
   })
 
+  const absenceMap: Record<string, AbsenceType> = {}
+  for (const p of personnel) {
+    if (p.absence) absenceMap[p.id] = p.absence
+  }
+
   return {
     shiftCommanderId: shiftCommander?.id ?? null,
     dutyOfficerIds: dutyOfficers.map(p => p.id),
     vehicles,
     unassignedIds: available.filter(p => !assigned.has(p.id)).map(p => p.id),
+    absenceMap: Object.keys(absenceMap).length > 0 ? absenceMap : undefined,
+  }
+}
+
+export function removePersonFromAssignment(a: ShiftAssignment, personId: string): ShiftAssignment {
+  return {
+    ...a,
+    shiftCommanderId: a.shiftCommanderId === personId ? null : a.shiftCommanderId,
+    dutyOfficerIds: a.dutyOfficerIds.filter(id => id !== personId),
+    unassignedIds: a.unassignedIds.filter(id => id !== personId),
+    vehicles: a.vehicles.map(v => ({
+      ...v,
+      commanderId: v.commanderId === personId ? null : v.commanderId,
+      driverId: v.driverId === personId ? null : v.driverId,
+      rescuerIds: v.rescuerIds.filter(id => id !== personId),
+    })),
   }
 }
 

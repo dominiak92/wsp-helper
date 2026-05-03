@@ -303,23 +303,34 @@ export function MobileHomePage() {
 
   const myPerson = user ? personnel.find(p => p.login === user.login) ?? null : null
   const myRole = (assignment && myPerson) ? resolveMyRole(assignment, myPerson.id) : null
-  const isAbsentNow = myPerson?.absence != null
 
-  const availableCount = personnel.filter(p => !p.absence).length
-  const absentPersonnel = personnel.filter(p => p.absence)
+  // Determine absence for the *current* duty date from the saved assignment's absenceMap first,
+  // falling back to the global flag only when the person is not in the assignment at all.
+  const myAbsenceNow = myPerson
+    ? (assignment?.absenceMap?.[myPerson.id] ?? (myRole === null ? myPerson.absence : null))
+    : null
+  const isAbsentNow = myAbsenceNow != null
+
+  // Use saved assignment to determine per-date absence instead of global flags.
+  const absentPersonnel = assignment
+    ? personnel.filter(p => !isPersonInAssignment(assignment, p.id) && (assignment.absenceMap?.[p.id] != null || p.absence != null))
+    : personnel.filter(p => p.absence)
+  const availableCount = personnel.length - absentPersonnel.length
   const total = personnel.length
 
   // Upcoming duties where user is absent (saved assignment exists but user not in it)
-  const upcomingAbsences: string[] = []
+  const upcomingAbsences: { date: string; label: string }[] = []
   if (myPerson) {
     for (const [date, a] of savedMap.entries()) {
       if (!isPersonInAssignment(a, myPerson.id)) {
-        upcomingAbsences.push(date)
+        const absType = a.absenceMap?.[myPerson.id] ?? myPerson.absence
+        const label = absType ? ABSENCE_LABELS[absType] : 'Poza obsadą'
+        upcomingAbsences.push({ date, label })
         if (upcomingAbsences.length >= 3) break
       }
     }
   }
-  upcomingAbsences.sort()
+  upcomingAbsences.sort((a, b) => a.date.localeCompare(b.date))
 
   async function sendDutyMessage() {
     if (!user || !msgText.trim()) return
@@ -370,16 +381,6 @@ export function MobileHomePage() {
               <UserCircle className="w-8 h-8 text-slate-600 shrink-0" />
               <p className="text-sm text-slate-500">Obsada nie została jeszcze wygenerowana</p>
             </div>
-          ) : isAbsentNow ? (
-            <div className="bg-surface-800 rounded-xl border border-red-900/40 p-4 flex items-center gap-3">
-              <UserX className="w-8 h-8 text-red-500 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-red-400">Nieobecny</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {ABSENCE_LABELS[myPerson.absence!]}
-                </p>
-              </div>
-            </div>
           ) : myRole ? (
             <div className={cn('bg-surface-800 rounded-xl border p-4 flex items-center gap-4', myRole.borderClass)}>
               {myRole.vehicle ? (
@@ -392,6 +393,16 @@ export function MobileHomePage() {
                 {myRole.vehicle && (
                   <p className="text-xs text-slate-400 mt-0.5">{myRole.vehicle}</p>
                 )}
+              </div>
+            </div>
+          ) : isAbsentNow ? (
+            <div className="bg-surface-800 rounded-xl border border-red-900/40 p-4 flex items-center gap-3">
+              <UserX className="w-8 h-8 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-400">Nieobecny</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {ABSENCE_LABELS[myAbsenceNow!]}
+                </p>
               </div>
             </div>
           ) : (
@@ -515,7 +526,7 @@ export function MobileHomePage() {
             </div>
           ) : (
             <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
-              {upcomingAbsences.map(date => (
+              {upcomingAbsences.map(({ date, label }) => (
                 <div key={date} className="flex items-center gap-3 px-4 py-3">
                   <CalendarX className="w-4 h-4 text-amber-500 shrink-0" />
                   <div className="min-w-0">
@@ -523,8 +534,8 @@ export function MobileHomePage() {
                     <p className="text-[11px] text-slate-500">{formatDateLong(date)}</p>
                   </div>
                   <span className="ml-auto text-[10px] font-medium text-amber-500 shrink-0 bg-amber-950/30 px-2 py-0.5 rounded-md border border-amber-900/40">
-                  {myPerson.absence ? ABSENCE_LABELS[myPerson.absence] : 'Poza obsadą'}
-                </span>
+                    {label}
+                  </span>
                 </div>
               ))}
             </div>

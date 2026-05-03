@@ -396,7 +396,9 @@ export function MobileHomePage() {
                     <p className="text-sm font-medium text-white">{formatDateShort(date)}</p>
                     <p className="text-[11px] text-slate-500">{formatDateLong(date)}</p>
                   </div>
-                  <span className="ml-auto text-[10px] text-slate-600 shrink-0">nieobecny</span>
+                  <span className="ml-auto text-[10px] font-medium text-amber-500 shrink-0 bg-amber-950/30 px-2 py-0.5 rounded-md border border-amber-900/40">
+                  {myPerson.absence ? ABSENCE_LABELS[myPerson.absence] : 'Poza obsadą'}
+                </span>
                 </div>
               ))}
             </div>

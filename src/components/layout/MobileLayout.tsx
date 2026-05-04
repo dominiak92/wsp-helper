@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Navigate } from 'react-router-dom'
-import { Shield, Home, CalendarDays } from 'lucide-react'
+import { Shield, Home, CalendarDays, Users } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
 
@@ -15,7 +15,14 @@ export function MobileLayout() {
   }
 
   if (!user) return <Navigate to="/login" replace />
-  if (user.role !== 'user') return <Navigate to="/dashboard" replace />
+
+  const navItems = [
+    { to: '/mobile', label: 'Dziś', icon: Home, end: true },
+    { to: '/mobile/calendar', label: 'Kalendarz', icon: CalendarDays, end: false },
+    ...(user.role !== 'user'
+      ? [{ to: '/mobile/crew-generator', label: 'Obsada', icon: Users, end: false }]
+      : []),
+  ]
 
   return (
     <div className="flex flex-col h-screen bg-surface-950 overflow-x-hidden">
@@ -47,10 +54,7 @@ export function MobileLayout() {
 
       {/* Bottom navigation */}
       <nav className="flex border-t border-slate-800 bg-surface-900 shrink-0">
-        {[
-          { to: '/mobile', label: 'Dziś', icon: Home, end: true },
-          { to: '/mobile/calendar', label: 'Kalendarz', icon: CalendarDays, end: false },
-        ].map(({ to, label, icon: Icon, end }) => (
+        {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}

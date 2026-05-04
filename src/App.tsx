@@ -11,6 +11,7 @@ import { GaragePage } from './pages/GaragePage'
 import { VademecumPage } from './pages/VademecumPage'
 import { MobileHomePage } from './pages/mobile/MobileHomePage'
 import { MobileCalendarPage } from './pages/mobile/MobileCalendarPage'
+import { MobileCrewPage } from './pages/mobile/MobileCrewPage'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route element={<MobileLayout />}>
             <Route path="/mobile" element={<MobileHomePage />} />
             <Route path="/mobile/calendar" element={<MobileCalendarPage />} />
+            <Route path="/mobile/crew-generator" element={<MobileCrewPage />} />
           </Route>
 
           <Route element={<DashboardLayout />}>

@@ -904,7 +904,7 @@ export function CrewGeneratorPage() {
                 </p>
                 <div className="flex gap-2">
                   {([true, false, null] as const).map(v => {
-                    const label = v === true ? 'Tak' : v === false ? 'Nie' : 'Brak danych'
+                    const label = v === true ? 'Jest obiad' : v === false ? 'Nie ma obiadu' : 'Brak danych'
                     const isActive = v === null ? assignment.dinner == null : assignment.dinner === v
                     const activeClass = v === true
                       ? 'bg-emerald-900/50 text-emerald-300 border-emerald-700'

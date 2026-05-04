@@ -390,12 +390,12 @@ export function DashboardPage() {
                 {assignment.dinner === true ? (
                   <div className="bg-surface-800 rounded-xl border border-emerald-900/50 px-4 py-3 flex items-center gap-3">
                     <Utensils className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <p className="text-sm font-semibold text-emerald-300">Tak</p>
+                    <p className="text-sm font-semibold text-emerald-300">Na służbie jest obiad</p>
                   </div>
                 ) : assignment.dinner === false ? (
                   <div className="bg-surface-800 rounded-xl border border-red-900/50 px-4 py-3 flex items-center gap-3">
                     <Utensils className="w-4 h-4 text-red-400 shrink-0" />
-                    <p className="text-sm font-semibold text-red-300">Nie</p>
+                    <p className="text-sm font-semibold text-red-300">Na służbie nie ma obiadu</p>
                   </div>
                 ) : (
                   <div className="bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 flex items-center gap-3">

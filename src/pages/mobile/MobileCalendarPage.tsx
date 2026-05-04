@@ -244,13 +244,14 @@ export function MobileCalendarPage() {
               const duty = isDutyDay(year, month, day)
               const isToday = key === todayK
               const isSelected = key === selectedDate
-              const isSun = (i % 7) === 6
 
               if (!duty) {
                 return (
                   <div key={key} className={cn(
                     'flex items-center justify-center aspect-square text-[12px] leading-none rounded-lg',
-                    isSun ? 'text-slate-700' : 'text-slate-700',
+                    isToday
+                      ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-surface-950 text-amber-400'
+                      : 'text-slate-700',
                   )}>
                     {day}
                   </div>

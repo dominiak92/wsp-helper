@@ -3,14 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
-
-// Reference: May 1, 2026 is a duty day
-const REF_UTC = Date.UTC(2026, 4, 1)
-
-function isDutyDay(year: number, month: number, day: number): boolean {
-  const diff = (Date.UTC(year, month, day) - REF_UTC) / 86400000
-  return diff % 4 === 0
-}
+import { isDutyDay } from '../lib/duty'
 
 // Meeus/Jones/Butcher algorithm
 function getEaster(year: number): Date {

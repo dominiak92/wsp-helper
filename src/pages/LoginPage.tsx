@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { Shield, Eye, EyeOff, Lock, User } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -7,7 +7,6 @@ import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
 
 export function LoginPage() {
-  const navigate = useNavigate()
   const { user, loading: authLoading, signIn } = useAuth()
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
@@ -34,8 +33,6 @@ export function LoginPage() {
 
     if (err) {
       setError(err)
-    } else {
-      navigate('/dashboard')
     }
   }
 

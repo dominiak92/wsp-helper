@@ -15,6 +15,7 @@ export function MobileLayout() {
   }
 
   if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'user') return <Navigate to="/dashboard" replace />
 
   return (
     <div className="flex flex-col h-screen bg-surface-950 overflow-x-hidden">

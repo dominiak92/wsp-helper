@@ -7,7 +7,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
 import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -40,15 +40,6 @@ function resolveMyRole(assignment: ShiftAssignment, personId: string): MyRole | 
     return { label: 'Rezerwa / Dyżur', vehicle: null, colorClass: 'text-slate-400', borderClass: 'border-slate-700' }
 
   return null // absent from this duty
-}
-
-function isPersonInAssignment(a: ShiftAssignment, id: string): boolean {
-  if (a.shiftCommanderId === id) return true
-  if (a.dutyOfficerIds.includes(id)) return true
-  if (a.unassignedIds.includes(id)) return true
-  return a.vehicles.some(v =>
-    v.commanderId === id || v.driverId === id || v.rescuerIds.includes(id)
-  )
 }
 
 // next N duty day keys starting from today

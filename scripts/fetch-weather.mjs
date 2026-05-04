@@ -1,6 +1,11 @@
 /**
  * Fetches Rzepin LBL weather data from traxelektronik.pl and caches it in
- * a Supabase `weather_cache` table. Run via GitHub Actions cron every 15 min.
+ * a Supabase `weather_cache` table (id=1). Run via GitHub Actions cron twice
+ * daily: 7:15 UTC (godz. 9 CEST) and 11:15 UTC (godz. 13 CEST).
+ *
+ * The `data` column stores: { morning: WeatherReading, afternoon: WeatherReading }
+ * Each run updates only the relevant slot (morning or afternoon) and preserves
+ * the other slot from the previous read.
  *
  * Required env vars:
  *   SUPABASE_URL          – project URL (e.g. https://xxx.supabase.co)
@@ -100,7 +105,7 @@ async function main() {
     .map(m => m[1].trim())
   const ts = html.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/)?.[1] ?? null
 
-  const data = {
+  const reading = {
     moisture:           cells[0] ?? null,
     temperature:        cells[1] ?? null,
     humidity:           cells[2] ?? null,
@@ -112,25 +117,43 @@ async function main() {
     updatedAt:          ts,
   }
 
-  // id=1 → pomiar poranny (godz. 9, run o 7:15 UTC)
-  // id=2 → pomiar południowy (godz. 13, run o 11:15 UTC)
+  // morning slot: hourUTC < 10 (runs at 7:15 UTC = 9:15 CEST summer / 8:15 CET winter)
+  // afternoon slot: hourUTC >= 10 (runs at 11:15 UTC = 13:15 CEST summer / 12:15 CET winter)
   const hourUTC = new Date().getUTCHours()
-  const rowId = hourUTC < 10 ? 1 : 2
+  const slot = hourUTC < 10 ? 'morning' : 'afternoon'
+  console.log(`UTC hour: ${hourUTC} → writing slot: ${slot}`)
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/weather_cache`, {
-    method: 'POST',
+  // Read existing row to preserve the other slot
+  const existingRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/weather_cache?id=eq.1&select=data`,
+    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
+  )
+  let existing = {}
+  if (existingRes.ok) {
+    const rows = await existingRes.json()
+    const rowData = rows?.[0]?.data
+    // Keep only if already in the new nested format (has morning or afternoon key)
+    if (rowData && ('morning' in rowData || 'afternoon' in rowData)) {
+      existing = rowData
+    }
+  }
+
+  const combinedData = { ...existing, [slot]: reading }
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/weather_cache?id=eq.1`, {
+    method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer': 'return=minimal,resolution=merge-duplicates',
+      'Prefer': 'return=minimal',
     },
-    body: JSON.stringify({ id: rowId, data, fetched_at: new Date().toISOString() }),
+    body: JSON.stringify({ data: combinedData, fetched_at: new Date().toISOString() }),
   })
 
-  if (!res.ok) throw new Error(`Supabase upsert failed: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw new Error(`Supabase PATCH failed: ${res.status} ${await res.text()}`)
 
-  console.log('Cached:', JSON.stringify(data))
+  console.log(`Cached [${slot}]:`, JSON.stringify(reading))
 }
 
 main().catch(err => { console.error(err); process.exit(1) })

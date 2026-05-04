@@ -333,19 +333,24 @@ export function MobileHomePage() {
     if (!user || !msgText.trim()) return
     setSendingMsg(true)
     setMsgError(null)
-    const { error } = await supabase.from('duty_messages').insert({
-      sender_login: user.login,
-      sender_name: user.displayName,
-      message: msgText.trim(),
-    })
-    setSendingMsg(false)
-    if (error) {
-      setMsgError('Błąd wysyłania: ' + error.message)
-    } else {
-      setMsgText('')
-      setMsgSentOk(true)
-      setShowMsgForm(false)
-      setTimeout(() => setMsgSentOk(false), 4000)
+    try {
+      const { error } = await supabase.from('duty_messages').insert({
+        sender_login: user.login,
+        sender_name: user.displayName,
+        message: msgText.trim(),
+      })
+      if (error) {
+        setMsgError('Błąd wysyłania: ' + error.message)
+      } else {
+        setMsgText('')
+        setMsgSentOk(true)
+        setShowMsgForm(false)
+        setTimeout(() => setMsgSentOk(false), 4000)
+      }
+    } catch (err) {
+      setMsgError('Błąd wysyłania: ' + (err instanceof Error ? err.message : 'nieznany błąd'))
+    } finally {
+      setSendingMsg(false)
     }
   }
 

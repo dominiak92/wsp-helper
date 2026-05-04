@@ -79,6 +79,7 @@ export function MobileCalendarPage() {
   // Map: duty_date → ShiftAssignment (for current month's saved assignments)
   const [assignmentMap, setAssignmentMap] = useState<Map<string, ShiftAssignment>>(new Map())
   const [assignmentLoading, setAssignmentLoading] = useState(false)
+  const [monthLoading, setMonthLoading] = useState(false)
   const todayK = todayYmdKey()
 
   // Load personnel once
@@ -99,6 +100,7 @@ export function MobileCalendarPage() {
 
   // Reload assignments when month/year changes
   useEffect(() => {
+    setMonthLoading(true)
     const firstDay = ymdKey(year, month, 1)
     const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
     const lastDay = ymdKey(year, month, daysInMonth)
@@ -113,12 +115,12 @@ export function MobileCalendarPage() {
         for (const row of data ?? []) {
           const parsed = row.assignment_json as ShiftAssignment
           if (Array.isArray(parsed?.dutyOfficerIds)) {
-            // keep the latest row if duplicates exist (data comes unsorted)
             const existing = m.get(row.duty_date as string)
             if (!existing) m.set(row.duty_date as string, parsed)
           }
         }
         setAssignmentMap(m)
+        setMonthLoading(false)
       })
   }, [year, month])
 
@@ -211,7 +213,12 @@ export function MobileCalendarPage() {
           <button onClick={prevMonth} className="p-2 rounded-lg text-slate-400 active:bg-surface-800 transition-colors">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <h2 className="text-base font-bold text-white">{MONTH_NAMES[month]} {year}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-white">{MONTH_NAMES[month]} {year}</h2>
+            {monthLoading && (
+              <div className="w-3.5 h-3.5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            )}
+          </div>
           <button onClick={nextMonth} className="p-2 rounded-lg text-slate-400 active:bg-surface-800 transition-colors">
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -230,7 +237,7 @@ export function MobileCalendarPage() {
           </div>
 
           {/* Day cells */}
-          <div className="grid grid-cols-7 gap-y-1">
+          <div className={cn('grid grid-cols-7 gap-y-1 transition-opacity duration-150', monthLoading && 'opacity-40 pointer-events-none')}>
             {cells.map((day, i) => {
               if (day === null) return <div key={`e${i}`} />
               const key = ymdKey(year, month, day)

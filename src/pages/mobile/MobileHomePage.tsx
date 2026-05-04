@@ -298,8 +298,28 @@ export function MobileHomePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      <div className="px-3 sm:px-5 py-4 space-y-5 pb-8 animate-pulse">
+        <div className="border-b border-slate-800 pb-4 space-y-2">
+          <div className="h-2.5 w-24 bg-surface-700 rounded" />
+          <div className="h-7 w-44 bg-surface-700 rounded" />
+          <div className="h-2.5 w-32 bg-surface-800 rounded" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-2.5 w-28 bg-surface-700 rounded" />
+          <div className="h-16 bg-surface-800 rounded-xl" />
+        </div>
+        <div className="h-14 bg-surface-800 rounded-xl" />
+        <div className="space-y-2">
+          <div className="h-2.5 w-20 bg-surface-700 rounded" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-20 bg-surface-800 rounded-xl" />
+            <div className="h-20 bg-surface-800 rounded-xl" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="h-2.5 w-36 bg-surface-700 rounded" />
+          <div className="h-12 bg-surface-800 rounded-xl" />
+        </div>
       </div>
     )
   }

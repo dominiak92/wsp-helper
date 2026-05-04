@@ -26,13 +26,6 @@
     max-width: 100%;
   }
 
-  /* Prevent iOS Safari from auto-zooming on input focus (font-size < 16px triggers it) */
-  @supports (-webkit-touch-callout: none) {
-    input, textarea, select {
-      font-size: max(16px, 1em);
-    }
-  }
-
   #root {
     min-height: 100vh;
     display: flex;
@@ -53,6 +46,18 @@
   }
   ::-webkit-scrollbar-thumb:hover {
     background: #4a5568;
+  }
+}
+
+/*
+  Prevent auto-zoom on input focus on touch devices.
+  iOS Safari and Android Chrome zoom in when font-size < 16px.
+  This rule lives OUTSIDE any @layer so it overrides Tailwind utility classes
+  (e.g. text-sm = 14px) on touch-screen devices only.
+*/
+@media (hover: none) and (pointer: coarse) {
+  input, textarea, select {
+    font-size: max(16px, 1em) !important;
   }
 }
 

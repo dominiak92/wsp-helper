@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -563,6 +563,11 @@ export function MobileHomePage() {
         )}
       </div>
 
+      {/* Full assignment summary — under Stan obsady */}
+      {assignment && (
+        <FullAssignmentCollapsible personnel={personnel} assignment={assignment} />
+      )}
+
       {/* Absent personnel */}
       {absentPersonnel.length > 0 && (
         <div>
@@ -613,9 +618,27 @@ export function MobileHomePage() {
       {/* Zagrożenie pożarowe */}
       <WeatherCollapsible data={weather} loading={weatherLoading} />
 
-      {/* Full assignment summary (collapsed but accessible) */}
+      {/* Obiad */}
       {assignment && (
-        <FullAssignmentCollapsible personnel={personnel} assignment={assignment} />
+        <div>
+          <SectionLabel>Obiad</SectionLabel>
+          {assignment.dinner === true ? (
+            <div className="bg-surface-800 rounded-xl border border-emerald-900/50 px-4 py-3 flex items-center gap-3">
+              <Utensils className="w-4 h-4 text-emerald-400 shrink-0" />
+              <p className="text-sm font-semibold text-emerald-300">Tak</p>
+            </div>
+          ) : assignment.dinner === false ? (
+            <div className="bg-surface-800 rounded-xl border border-red-900/50 px-4 py-3 flex items-center gap-3">
+              <Utensils className="w-4 h-4 text-red-400 shrink-0" />
+              <p className="text-sm font-semibold text-red-300">Nie</p>
+            </div>
+          ) : (
+            <div className="bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 flex items-center gap-3">
+              <Utensils className="w-4 h-4 text-slate-600 shrink-0" />
+              <p className="text-sm text-slate-500">Brak danych</p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

@@ -897,6 +897,36 @@ export function CrewGeneratorPage() {
                 </div>
               </div>
 
+              {/* Obiad */}
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-2">
+                  Obiad
+                </p>
+                <div className="flex gap-2">
+                  {([true, false, null] as const).map(v => {
+                    const label = v === true ? 'Tak' : v === false ? 'Nie' : 'Brak danych'
+                    const isActive = v === null ? assignment.dinner == null : assignment.dinner === v
+                    const activeClass = v === true
+                      ? 'bg-emerald-900/50 text-emerald-300 border-emerald-700'
+                      : v === false
+                        ? 'bg-red-900/50 text-red-300 border-red-700'
+                        : 'bg-surface-700 text-slate-300 border-slate-500'
+                    return (
+                      <button
+                        key={String(v)}
+                        onClick={() => applyAssignment({ ...assignment, dinner: v })}
+                        className={cn(
+                          'text-xs px-3 py-1.5 rounded-lg border transition-colors',
+                          isActive ? activeClass : 'bg-surface-800 text-slate-600 border-slate-700 hover:border-slate-500 hover:text-slate-400',
+                        )}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {/* Vehicles */}
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-3">

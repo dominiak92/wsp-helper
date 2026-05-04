@@ -93,6 +93,7 @@ export interface ShiftAssignment {
   vehicles: VehicleAssignment[]
   unassignedIds: string[]
   absenceMap?: Record<string, AbsenceType> // personId → absence type for this specific duty date
+  dinner?: boolean | null
 }
 
 function shuffle<T>(arr: T[]): T[] {

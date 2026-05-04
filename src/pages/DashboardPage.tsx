@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Pencil, X, Check, RefreshCw, MessageSquare, Bell, Trash2, Flame, Wind, Thermometer, Droplets, Leaf } from 'lucide-react'
+import { ChevronRight, Pencil, X, Check, RefreshCw, MessageSquare, Bell, Trash2, Flame, Wind, Thermometer, Droplets, Leaf, Utensils } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
   currentOrNextDutyDate,
@@ -382,6 +382,29 @@ export function DashboardPage() {
                 </div>
               )}
             </div>
+
+            {/* Obiad */}
+            {assignment && (
+              <div>
+                <SectionLabel>Obiad</SectionLabel>
+                {assignment.dinner === true ? (
+                  <div className="bg-surface-800 rounded-xl border border-emerald-900/50 px-4 py-3 flex items-center gap-3">
+                    <Utensils className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <p className="text-sm font-semibold text-emerald-300">Tak</p>
+                  </div>
+                ) : assignment.dinner === false ? (
+                  <div className="bg-surface-800 rounded-xl border border-red-900/50 px-4 py-3 flex items-center gap-3">
+                    <Utensils className="w-4 h-4 text-red-400 shrink-0" />
+                    <p className="text-sm font-semibold text-red-300">Nie</p>
+                  </div>
+                ) : (
+                  <div className="bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 flex items-center gap-3">
+                    <Utensils className="w-4 h-4 text-slate-600 shrink-0" />
+                    <p className="text-sm text-slate-500">Brak danych</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Wiadomości od użytkowników */}
             {isAdmin && (

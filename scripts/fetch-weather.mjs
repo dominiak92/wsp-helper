@@ -112,18 +112,23 @@ async function main() {
     updatedAt:          ts,
   }
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/weather_cache?id=eq.1`, {
-    method: 'PATCH',
+  // id=1 → pomiar poranny (godz. 9, run o 7:15 UTC)
+  // id=2 → pomiar południowy (godz. 13, run o 11:15 UTC)
+  const hourUTC = new Date().getUTCHours()
+  const rowId = hourUTC < 10 ? 1 : 2
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/weather_cache`, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer': 'return=minimal',
+      'Prefer': 'return=minimal,resolution=merge-duplicates',
     },
-    body: JSON.stringify({ data, fetched_at: new Date().toISOString() }),
+    body: JSON.stringify({ id: rowId, data, fetched_at: new Date().toISOString() }),
   })
 
-  if (!res.ok) throw new Error(`Supabase PATCH failed: ${res.status} ${await res.text()}`)
+  if (!res.ok) throw new Error(`Supabase upsert failed: ${res.status} ${await res.text()}`)
 
   console.log('Cached:', JSON.stringify(data))
 }

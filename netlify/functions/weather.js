@@ -1,5 +1,6 @@
 // Reads cached weather data from Supabase (written by GitHub Actions cron).
-// Env vars VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set in Netlify.
+// Returns { morning: WeatherReading | null, afternoon: WeatherReading | null }
+// id=1 → morning reading (~9:00), id=2 → afternoon reading (~13:00)
 
 export const handler = async () => {
   const url = process.env.VITE_SUPABASE_URL
@@ -15,7 +16,7 @@ export const handler = async () => {
 
   try {
     const res = await fetch(
-      `${url}/rest/v1/weather_cache?id=eq.1&select=data,fetched_at`,
+      `${url}/rest/v1/weather_cache?id=lte.2&select=id,data,fetched_at&order=id.asc`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` } },
     )
 
@@ -28,9 +29,10 @@ export const handler = async () => {
     }
 
     const rows = await res.json()
-    const row = rows?.[0]
+    const morning   = rows?.find(r => r.id === 1)
+    const afternoon = rows?.find(r => r.id === 2)
 
-    if (!row?.data) {
+    if (!morning?.data && !afternoon?.data) {
       return {
         statusCode: 503,
         headers: { 'Content-Type': 'application/json' },
@@ -45,7 +47,10 @@ export const handler = async () => {
         'Cache-Control': 'public, s-maxage=300, max-age=300',
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify({ ...row.data, cachedAt: row.fetched_at }),
+      body: JSON.stringify({
+        morning:   morning?.data   ? { ...morning.data,   cachedAt: morning.fetched_at   } : null,
+        afternoon: afternoon?.data ? { ...afternoon.data, cachedAt: afternoon.fetched_at } : null,
+      }),
     }
   } catch (err) {
     console.error('[weather]', err)

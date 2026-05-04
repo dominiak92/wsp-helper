@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users } from 'lucide-react'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ function nextDutyKeys(count: number): string[] {
 
 // ── weather helpers ───────────────────────────────────────────────────────────
 
-interface WeatherData {
+interface WeatherReading {
   moisture: string | null
   temperature: string | null
   humidity: string | null
@@ -67,6 +67,11 @@ interface WeatherData {
   fireThreat: string | null
   fireThreatForecast: string | null
   updatedAt: string | null
+}
+
+interface WeatherData {
+  morning: WeatherReading | null
+  afternoon: WeatherReading | null
 }
 
 const FIRE_STYLES: Record<number, { text: string; bg: string; border: string }> = {
@@ -84,9 +89,31 @@ function parseFireLevel(threat: string | null): number {
   return m ? Math.min(5, Math.max(0, parseInt(m[1]))) : 0
 }
 
+function FireThreatCard({ label, reading }: { label: string; reading: WeatherReading | null }) {
+  const level = parseFireLevel(reading?.fireThreat ?? null)
+  const ls = FIRE_STYLES[level]
+  const time = reading?.updatedAt?.match(/\d{2}:\d{2}/)?.[0] ?? null
+  return (
+    <div className={cn('rounded-xl border p-3', ls.bg, ls.border)}>
+      <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
+        {label}{time ? <span className="text-slate-600 font-normal"> · {time}</span> : null}
+      </p>
+      <p className={cn('text-sm font-bold leading-snug', reading ? ls.text : 'text-slate-600')}>
+        {reading?.fireThreat ?? '—'}
+      </p>
+      {reading?.fireThreatForecast && (
+        <p className="text-[10px] text-slate-500 mt-0.5">
+          prognoza: <span className="text-slate-400">{reading.fireThreatForecast}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
 function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loading: boolean }) {
   const [open, setOpen] = useState(false)
-  const level = parseFireLevel(data?.fireThreat ?? null)
+  const latest = data?.afternoon ?? data?.morning ?? null
+  const level = parseFireLevel(latest?.fireThreat ?? null)
   const ls = FIRE_STYLES[level]
 
   return (
@@ -94,7 +121,7 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
       <button
         onClick={() => setOpen(v => !v)}
         className={cn(
-          'w-full flex items-center justify-between bg-surface-800 rounded-xl border px-4 py-3 text-left transition-colors hover:border-opacity-80',
+          'w-full flex items-center justify-between bg-surface-800 rounded-xl border px-4 py-3 text-left transition-colors',
           ls.border,
         )}
       >
@@ -105,17 +132,9 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             {loading ? (
               <p className="text-[11px] text-slate-500">Ładowanie…</p>
             ) : (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={cn('text-[11px] font-semibold', ls.text)}>
-                  {data?.fireThreat ?? 'Brak danych'}
-                </span>
-                {data?.fireThreatForecast && (
-                  <>
-                    <span className="text-[11px] text-slate-600">→</span>
-                    <span className="text-[11px] text-slate-400">{data.fireThreatForecast} <span className="text-slate-600">(prognoza)</span></span>
-                  </>
-                )}
-              </div>
+              <span className={cn('text-[11px] font-semibold', ls.text)}>
+                {latest?.fireThreat ?? 'Brak danych'}
+              </span>
             )}
           </div>
         </div>
@@ -130,38 +149,44 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             <p className="text-xs text-slate-600 text-center py-2">Brak danych pogodowych</p>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="text-center bg-surface-700/30 rounded-lg py-2">
-                  <Thermometer className="w-3.5 h-3.5 text-red-400 mx-auto mb-0.5" />
-                  <p className="text-sm font-bold text-white tabular-nums">
-                    {data.temperature ? `${data.temperature}°` : '—'}
-                  </p>
-                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
-                </div>
-                <div className="text-center bg-surface-700/30 rounded-lg py-2">
-                  <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
-                  <p className="text-sm font-bold text-white tabular-nums">{data.moisture ?? '—'}</p>
-                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
-                </div>
-                <div className="text-center bg-surface-700/30 rounded-lg py-2">
-                  <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
-                  <p className="text-sm font-bold text-white tabular-nums">
-                    {data.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
-                  </p>
-                  <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
-                </div>
+              {/* Dwa pomiary */}
+              <div className="grid grid-cols-2 gap-2">
+                <FireThreatCard label="Godz. 9" reading={data.morning} />
+                <FireThreatCard label="Godz. 13" reading={data.afternoon} />
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
-                <span className="flex items-center gap-1">
-                  <Wind className="w-3 h-3 text-slate-600" />
-                  <span className="text-slate-400">{data.windSpeed ?? '—'} m/s {data.windDir ?? ''}</span>
-                </span>
-                <span>Opady: <span className="text-slate-400">{data.precipitation ?? '0'} mm</span></span>
-              </div>
-
-              {data.updatedAt && (
-                <p className="text-[10px] text-slate-700 text-right">akt. {data.updatedAt}</p>
+              {/* Dane meteorologiczne dla najnowszego odczytu */}
+              {latest && (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                      <Thermometer className="w-3.5 h-3.5 text-red-400 mx-auto mb-0.5" />
+                      <p className="text-sm font-bold text-white tabular-nums">
+                        {latest.temperature ? `${latest.temperature}°` : '—'}
+                      </p>
+                      <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
+                    </div>
+                    <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                      <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
+                      <p className="text-sm font-bold text-white tabular-nums">{latest.moisture ?? '—'}</p>
+                      <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
+                    </div>
+                    <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                      <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
+                      <p className="text-sm font-bold text-white tabular-nums">
+                        {latest.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
+                      </p>
+                      <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
+                    <span className="flex items-center gap-1">
+                      <Wind className="w-3 h-3 text-slate-600" />
+                      <span className="text-slate-400">{latest.windSpeed ?? '—'} m/s {latest.windDir ?? ''}</span>
+                    </span>
+                    <span>Opady: <span className="text-slate-400">{latest.precipitation ?? '0'} mm</span></span>
+                  </div>
+                </>
               )}
             </>
           )}
@@ -220,6 +245,7 @@ export function MobileHomePage() {
 
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(true)
+  // WeatherData = { morning, afternoon } — shape matches weather.js response
 
   useEffect(() => {
     const upcomingKeys = nextDutyKeys(16) // next 16 duty days
@@ -584,10 +610,15 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
     <div>
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between text-left py-1"
+        className="w-full flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
       >
-        <SectionLabelInline>Pełna obsada służby</SectionLabelInline>
-        <span className="text-[10px] text-slate-600">{open ? 'Zwiń ▲' : 'Rozwiń ▼'}</span>
+        <div className="flex items-center gap-2.5">
+          <Users className="w-4 h-4 text-brand-400 shrink-0" />
+          <p className="text-sm font-medium text-white">Pełna obsada służby</p>
+        </div>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
       </button>
 
       {open && (
@@ -641,11 +672,6 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
   )
 }
 
-function SectionLabelInline({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600">{children}</p>
-  )
-}
 
 function RowInline({ label, value }: { label: string; value: string }) {
   return (

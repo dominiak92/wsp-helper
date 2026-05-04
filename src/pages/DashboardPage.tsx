@@ -206,7 +206,6 @@ export function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(30),
     ]).then(([{ data: pData }, { data: aData }, { data: noteData }, { data: msgData }]) => {
-      // Resolve assignment first so personnel absences can be derived from its absenceMap.
       const aRow = aData?.[0]
       let loadedAssignment: ShiftAssignment | null = null
       if (aRow?.assignment_json) {
@@ -220,7 +219,6 @@ export function DashboardPage() {
             name: row.name,
             roles: row.roles as RoleType[],
             preferredVehicleId: row.preferred_vehicle_id ?? undefined,
-            // Use date-specific absence from absenceMap; ignore global personnel.absence
             absence: (loadedAssignment?.absenceMap?.[row.id] ?? null) as AbsenceType | null,
             login: row.login ?? null,
           })),
@@ -232,6 +230,20 @@ export function DashboardPage() {
       setLoading(false)
     })
   }, [dutyDate])
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return
+    async function pollMessages() {
+      const { data } = await supabase
+        .from('duty_messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30)
+      if (data) setDutyMessages(data as DutyMsg[])
+    }
+    const interval = setInterval(pollMessages, 20_000)
+    return () => clearInterval(interval)
+  }, [user?.role])
 
   function fetchWeather() {
     setWeatherLoading(true)

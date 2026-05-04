@@ -7,8 +7,7 @@ import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS,
   CREW_VEHICLE_NAMES, VEHICLE_SEATS, ROLE_SORT_ORDER,
-  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop,
-  removePersonFromAssignment, isPersonInAssignment,
+  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, isPersonInAssignment,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
 
@@ -440,7 +439,9 @@ export function CrewGeneratorPage() {
   const [showPrevDuty, setShowPrevDuty] = useState(false)
   const [prevAssignment, setPrevAssignment] = useState<ShiftAssignment | null>(null)
 
+  // Standalone mode (no specific duty date) — load personnel with global absence flags
   useEffect(() => {
+    if (dutyDate) return
     supabase
       .from('personnel')
       .select('*')
@@ -455,43 +456,54 @@ export function CrewGeneratorPage() {
           })))
         }
       })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Specific duty date mode — load personnel + assignment atomically to avoid race condition.
+  // Absence for a given date lives exclusively in assignment.absenceMap, not in personnel table.
   useEffect(() => {
     if (!dutyDate) return
-    // order by created_at desc + limit 1 handles any duplicate rows from past bugs
-    supabase
-      .from('duty_assignments')
-      .select('id, assignment_json')
-      .eq('duty_date', dutyDate)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        const row = data?.[0]
-        if (row?.assignment_json) {
-          const parsed = row.assignment_json as ShiftAssignment
-          if (Array.isArray(parsed.dutyOfficerIds)) {
-            setAssignment(parsed)
-            assignmentIdRef.current = row.id
-          }
-        }
-      })
-
-    // Fetch previous duty assignment for reference panel
     const prevDate = previousDutyDate(dutyDate)
-    supabase
-      .from('duty_assignments')
-      .select('assignment_json')
-      .eq('duty_date', prevDate)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        const row = data?.[0]
-        if (row?.assignment_json) {
-          const parsed = row.assignment_json as ShiftAssignment
-          if (Array.isArray(parsed.dutyOfficerIds)) setPrevAssignment(parsed)
+    Promise.all([
+      supabase.from('personnel').select('*'),
+      supabase
+        .from('duty_assignments')
+        .select('id, assignment_json')
+        .eq('duty_date', dutyDate)
+        .order('created_at', { ascending: false })
+        .limit(1),
+      supabase
+        .from('duty_assignments')
+        .select('assignment_json')
+        .eq('duty_date', prevDate)
+        .order('created_at', { ascending: false })
+        .limit(1),
+    ]).then(([{ data: pData }, { data: aData }, { data: prevData }]) => {
+      const row = aData?.[0]
+      let loadedAssignment: ShiftAssignment | null = null
+      if (row?.assignment_json) {
+        const parsed = row.assignment_json as ShiftAssignment
+        if (Array.isArray(parsed.dutyOfficerIds)) {
+          loadedAssignment = parsed
+          assignmentIdRef.current = row.id
         }
-      })
+      }
+      if (pData && pData.length > 0) {
+        setPersonnel(pData.map(pRow => ({
+          id: pRow.id,
+          name: pRow.name,
+          roles: pRow.roles as RoleType[],
+          preferredVehicleId: pRow.preferred_vehicle_id ?? undefined,
+          // Use only the date-specific absenceMap — ignore global personnel.absence
+          absence: (loadedAssignment?.absenceMap?.[pRow.id] ?? null) as AbsenceType | null,
+        })))
+      }
+      if (loadedAssignment) setAssignment(loadedAssignment)
+      const prevRow = prevData?.[0]
+      if (prevRow?.assignment_json) {
+        const parsed = prevRow.assignment_json as ShiftAssignment
+        if (Array.isArray(parsed.dutyOfficerIds)) setPrevAssignment(parsed)
+      }
+    })
   }, [dutyDate])
 
   // Persist to Supabase — called explicitly via "Zapisz" button or after generate
@@ -545,19 +557,18 @@ export function CrewGeneratorPage() {
   function updatePerson(updated: Person) {
     setPersonnel(prev => prev.map(p => p.id === updated.id ? updated : p))
 
-    // Keep assignment in sync with absence changes so the person doesn't appear
-    // in both the roster and the absent list simultaneously.
+    // Keep absenceMap in sync. Multi-status is intentional — a person can be
+    // in a slot AND marked absent simultaneously (formal status vs. slot assignment).
     if (assignment) {
       let next = assignment
       if (updated.absence !== null) {
-        next = removePersonFromAssignment(next, updated.id)
         next = { ...next, absenceMap: { ...(next.absenceMap ?? {}), [updated.id]: updated.absence } }
       } else {
         const newMap = { ...(next.absenceMap ?? {}) }
         delete newMap[updated.id]
         next = { ...next, absenceMap: Object.keys(newMap).length > 0 ? newMap : undefined }
       }
-      if (next !== assignment) applyAssignment(next, !!dutyDate)
+      if (next !== assignment) applyAssignment(next)
     }
 
     supabase.from('personnel').upsert({
@@ -565,12 +576,14 @@ export function CrewGeneratorPage() {
       name: updated.name,
       roles: updated.roles,
       preferred_vehicle_id: updated.preferredVehicleId ?? null,
-      absence: updated.absence,
+      // When dutyDate is set, absence is stored only in assignment.absenceMap —
+      // never write it back to the global personnel table.
+      ...(dutyDate ? {} : { absence: updated.absence }),
     }).then(({ error }) => { if (error) console.error('[supabase] upsert personnel:', error) })
   }
 
   function handleGenerate() {
-    applyAssignment(generateCrew(personnel), true)
+    applyAssignment(generateCrew(personnel))
   }
 
   function deletePerson(id: string) {

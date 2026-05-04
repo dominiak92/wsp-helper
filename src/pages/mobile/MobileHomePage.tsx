@@ -89,12 +89,26 @@ function parseFireLevel(threat: string | null): number {
   return m ? Math.min(5, Math.max(0, parseInt(m[1]))) : 0
 }
 
-function FireThreatCard({ label, reading }: { label: string; reading: WeatherReading | null }) {
+function FireThreatCard({
+  label, reading, selected, onClick,
+}: {
+  label: string
+  reading: WeatherReading | null
+  selected?: boolean
+  onClick?: () => void
+}) {
   const level = parseFireLevel(reading?.fireThreat ?? null)
   const ls = FIRE_STYLES[level]
   const time = reading?.updatedAt?.match(/\d{2}:\d{2}/)?.[0] ?? null
   return (
-    <div className={cn('rounded-xl border p-3', ls.bg, ls.border)}>
+    <button
+      onClick={onClick}
+      className={cn(
+        'rounded-xl border p-3 text-left w-full transition-all',
+        ls.bg, ls.border,
+        selected && 'ring-2 ring-brand-500 ring-offset-1 ring-offset-surface-800',
+      )}
+    >
       <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
         {label}{time ? <span className="text-slate-600 font-normal"> · {time}</span> : null}
       </p>
@@ -106,12 +120,16 @@ function FireThreatCard({ label, reading }: { label: string; reading: WeatherRea
           prognoza: <span className="text-slate-400">{reading.fireThreatForecast}</span>
         </p>
       )}
-    </div>
+    </button>
   )
 }
 
 function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loading: boolean }) {
   const [open, setOpen] = useState(false)
+  const defaultSlot: 'morning' | 'afternoon' = data?.afternoon ? 'afternoon' : 'morning'
+  const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>(defaultSlot)
+
+  const displayed = data?.[selectedSlot] ?? data?.afternoon ?? data?.morning ?? null
   const latest = data?.afternoon ?? data?.morning ?? null
   const level = parseFireLevel(latest?.fireThreat ?? null)
   const ls = FIRE_STYLES[level]
@@ -149,32 +167,42 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             <p className="text-xs text-slate-600 text-center py-2">Brak danych pogodowych</p>
           ) : (
             <>
-              {/* Dwa pomiary */}
+              {/* Dwa pomiary — klikalne */}
               <div className="grid grid-cols-2 gap-2">
-                <FireThreatCard label="Godz. 9" reading={data.morning} />
-                <FireThreatCard label="Godz. 13" reading={data.afternoon} />
+                <FireThreatCard
+                  label="Godz. 9"
+                  reading={data.morning}
+                  selected={selectedSlot === 'morning'}
+                  onClick={() => setSelectedSlot('morning')}
+                />
+                <FireThreatCard
+                  label="Godz. 13"
+                  reading={data.afternoon}
+                  selected={selectedSlot === 'afternoon'}
+                  onClick={() => setSelectedSlot('afternoon')}
+                />
               </div>
 
-              {/* Dane meteorologiczne dla najnowszego odczytu */}
-              {latest && (
+              {/* Dane meteorologiczne dla wybranego odczytu */}
+              {displayed && (
                 <>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="text-center bg-surface-700/30 rounded-lg py-2">
                       <Thermometer className="w-3.5 h-3.5 text-red-400 mx-auto mb-0.5" />
                       <p className="text-sm font-bold text-white tabular-nums">
-                        {latest.temperature ? `${latest.temperature}°` : '—'}
+                        {displayed.temperature ? `${displayed.temperature}°` : '—'}
                       </p>
                       <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
                     </div>
                     <div className="text-center bg-surface-700/30 rounded-lg py-2">
                       <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
-                      <p className="text-sm font-bold text-white tabular-nums">{latest.moisture ?? '—'}</p>
+                      <p className="text-sm font-bold text-white tabular-nums">{displayed.moisture ?? '—'}</p>
                       <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
                     </div>
                     <div className="text-center bg-surface-700/30 rounded-lg py-2">
                       <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
                       <p className="text-sm font-bold text-white tabular-nums">
-                        {latest.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
+                        {displayed.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
                       </p>
                       <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
                     </div>
@@ -182,9 +210,9 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
                   <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
                     <span className="flex items-center gap-1">
                       <Wind className="w-3 h-3 text-slate-600" />
-                      <span className="text-slate-400">{latest.windSpeed ?? '—'} m/s {latest.windDir ?? ''}</span>
+                      <span className="text-slate-400">{displayed.windSpeed ?? '—'} m/s {displayed.windDir ?? ''}</span>
                     </span>
-                    <span>Opady: <span className="text-slate-400">{latest.precipitation ?? '0'} mm</span></span>
+                    <span>Opady: <span className="text-slate-400">{displayed.precipitation ?? '0'} mm</span></span>
                   </div>
                 </>
               )}

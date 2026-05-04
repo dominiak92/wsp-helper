@@ -32,13 +32,8 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
     }
 
     fetchUnread()
-
-    const channel = supabase
-      .channel('topbar-duty-messages')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'duty_messages' }, fetchUnread)
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    const interval = setInterval(fetchUnread, 20_000)
+    return () => clearInterval(interval)
   }, [user?.role])
 
   return (

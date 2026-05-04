@@ -322,6 +322,81 @@ export function DashboardPage() {
               )}
             </div>
 
+            {/* Wiadomości od użytkowników */}
+            {isAdmin && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <SectionLabel>Wiadomości od użytkowników</SectionLabel>
+                  {dutyMessages.filter(m => !m.read_at).length > 0 && (
+                    <span className="text-[10px] font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 leading-none -mt-2">
+                      {dutyMessages.filter(m => !m.read_at).length}
+                    </span>
+                  )}
+                </div>
+                {dutyMessages.length === 0 ? (
+                  <div className="flex items-center gap-2.5 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
+                    <Bell className="w-4 h-4 text-slate-600 shrink-0" />
+                    <p className="text-xs text-slate-600">Brak wiadomości</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {dutyMessages.map(msg => (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          'bg-surface-800 rounded-xl border px-4 py-3 flex flex-col gap-1.5',
+                          msg.read_at ? 'border-slate-700/40' : 'border-brand-800/60'
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {!msg.read_at && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0" />
+                            )}
+                            <span className="text-xs font-semibold text-slate-300 truncate">
+                              {msg.sender_name ?? msg.sender_login}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[10px] text-slate-600">
+                              {new Date(msg.created_at).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}
+                              {' '}
+                              {new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {!msg.read_at && (
+                              <button
+                                onClick={async () => {
+                                  await supabase.from('duty_messages').update({ read_at: new Date().toISOString() }).eq('id', msg.id)
+                                  setDutyMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: new Date().toISOString() } : m))
+                                }}
+                                className="text-[10px] text-slate-600 hover:text-brand-400 transition-colors"
+                                title="Oznacz jako przeczytane"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={async () => {
+                                await supabase.from('duty_messages').delete().eq('id', msg.id)
+                                setDutyMessages(prev => prev.filter(m => m.id !== msg.id))
+                              }}
+                              className="text-[10px] text-slate-700 hover:text-red-400 transition-colors"
+                              title="Usuń"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
+                          {msg.message}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Zagrożenie pożarowe */}
             <WeatherWidget data={weather} loading={weatherLoading} onRefresh={fetchWeather} />
 
@@ -422,80 +497,6 @@ export function DashboardPage() {
               </Link>
             </div>
 
-            {/* Wiadomości od użytkowników */}
-            {isAdmin && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <SectionLabel>Wiadomości od użytkowników</SectionLabel>
-                  {dutyMessages.filter(m => !m.read_at).length > 0 && (
-                    <span className="text-[10px] font-bold bg-red-600 text-white rounded-full px-1.5 py-0.5 leading-none -mt-2">
-                      {dutyMessages.filter(m => !m.read_at).length}
-                    </span>
-                  )}
-                </div>
-                {dutyMessages.length === 0 ? (
-                  <div className="flex items-center gap-2.5 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
-                    <Bell className="w-4 h-4 text-slate-600 shrink-0" />
-                    <p className="text-xs text-slate-600">Brak wiadomości</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {dutyMessages.map(msg => (
-                      <div
-                        key={msg.id}
-                        className={cn(
-                          'bg-surface-800 rounded-xl border px-4 py-3 flex flex-col gap-1.5',
-                          msg.read_at ? 'border-slate-700/40' : 'border-brand-800/60'
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {!msg.read_at && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0" />
-                            )}
-                            <span className="text-xs font-semibold text-slate-300 truncate">
-                              {msg.sender_name ?? msg.sender_login}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] text-slate-600">
-                              {new Date(msg.created_at).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}
-                              {' '}
-                              {new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            {!msg.read_at && (
-                              <button
-                                onClick={async () => {
-                                  await supabase.from('duty_messages').update({ read_at: new Date().toISOString() }).eq('id', msg.id)
-                                  setDutyMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: new Date().toISOString() } : m))
-                                }}
-                                className="text-[10px] text-slate-600 hover:text-brand-400 transition-colors"
-                                title="Oznacz jako przeczytane"
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            <button
-                              onClick={async () => {
-                                await supabase.from('duty_messages').delete().eq('id', msg.id)
-                                setDutyMessages(prev => prev.filter(m => m.id !== msg.id))
-                              }}
-                              className="text-[10px] text-slate-700 hover:text-red-400 transition-colors"
-                              title="Usuń"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                        <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
-                          {msg.message}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
           </div>
 

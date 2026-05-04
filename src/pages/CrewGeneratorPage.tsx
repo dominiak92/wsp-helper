@@ -713,15 +713,6 @@ export function CrewGeneratorPage() {
             <Users className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{showPersonnel ? 'Ukryj' : 'Personel'}</span>
           </button>
-          {assignment && (
-            <button
-              onClick={handleGenerate}
-              title="Nowe losowanie"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 hover:text-white text-sm transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          )}
           {dutyDate && assignment && isDirty && (
             <button
               onClick={() => persistToSupabase(assignment)}

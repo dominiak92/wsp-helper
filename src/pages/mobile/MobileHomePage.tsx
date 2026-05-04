@@ -252,22 +252,25 @@ export function MobileHomePage() {
       // announcement
       supabase.from('announcements').select('message').eq('id', 1).maybeSingle(),
     ]).then(([{ data: pData }, { data: aData }, { data: futureData }, { data: noteData }]) => {
+      // Resolve assignment first so personnel absences can be derived from its absenceMap.
+      const aRow = aData?.[0]
+      let loadedAssignment: ShiftAssignment | null = null
+      if (aRow?.assignment_json) {
+        const parsed = aRow.assignment_json as ShiftAssignment
+        if (Array.isArray(parsed.dutyOfficerIds)) loadedAssignment = parsed
+      }
       if (pData) {
         setPersonnel(pData.map(row => ({
           id: row.id,
           name: row.name,
           roles: row.roles as RoleType[],
           preferredVehicleId: row.preferred_vehicle_id ?? undefined,
-          absence: row.absence as AbsenceType | null,
+          // Use date-specific absence from absenceMap; ignore global personnel.absence
+          absence: (loadedAssignment?.absenceMap?.[row.id] ?? null) as AbsenceType | null,
           login: row.login ?? null,
         })))
       }
-
-      const row = aData?.[0]
-      if (row?.assignment_json) {
-        const parsed = row.assignment_json as ShiftAssignment
-        if (Array.isArray(parsed.dutyOfficerIds)) setAssignment(parsed)
-      }
+      if (loadedAssignment) setAssignment(loadedAssignment)
 
       if (futureData) {
         const m = new Map<string, ShiftAssignment>()
@@ -304,17 +307,11 @@ export function MobileHomePage() {
   const myPerson = user ? personnel.find(p => p.login === user.login) ?? null : null
   const myRole = (assignment && myPerson) ? resolveMyRole(assignment, myPerson.id) : null
 
-  // Determine absence for the *current* duty date from the saved assignment's absenceMap first,
-  // falling back to the global flag only when the person is not in the assignment at all.
-  const myAbsenceNow = myPerson
-    ? (assignment?.absenceMap?.[myPerson.id] ?? (myRole === null ? myPerson.absence : null))
-    : null
+  // person.absence is already date-specific (populated from absenceMap at load time)
+  const myAbsenceNow = myPerson?.absence ?? null
   const isAbsentNow = myAbsenceNow != null
 
-  // Use saved assignment to determine per-date absence instead of global flags.
-  const absentPersonnel = assignment
-    ? personnel.filter(p => !isPersonInAssignment(assignment, p.id) && (assignment.absenceMap?.[p.id] != null || p.absence != null))
-    : personnel.filter(p => p.absence)
+  const absentPersonnel = personnel.filter(p => p.absence)
   const availableCount = personnel.length - absentPersonnel.length
   const total = personnel.length
 
@@ -323,7 +320,7 @@ export function MobileHomePage() {
   if (myPerson) {
     for (const [date, a] of savedMap.entries()) {
       if (!isPersonInAssignment(a, myPerson.id)) {
-        const absType = a.absenceMap?.[myPerson.id] ?? myPerson.absence
+        const absType = a.absenceMap?.[myPerson.id]
         const label = absType ? ABSENCE_LABELS[absType] : 'Poza obsadą'
         upcomingAbsences.push({ date, label })
         if (upcomingAbsences.length >= 3) break

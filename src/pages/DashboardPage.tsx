@@ -206,6 +206,13 @@ export function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(30),
     ]).then(([{ data: pData }, { data: aData }, { data: noteData }, { data: msgData }]) => {
+      // Resolve assignment first so personnel absences can be derived from its absenceMap.
+      const aRow = aData?.[0]
+      let loadedAssignment: ShiftAssignment | null = null
+      if (aRow?.assignment_json) {
+        const parsed = aRow.assignment_json as ShiftAssignment
+        if (Array.isArray(parsed.dutyOfficerIds)) loadedAssignment = parsed
+      }
       if (pData) {
         setPersonnel(
           pData.map(row => ({
@@ -213,16 +220,13 @@ export function DashboardPage() {
             name: row.name,
             roles: row.roles as RoleType[],
             preferredVehicleId: row.preferred_vehicle_id ?? undefined,
-            absence: row.absence as AbsenceType | null,
+            // Use date-specific absence from absenceMap; ignore global personnel.absence
+            absence: (loadedAssignment?.absenceMap?.[row.id] ?? null) as AbsenceType | null,
             login: row.login ?? null,
           })),
         )
       }
-      const row = aData?.[0]
-      if (row?.assignment_json) {
-        const parsed = row.assignment_json as ShiftAssignment
-        if (Array.isArray(parsed.dutyOfficerIds)) setAssignment(parsed)
-      }
+      if (loadedAssignment) setAssignment(loadedAssignment)
       if (noteData?.message) setAnnouncement(noteData.message)
       if (msgData) setDutyMessages(msgData as DutyMsg[])
       setLoading(false)

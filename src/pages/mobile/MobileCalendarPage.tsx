@@ -25,7 +25,6 @@ type UserStatus =
 function resolveUserStatus(
   assignment: ShiftAssignment | undefined,
   personId: string,
-  currentAbsence: AbsenceType | null,
 ): UserStatus | null {
   if (!assignment) return { kind: 'unsaved' }
 
@@ -45,8 +44,9 @@ function resolveUserStatus(
   if (assignment.unassignedIds.includes(personId))
     return { kind: 'reserve' }
 
-  // Not in assignment at all → absent
-  const label = currentAbsence ? ABSENCE_LABELS[currentAbsence] : 'Nieobecny'
+  // Not in assignment — use date-specific absence from absenceMap
+  const absType = assignment.absenceMap?.[personId]
+  const label = absType ? ABSENCE_LABELS[absType] : 'Nieobecny'
   return { kind: 'absent', label }
 }
 
@@ -190,6 +190,16 @@ export function MobileCalendarPage() {
     ? assignmentLoading && !assignmentMap.has(selectedDate)
     : false
 
+  // Personnel with absences derived from the selected assignment's absenceMap,
+  // so DutyAssignmentView shows only absences relevant to this specific duty date.
+  const personnelForView = useMemo(() => {
+    if (!selectedAssignment) return personnel.map(p => ({ ...p, absence: null as AbsenceType | null }))
+    return personnel.map(p => ({
+      ...p,
+      absence: (selectedAssignment.absenceMap?.[p.id] ?? null) as AbsenceType | null,
+    }))
+  }, [personnel, selectedAssignment])
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-start min-h-full">
 
@@ -242,7 +252,7 @@ export function MobileCalendarPage() {
 
               // Determine user status for this duty day
               const userStatus = myPerson
-                ? resolveUserStatus(assignmentMap.get(key), myPerson.id, myPerson.absence)
+                ? resolveUserStatus(assignmentMap.get(key), myPerson.id)
                 : null
               const tag = cellAbsenceTag(userStatus)
               const hasSaved = assignmentMap.has(key)
@@ -294,7 +304,7 @@ export function MobileCalendarPage() {
             </p>
             <div className="space-y-0.5">
               {dutyDaysInMonth.map(date => {
-                const status = resolveUserStatus(assignmentMap.get(date), myPerson.id, myPerson.absence)
+                const status = resolveUserStatus(assignmentMap.get(date), myPerson.id)
                 return (
                   <button
                     key={date}
@@ -327,7 +337,7 @@ export function MobileCalendarPage() {
               <p className="text-xs text-slate-500">{formatDateLong(selectedDate)}</p>
               {/* User's role summary for selected date */}
               {myPerson && (() => {
-                const status = resolveUserStatus(assignmentMap.get(selectedDate), myPerson.id, myPerson.absence)
+                const status = resolveUserStatus(assignmentMap.get(selectedDate), myPerson.id)
                 if (!status || status.kind === 'unsaved') return null
                 return (
                   <div className="mt-2">
@@ -337,7 +347,7 @@ export function MobileCalendarPage() {
               })()}
             </div>
             <DutyAssignmentView
-              personnel={personnel}
+              personnel={personnelForView}
               assignment={selectedAssignment}
               loading={isLoading}
             />

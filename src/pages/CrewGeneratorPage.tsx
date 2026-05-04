@@ -228,6 +228,22 @@ interface DragCtx {
   onDragOver: (key: string, e: React.DragEvent) => void
   onDragLeave: (e: React.DragEvent) => void
   onDrop: (key: string, e: React.DragEvent) => void
+  // Tap-to-swap (mobile) ─────────────────────────────────────────────────────
+  selectedSlot: string | null
+  onTap: (key: string, hasPerson: boolean) => void
+}
+
+function getPersonAtSlotKey(a: ShiftAssignment, key: string): string | null {
+  if (!key || key === 'unassigned') return null
+  if (key.startsWith('unassigned:')) return key.split(':')[1]
+  const [ns, vid, role, idxStr] = key.split(':')
+  if (ns !== 'v') return null
+  const v = a.vehicles.find(x => x.vehicleId === vid)
+  if (!v) return null
+  if (role === 'commander') return v.commanderId
+  if (role === 'driver') return v.driverId
+  if (role === 'rescuer') return v.rescuerIds[parseInt(idxStr)] ?? null
+  return null
 }
 
 // ── Slot row ──────────────────────────────────────────────────────────────────
@@ -244,13 +260,18 @@ function SlotRow({ label, personId, slotKey, persons, highlight = false, empty =
   const name = resolveName(persons, personId)
   const isOver = dnd.dropTarget === slotKey
   const isDragging = dnd.dragSource === slotKey
+  const isSelected = dnd.selectedSlot === slotKey
+  const hasSelection = dnd.selectedSlot !== null
 
   return (
     <div
       className={cn(
         'flex items-center gap-2 py-1.5 px-1 rounded-md transition-all',
         isOver && 'bg-brand-900/30 ring-1 ring-inset ring-brand-500/70',
+        isSelected && 'bg-brand-900/40 ring-1 ring-inset ring-brand-400/80',
+        hasSelection && !isSelected && 'cursor-pointer hover:bg-surface-700/40',
       )}
+      onClick={() => dnd.onTap(slotKey, !!personId)}
       onDragOver={e => dnd.onDragOver(slotKey, e)}
       onDragLeave={dnd.onDragLeave}
       onDrop={e => dnd.onDrop(slotKey, e)}
@@ -262,9 +283,10 @@ function SlotRow({ label, personId, slotKey, persons, highlight = false, empty =
           onDragStart={e => dnd.onDragStart(slotKey, e)}
           onDragEnd={dnd.onDragEnd}
           className={cn(
-            'text-sm font-medium truncate cursor-grab active:cursor-grabbing select-none transition-opacity',
+            'text-sm font-medium truncate select-none transition-opacity',
             highlight ? 'text-brand-300' : 'text-white',
             isDragging && 'opacity-30',
+            isSelected ? 'cursor-pointer text-brand-200' : 'cursor-grab active:cursor-grabbing',
           )}
         >
           {name}
@@ -433,6 +455,7 @@ export function CrewGeneratorPage() {
   const [addingPerson, setAddingPerson] = useState(false)
   const [dragSource, setDragSource] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
@@ -653,6 +676,18 @@ export function CrewGeneratorPage() {
     applyAssignment(applyDrop(assignment, srcKey, dstKey))
   }
 
+  function handleTap(key: string, hasPerson: boolean) {
+    if (!assignment) return
+    if (selectedSlot === null) {
+      if (hasPerson) setSelectedSlot(key)
+    } else if (selectedSlot === key) {
+      setSelectedSlot(null)
+    } else {
+      applyAssignment(applyDrop(assignment, selectedSlot, key))
+      setSelectedSlot(null)
+    }
+  }
+
   const dnd: DragCtx = {
     dragSource, dropTarget,
     onDragStart: handleDragStart,
@@ -660,6 +695,8 @@ export function CrewGeneratorPage() {
     onDragOver: handleDragOver,
     onDragLeave: handleDragLeave,
     onDrop: handleDrop,
+    selectedSlot,
+    onTap: handleTap,
   }
 
   const absentCount = personnel.filter(p => p.absence).length
@@ -894,7 +931,9 @@ export function CrewGeneratorPage() {
                           'flex flex-wrap gap-2 min-h-[3rem] p-2 rounded-lg border border-dashed transition-colors',
                           dropTarget === 'unassigned'
                             ? 'border-brand-500 bg-brand-900/20'
-                            : 'border-slate-700 bg-surface-900/30'
+                            : selectedSlot
+                              ? 'border-slate-600 bg-surface-900/30 cursor-pointer'
+                              : 'border-slate-700 bg-surface-900/30'
                         )}
                         onDragOver={e => { e.preventDefault(); setDropTarget('unassigned') }}
                         onDragLeave={e => {
@@ -908,6 +947,11 @@ export function CrewGeneratorPage() {
                           if (!srcKey || !assignment) return
                           applyAssignment(applyDrop(assignment, srcKey, 'unassigned'))
                         }}
+                        onClick={e => {
+                          if (e.target === e.currentTarget && selectedSlot) {
+                            handleTap('unassigned', false)
+                          }
+                        }}
                       >
                         {assignment.unassignedIds.map(id => (
                           <span
@@ -915,10 +959,14 @@ export function CrewGeneratorPage() {
                             draggable
                             onDragStart={e => handleDragStart(`unassigned:${id}`, e)}
                             onDragEnd={handleDragEnd}
+                            onClick={e => { e.stopPropagation(); handleTap(`unassigned:${id}`, true) }}
                             className={cn(
-                              'text-sm px-3 py-1.5 rounded-lg bg-surface-800 border border-slate-700 text-slate-400',
+                              'text-sm px-3 py-1.5 rounded-lg bg-surface-800 border text-slate-400',
                               'cursor-grab active:cursor-grabbing select-none transition-opacity',
-                              dragSource === `unassigned:${id}` && 'opacity-30'
+                              dragSource === `unassigned:${id}` && 'opacity-30',
+                              selectedSlot === `unassigned:${id}`
+                                ? 'border-brand-600 ring-1 ring-brand-400 text-brand-200'
+                                : 'border-slate-700',
                             )}
                           >
                             {resolveName(personnel, id)}
@@ -926,7 +974,7 @@ export function CrewGeneratorPage() {
                         ))}
                         {assignment.unassignedIds.length === 0 && (
                           <span className="text-xs text-slate-700 italic self-center px-1">
-                            Upuść tutaj aby usunąć z obsady
+                            Upuść / przenieś tutaj aby usunąć z obsady
                           </span>
                         )}
                       </div>
@@ -958,6 +1006,26 @@ export function CrewGeneratorPage() {
           )}
         </main>
       </div>
+
+      {/* Tap-to-swap indicator — fixed bar shown when a person is selected on mobile */}
+      {selectedSlot && assignment && (() => {
+        const pid = getPersonAtSlotKey(assignment, selectedSlot)
+        if (!pid) return null
+        return (
+          <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 bg-brand-950/95 backdrop-blur border-t border-brand-800/60 px-4 py-3 shadow-2xl">
+            <p className="text-sm text-brand-100 min-w-0 truncate">
+              <span className="font-semibold">{resolveName(personnel, pid)}</span>
+              <span className="text-brand-400 ml-1.5">— wybierz docelowy slot</span>
+            </p>
+            <button
+              onClick={() => setSelectedSlot(null)}
+              className="shrink-0 text-xs px-2.5 py-1.5 rounded-lg bg-brand-800 hover:bg-brand-700 text-brand-200 transition-colors"
+            >
+              Anuluj
+            </button>
+          </div>
+        )
+      })()}
     </div>
   )
 }

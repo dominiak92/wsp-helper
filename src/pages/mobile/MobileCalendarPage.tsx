@@ -350,11 +350,20 @@ export function MobileCalendarPage() {
           }
           if (!myPerson && eventsInMonth.length === 0 && billingInMonth.length === 0) return null
 
-          const items: Array<{ date: string; kind: 'duty' | 'event' | 'billing'; ev?: CalendarEvent }> = [
-            ...dutyDaysInMonth.map(date => ({ date, kind: 'duty' as const })),
-            ...eventsInMonth.map(ev => ({ date: ev.event_date, kind: 'event' as const, ev })),
-            ...billingInMonth.map(date => ({ date, kind: 'billing' as const })),
-          ].sort((a, b) => a.date.localeCompare(b.date))
+          // Merge all entries by date so one day = one row with multiple badges
+          type DayFlags = { duty: boolean; billing: boolean; ev?: CalendarEvent }
+          const dayMap = new Map<string, DayFlags>()
+          for (const date of dutyDaysInMonth)
+            dayMap.set(date, { duty: true, billing: false })
+          for (const ev of eventsInMonth) {
+            const f = dayMap.get(ev.event_date) ?? { duty: false, billing: false }
+            dayMap.set(ev.event_date, { ...f, ev })
+          }
+          for (const date of billingInMonth) {
+            const f = dayMap.get(date) ?? { duty: false, billing: false }
+            dayMap.set(date, { ...f, billing: true })
+          }
+          const sortedDates = [...dayMap.keys()].sort()
 
           return (
             <div className="px-3 pb-4 border-t border-slate-800 pt-3">
@@ -362,41 +371,52 @@ export function MobileCalendarPage() {
                 {myPerson ? `Twój status — ${MONTH_NAMES[month]}` : `Zdarzenia — ${MONTH_NAMES[month]}`}
               </p>
               <div className="space-y-0.5">
-                {items.map(item => {
-                  if (item.kind === 'billing') {
+                {sortedDates.map(date => {
+                  const { duty, billing, ev } = dayMap.get(date)!
+                  // Skip duty-only rows when no user is logged in
+                  if (!ev && !billing && (!duty || !myPerson)) return null
+
+                  const orBadge = billing ? (
+                    <span className="text-[10px] font-medium text-yellow-400 bg-yellow-900/20 px-1.5 py-0.5 rounded border border-yellow-800/40 shrink-0">
+                      OR
+                    </span>
+                  ) : null
+
+                  const eventBadge = ev ? (
+                    <span className="text-[10px] font-medium text-red-300 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-900/40 truncate max-w-[45%]">
+                      {ev.label}
+                    </span>
+                  ) : null
+
+                  if (duty && myPerson) {
+                    const status = resolveUserStatus(assignmentMap.get(date), myPerson.id)
                     return (
-                      <div key={`or-${item.date}`} className="flex items-center justify-between gap-2 px-2 py-1.5">
-                        <span className="text-xs text-slate-400 shrink-0">{formatDateShort(item.date)}</span>
-                        <span className="text-[10px] font-medium text-yellow-400 bg-yellow-900/20 px-2 py-0.5 rounded border border-yellow-800/40">
-                          OR – koniec okresu
-                        </span>
-                      </div>
+                      <button
+                        key={date}
+                        onClick={() => setSelectedDate(selectedDate === date ? null : date)}
+                        className={cn(
+                          'w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
+                          selectedDate === date ? 'bg-brand-900/40' : 'hover:bg-surface-800',
+                        )}
+                      >
+                        <span className="text-xs text-slate-400 shrink-0">{formatDateShort(date)}</span>
+                        <div className="flex items-center gap-1.5 justify-end min-w-0">
+                          {eventBadge}
+                          {orBadge}
+                          <StatusPill status={status} />
+                        </div>
+                      </button>
                     )
                   }
-                  if (item.kind === 'event') {
-                    return (
-                      <div key={`ev-${item.ev!.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5">
-                        <span className="text-xs text-slate-400 shrink-0">{formatDateShort(item.date)}</span>
-                        <span className="text-[10px] font-medium text-red-300 bg-red-950/40 px-2 py-0.5 rounded border border-red-900/40 truncate max-w-[60%] text-right">
-                          {item.ev!.label}
-                        </span>
-                      </div>
-                    )
-                  }
-                  if (!myPerson) return null
-                  const status = resolveUserStatus(assignmentMap.get(item.date), myPerson.id)
+
                   return (
-                    <button
-                      key={item.date}
-                      onClick={() => setSelectedDate(selectedDate === item.date ? null : item.date)}
-                      className={cn(
-                        'w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
-                        selectedDate === item.date ? 'bg-brand-900/40' : 'hover:bg-surface-800',
-                      )}
-                    >
-                      <span className="text-xs text-slate-400 shrink-0">{formatDateShort(item.date)}</span>
-                      <StatusPill status={status} />
-                    </button>
+                    <div key={date} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                      <span className="text-xs text-slate-400 shrink-0">{formatDateShort(date)}</span>
+                      <div className="flex items-center gap-1.5 justify-end min-w-0">
+                        {eventBadge}
+                        {orBadge}
+                      </div>
+                    </div>
                   )
                 })}
               </div>

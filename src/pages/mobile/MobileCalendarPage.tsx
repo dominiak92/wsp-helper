@@ -81,17 +81,19 @@ export function MobileCalendarPage() {
   const [assignmentMap, setAssignmentMap] = useState<Map<string, ShiftAssignment>>(new Map())
   const [assignmentLoading, setAssignmentLoading] = useState(false)
   const [monthLoading, setMonthLoading] = useState(false)
-  const [eventDates, setEventDates] = useState<Set<string>>(new Set())
+  const [calEvents, setCalEvents] = useState<CalendarEvent[]>([])
   const todayK = todayYmdKey()
 
   useEffect(() => {
     supabase
       .from('calendar_events')
-      .select('event_date')
+      .select('*')
       .then(({ data }) => {
-        if (data) setEventDates(new Set((data as Pick<CalendarEvent, 'event_date'>[]).map(r => r.event_date)))
+        if (data) setCalEvents(data as CalendarEvent[])
       })
   }, [])
+
+  const eventDates = useMemo(() => new Set(calEvents.map(e => e.event_date)), [calEvents])
 
   // Load personnel once
   useEffect(() => {
@@ -337,31 +339,54 @@ export function MobileCalendarPage() {
         </div>
 
         {/* ── Monthly status summary ── */}
-        {myPerson && dutyDaysInMonth.length > 0 && (
-          <div className="px-3 pb-4 border-t border-slate-800 pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600 mb-2">
-              Twój status — {MONTH_NAMES[month]}
-            </p>
-            <div className="space-y-0.5">
-              {dutyDaysInMonth.map(date => {
-                const status = resolveUserStatus(assignmentMap.get(date), myPerson.id)
-                return (
-                  <button
-                    key={date}
-                    onClick={() => setSelectedDate(selectedDate === date ? null : date)}
-                    className={cn(
-                      'w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
-                      selectedDate === date ? 'bg-brand-900/40' : 'hover:bg-surface-800',
-                    )}
-                  >
-                    <span className="text-xs text-slate-400 shrink-0">{formatDateShort(date)}</span>
-                    <StatusPill status={status} />
-                  </button>
-                )
-              })}
+        {(() => {
+          const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
+          const eventsInMonth = calEvents.filter(e => e.event_date.startsWith(monthPrefix))
+          if (!myPerson && eventsInMonth.length === 0 && dutyDaysInMonth.length === 0) return null
+          if (!myPerson && eventsInMonth.length === 0) return null
+
+          const items: Array<{ date: string; kind: 'duty' | 'event'; ev?: CalendarEvent }> = [
+            ...dutyDaysInMonth.map(date => ({ date, kind: 'duty' as const })),
+            ...eventsInMonth.map(ev => ({ date: ev.event_date, kind: 'event' as const, ev })),
+          ].sort((a, b) => a.date.localeCompare(b.date))
+
+          return (
+            <div className="px-3 pb-4 border-t border-slate-800 pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600 mb-2">
+                {myPerson ? `Twój status — ${MONTH_NAMES[month]}` : `Zdarzenia — ${MONTH_NAMES[month]}`}
+              </p>
+              <div className="space-y-0.5">
+                {items.map(item => {
+                  if (item.kind === 'event') {
+                    return (
+                      <div key={`ev-${item.ev!.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                        <span className="text-xs text-slate-400 shrink-0">{formatDateShort(item.date)}</span>
+                        <span className="text-[10px] font-medium text-red-300 bg-red-950/40 px-2 py-0.5 rounded border border-red-900/40 truncate max-w-[60%] text-right">
+                          {item.ev!.label}
+                        </span>
+                      </div>
+                    )
+                  }
+                  if (!myPerson) return null
+                  const status = resolveUserStatus(assignmentMap.get(item.date), myPerson.id)
+                  return (
+                    <button
+                      key={item.date}
+                      onClick={() => setSelectedDate(selectedDate === item.date ? null : item.date)}
+                      className={cn(
+                        'w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
+                        selectedDate === item.date ? 'bg-brand-900/40' : 'hover:bg-surface-800',
+                      )}
+                    >
+                      <span className="text-xs text-slate-400 shrink-0">{formatDateShort(item.date)}</span>
+                      <StatusPill status={status} />
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
 
       {/* ── Divider on sm+ ── */}

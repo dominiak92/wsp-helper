@@ -808,11 +808,11 @@ export function CrewGeneratorPage() {
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <button
-                onClick={() => navigate(`/crew?date=${nextDutyDate(dutyDate)}`)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
-                title="Następna służba"
+                onClick={() => navigate(`/crew-generator?date=${nextDutyDate(dutyDate)}`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 hover:text-white text-xs transition-colors shrink-0"
               >
-                <ArrowRight className="w-4 h-4" />
+                <span>Następna służba</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}

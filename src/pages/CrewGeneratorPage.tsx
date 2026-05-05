@@ -350,19 +350,31 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
   )
 }
 
-// ── Special role card (read-only, no DnD) ────────────────────────────────────
+// ── Special role card ─────────────────────────────────────────────────────────
 
-function SpecialRoleCard({ title, personId, persons, colorClass, borderClass }: {
+function SpecialRoleCard({ title, personId, persons, colorClass, borderClass, onClear }: {
   title: string
   personId: string | null
   persons: Person[]
   colorClass: string
   borderClass: string
+  onClear?: () => void
 }) {
   return (
     <div className={cn('rounded-xl border p-4 bg-surface-800 min-w-[140px]', borderClass)}>
       <p className={cn('text-[10px] uppercase tracking-widest font-semibold mb-1.5', colorClass)}>{title}</p>
-      <p className="text-sm font-bold text-white">{resolveName(persons, personId)}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-bold text-white flex-1">{resolveName(persons, personId)}</p>
+        {onClear && personId && (
+          <button
+            onClick={onClear}
+            title="Przenieś do nieprzydzielonych"
+            className="text-slate-600 hover:text-red-400 transition-colors shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -603,6 +615,14 @@ export function CrewGeneratorPage() {
       // never write it back to the global personnel table.
       ...(dutyDate ? {} : { absence: updated.absence }),
     }).then(({ error }) => { if (error) console.error('[supabase] upsert personnel:', error) })
+  }
+
+  function clearSpecialRole(role: 'shiftCommander' | 'dutyOfficer', personId: string) {
+    if (!assignment) return
+    const base = role === 'shiftCommander'
+      ? { ...assignment, shiftCommanderId: null }
+      : { ...assignment, dutyOfficerIds: assignment.dutyOfficerIds.filter(id => id !== personId) }
+    applyAssignment({ ...base, unassignedIds: [...base.unassignedIds, personId] })
   }
 
   function handleGenerate() {
@@ -872,6 +892,7 @@ export function CrewGeneratorPage() {
                     persons={personnel}
                     colorClass="text-brand-400"
                     borderClass="border-brand-900"
+                    onClear={assignment.shiftCommanderId ? () => clearSpecialRole('shiftCommander', assignment.shiftCommanderId!) : undefined}
                   />
                   {assignment.dutyOfficerIds.length > 0
                     ? assignment.dutyOfficerIds.map(id => (
@@ -882,6 +903,7 @@ export function CrewGeneratorPage() {
                           persons={personnel}
                           colorClass="text-amber-400"
                           borderClass="border-amber-900"
+                          onClear={() => clearSpecialRole('dutyOfficer', id)}
                         />
                       ))
                     : (

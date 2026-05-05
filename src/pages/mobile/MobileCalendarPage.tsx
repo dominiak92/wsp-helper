@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { isDutyDay, ymdKey, todayYmdKey, formatDateShort, formatDateLong } from '../../lib/duty'
+import { isDutyDay, isBillingDay, ymdKey, todayYmdKey, formatDateShort, formatDateLong } from '../../lib/duty'
 import { DutyAssignmentView } from '../../components/DutyAssignmentView'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
@@ -245,15 +245,22 @@ export function MobileCalendarPage() {
               const isToday = key === todayK
               const isSelected = key === selectedDate
 
+              const billing = isBillingDay(year, month, day)
+
               if (!duty) {
                 return (
                   <div key={key} className={cn(
-                    'flex items-center justify-center aspect-square text-[12px] leading-none rounded-lg',
+                    'relative flex items-center justify-center aspect-square text-[12px] leading-none rounded-lg',
                     isToday
                       ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-surface-950 text-amber-400'
-                      : 'text-slate-700',
+                      : billing
+                        ? 'bg-yellow-900/20 text-yellow-400'
+                        : 'text-slate-700',
                   )}>
                     {day}
+                    {billing && (
+                      <span className="absolute top-[2px] left-[2px] w-[3px] h-[3px] bg-yellow-400 rounded-sm" />
+                    )}
                   </div>
                 )
               }
@@ -297,6 +304,10 @@ export function MobileCalendarPage() {
                   {/* Grey dot: saved assignment exists but no user match */}
                   {!myPerson && hasSaved && !isSelected && (
                     <span className="absolute top-[3px] right-[3px] w-[5px] h-[5px] rounded-full bg-emerald-400" />
+                  )}
+                  {/* Billing period pip */}
+                  {billing && (
+                    <span className="absolute top-[3px] left-[3px] w-[4px] h-[4px] bg-yellow-400 rounded-sm" />
                   )}
                 </button>
               )

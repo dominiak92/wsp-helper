@@ -1,7 +1,12 @@
 const REF_UTC = Date.UTC(2026, 4, 1) // 1 maja 2026 = dzień służby
+const BILLING_REF_UTC = Date.UTC(2026, 3, 21) // 21 kwietnia 2026 = pierwsza rozliczeniówka
 
 export function isDutyDay(year: number, month: number, day: number): boolean {
   return ((Date.UTC(year, month, day) - REF_UTC) / 86400000) % 4 === 0
+}
+
+export function isBillingDay(year: number, month: number, day: number): boolean {
+  return ((Date.UTC(year, month, day) - BILLING_REF_UTC) / 86400000) % 28 === 0
 }
 
 export function ymdKey(y: number, m: number, d: number): string {

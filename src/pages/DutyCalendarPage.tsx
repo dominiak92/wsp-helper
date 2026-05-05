@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
-import { isDutyDay } from '../lib/duty'
+import { isDutyDay, isBillingDay } from '../lib/duty'
 
 // Meeus/Jones/Butcher algorithm
 function getEaster(year: number): Date {
@@ -149,6 +149,7 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
 
           const key = ymdKey(year, month, day)
           const duty = isDutyDay(year, month, day)
+          const billing = isBillingDay(year, month, day)
           const holiday = holidays[key]
           const isToday = key === todayKey
           const colIdx = i % 7
@@ -161,8 +162,8 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
               key={key}
               title={
                 duty
-                  ? `${hasSavedAssignment ? '✓ Obsada zapisana · ' : ''}Kliknij aby otworzyć obsadę${holiday ? ` · ${holiday.name}` : ''}`
-                  : holiday?.name
+                  ? `${hasSavedAssignment ? '✓ Obsada zapisana · ' : ''}${billing ? 'Okres rozliczeniowy · ' : ''}Kliknij aby otworzyć obsadę${holiday ? ` · ${holiday.name}` : ''}`
+                  : `${billing ? 'Okres rozliczeniowy' : ''}${holiday ? `${billing ? ' · ' : ''}${holiday.name}` : ''}` || undefined
               }
               onClick={duty ? () => onDutyDayClick(key) : undefined}
               className={cn(
@@ -173,6 +174,7 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
                 !duty && (isSun ? 'text-red-400/60' : isSat ? 'text-slate-500' : 'text-slate-500'),
                 !duty && holiday?.type === 'public' && 'text-amber-300',
                 !duty && holiday?.type === 'notable' && 'text-sky-300',
+                !duty && billing && 'bg-yellow-900/25 text-yellow-300',
                 isToday && 'ring-2 ring-amber-400 ring-offset-[1.5px] ring-offset-surface-800 z-10',
               )}
             >
@@ -190,6 +192,10 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
                     duty && 'opacity-80',
                   )}
                 />
+              )}
+              {/* Billing period pip */}
+              {billing && (
+                <span className="absolute top-[1px] left-[1px] w-[3px] h-[3px] bg-yellow-400 rounded-sm" />
               )}
             </div>
           )
@@ -347,6 +353,12 @@ export function DutyCalendarPage() {
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded ring-2 ring-amber-400 bg-transparent flex-shrink-0" />
           <span>Dziś</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative w-4 h-4 rounded bg-yellow-900/25 flex-shrink-0">
+            <span className="absolute top-[2px] left-[2px] w-[3px] h-[3px] bg-yellow-400 rounded-sm" />
+          </div>
+          <span>Okres rozliczeniowy (co 28 dni)</span>
         </div>
       </div>
     </div>

@@ -278,7 +278,7 @@ export function MobileCalendarPage() {
                       <span className="absolute top-[1px] left-[1px] text-[6px] font-bold leading-none text-yellow-400">OR</span>
                     )}
                     {hasEvent && (
-                      <span className="absolute bottom-[2px] right-[2px] w-[3px] h-[3px] rounded-full bg-red-400" />
+                      <span className="absolute bottom-[1px] right-[1px] text-[6px] font-bold leading-none text-red-400">!</span>
                     )}
                   </div>
                 )
@@ -330,7 +330,7 @@ export function MobileCalendarPage() {
                   )}
                   {/* Event indicator */}
                   {hasEvent && (
-                    <span className="absolute bottom-[3px] right-[3px] w-[4px] h-[4px] rounded-full bg-red-400" />
+                    <span className="absolute bottom-[2px] right-[2px] text-[7px] font-bold leading-none text-red-400">!</span>
                   )}
                 </button>
               )

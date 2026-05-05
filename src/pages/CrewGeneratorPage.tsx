@@ -799,22 +799,13 @@ export function CrewGeneratorPage() {
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           {dutyDate && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => navigate('/duty-calendar')}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
-                title="Wróć do kalendarza"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => navigate(`/crew-generator?date=${nextDutyDate(dutyDate)}`)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 hover:text-white text-xs transition-colors shrink-0"
-              >
-                <span>Następna służba</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <button
+              onClick={() => navigate('/duty-calendar')}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
+              title="Wróć do kalendarza"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
           )}
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-white">Tworzenie obsady</h1>
@@ -828,19 +819,28 @@ export function CrewGeneratorPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {dutyDate && (
-            <button
-              onClick={() => setShowPrevDuty(v => !v)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs transition-colors',
-                showPrevDuty
-                  ? 'bg-slate-700 text-white'
-                  : 'bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white',
-              )}
-              title="Obsada poprzedniej służby"
-            >
-              <History className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Poprzednia służba</span>
-            </button>
+            <>
+              <button
+                onClick={() => setShowPrevDuty(v => !v)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs transition-colors',
+                  showPrevDuty
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white',
+                )}
+                title="Obsada poprzedniej służby"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Poprzednia służba</span>
+              </button>
+              <button
+                onClick={() => navigate(`/crew-generator?date=${nextDutyDate(dutyDate)}`)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white transition-colors"
+              >
+                <span className="hidden sm:inline">Następna służba</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
           <button
             onClick={() => setShowPersonnel(v => !v)}

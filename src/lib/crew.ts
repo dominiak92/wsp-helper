@@ -161,7 +161,7 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
     const cap = VEHICLE_SEATS[vid]
     const commanderId = cmdMap[vid] ?? null
     const driverId = driverMap[vid] ?? null
-    let seats = (commanderId ? 1 : 0) + (driverId && driverId !== commanderId ? 1 : 0)
+    let seats = (commanderId ? 1 : 0) + 1 // always reserve 1 seat for driver row
     const rescuerIds: string[] = []
     while (seats < cap) {
       const r = fillPool.find(p => !assigned.has(p.id))

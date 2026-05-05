@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft, Save, Check, History } from 'lucide-react'
-import { previousDutyDate, formatDateShort } from '../lib/duty'
+import { RefreshCw, Zap, Pencil, X, Users, Plus, ArrowLeft, ArrowRight, Save, Check, History } from 'lucide-react'
+import { previousDutyDate, nextDutyDate, formatDateShort } from '../lib/duty'
 import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
@@ -316,11 +316,13 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
   const extraCap = VEHICLE_EXTRA_RESCUERS[vid as keyof typeof VEHICLE_EXTRA_RESCUERS] ?? 0
   const pfx = `v:${vehicleId}`
 
-  const takenBySpecial = (commanderId ? 1 : 0) + (driverId && driverId !== commanderId ? 1 : 0)
-  const stdRescuerSlots = cap - takenBySpecial
+  const cmdSlot = commanderId ? 1 : 0
+  // driver row always takes 1 visual slot regardless of whether it's filled
+  const stdRescuerSlots = cap - cmdSlot - 1
   const stdRescuers = rescuerIds.slice(0, stdRescuerSlots)
   const extraRescuers = rescuerIds.slice(stdRescuerSlots)
 
+  const takenBySpecial = cmdSlot + (driverId && driverId !== commanderId ? 1 : 0)
   const stdFilled = takenBySpecial + stdRescuers.length
   const full = stdFilled >= cap
 
@@ -797,13 +799,22 @@ export function CrewGeneratorPage() {
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           {dutyDate && (
-            <button
-              onClick={() => navigate('/duty-calendar')}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
-              title="Wróć do kalendarza"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => navigate('/duty-calendar')}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
+                title="Wróć do kalendarza"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => navigate(`/crew?date=${nextDutyDate(dutyDate)}`)}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
+                title="Następna służba"
+              >
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           )}
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-white">Tworzenie obsady</h1>

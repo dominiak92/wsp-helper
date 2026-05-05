@@ -42,6 +42,13 @@ export function previousDutyDate(from: string): string {
   return ymdKey(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate())
 }
 
+export function nextDutyDate(from: string): string {
+  const [y, m, d] = from.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + 4)
+  return ymdKey(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate())
+}
+
 const MONTHS_GEN = [
   'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
   'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',

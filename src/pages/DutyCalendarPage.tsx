@@ -206,7 +206,7 @@ function MonthCalendar({ year, month, holidays, savedDates, eventDates, onDutyDa
               )}
               {/* Event indicator */}
               {hasEvent && (
-                <span className="absolute bottom-[1px] right-[1px] text-[6px] font-bold leading-none text-red-400">!</span>
+                <span className="absolute -bottom-[2px] -right-[2px] w-[9px] h-[9px] rounded-full bg-red-500 flex items-center justify-center text-[6px] font-black text-white leading-none z-20">!</span>
               )}
             </div>
           )
@@ -400,7 +400,7 @@ export function DutyCalendarPage() {
         </div>
         <div className="flex items-center gap-2">
           <div className="relative w-4 h-4 rounded bg-red-900/30 flex-shrink-0">
-            <span className="absolute bottom-[1px] right-[1px] text-[6px] font-bold leading-none text-red-400">!</span>
+            <span className="absolute -bottom-[2px] -right-[2px] w-[9px] h-[9px] rounded-full bg-red-500 flex items-center justify-center text-[6px] font-black text-white leading-none">!</span>
           </div>
           <span>Zdarzenie specjalne</span>
         </div>

@@ -229,6 +229,11 @@ function getPersonAtSlot(a: ShiftAssignment, key: string): string | null {
   if (key === 'unassigned') return null
   const [ns, vid, role, idxStr] = key.split(':')
   if (ns === 'unassigned') return vid // 'unassigned:personId'
+  if (ns === 'special') {
+    if (vid === 'shift-commander') return a.shiftCommanderId
+    if (vid === 'duty-officer') return a.dutyOfficerIds[Number(role)] ?? null
+    return null
+  }
   if (ns !== 'v') return null
   const v = a.vehicles.find(x => x.vehicleId === vid)
   if (!v) return null
@@ -250,6 +255,19 @@ function setPersonAtSlot(a: ShiftAssignment, key: string, personId: string | nul
     if (personId === null)
       return { ...a, unassignedIds: a.unassignedIds.filter(id => id !== oldId) }
     return { ...a, unassignedIds: a.unassignedIds.map(id => id === oldId ? personId : id) }
+  }
+  if (ns === 'special') {
+    if (vid === 'shift-commander') return { ...a, shiftCommanderId: personId }
+    if (vid === 'duty-officer') {
+      const idx = Number(role)
+      if (personId === null)
+        return { ...a, dutyOfficerIds: a.dutyOfficerIds.filter((_, i) => i !== idx) }
+      const dutyOfficerIds = [...a.dutyOfficerIds]
+      if (idx < dutyOfficerIds.length) dutyOfficerIds[idx] = personId
+      else dutyOfficerIds.push(personId)
+      return { ...a, dutyOfficerIds }
+    }
+    return a
   }
   if (ns !== 'v') return a
   const vehicles = a.vehicles.map(v => {

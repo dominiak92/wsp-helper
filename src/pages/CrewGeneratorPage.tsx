@@ -236,6 +236,8 @@ interface DragCtx {
 function getPersonAtSlotKey(a: ShiftAssignment, key: string): string | null {
   if (!key || key === 'unassigned') return null
   if (key.startsWith('unassigned:')) return key.split(':')[1]
+  if (key === 'special:shift-commander') return a.shiftCommanderId
+  if (key.startsWith('special:duty-officer:')) return a.dutyOfficerIds[parseInt(key.split(':')[2])] ?? null
   const [ns, vid, role, idxStr] = key.split(':')
   if (ns !== 'v') return null
   const v = a.vehicles.find(x => x.vehicleId === vid)
@@ -352,22 +354,55 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
 
 // ── Special role card ─────────────────────────────────────────────────────────
 
-function SpecialRoleCard({ title, personId, persons, colorClass, borderClass, onClear }: {
+function SpecialRoleCard({ title, personId, persons, colorClass, borderClass, slotKey, dnd, onClear }: {
   title: string
   personId: string | null
   persons: Person[]
   colorClass: string
   borderClass: string
+  slotKey: string
+  dnd: DragCtx
   onClear?: () => void
 }) {
+  const isOver = dnd.dropTarget === slotKey
+  const isSelected = dnd.selectedSlot === slotKey
+  const hasSelection = dnd.selectedSlot !== null
+
   return (
-    <div className={cn('rounded-xl border p-4 bg-surface-800 min-w-[140px]', borderClass)}>
+    <div
+      className={cn(
+        'rounded-xl border p-4 bg-surface-800 min-w-[140px] transition-all',
+        borderClass,
+        isOver && 'ring-1 ring-inset ring-brand-500/70',
+        isSelected && 'ring-1 ring-inset ring-brand-400/80',
+        hasSelection && !isSelected && 'cursor-pointer hover:bg-surface-700/60',
+      )}
+      onDragOver={e => dnd.onDragOver(slotKey, e)}
+      onDragLeave={dnd.onDragLeave}
+      onDrop={e => dnd.onDrop(slotKey, e)}
+      onClick={() => { if (hasSelection && !isSelected) dnd.onTap(slotKey, !!personId) }}
+    >
       <p className={cn('text-[10px] uppercase tracking-widest font-semibold mb-1.5', colorClass)}>{title}</p>
       <div className="flex items-center gap-2">
-        <p className="text-sm font-bold text-white flex-1">{resolveName(persons, personId)}</p>
-        {onClear && personId && (
+        {personId ? (
+          <span
+            draggable
+            onDragStart={e => dnd.onDragStart(slotKey, e)}
+            onDragEnd={dnd.onDragEnd}
+            onClick={e => { e.stopPropagation(); dnd.onTap(slotKey, true) }}
+            className={cn(
+              'text-sm font-bold flex-1 select-none',
+              isSelected ? 'text-brand-200 cursor-pointer' : 'text-white cursor-grab active:cursor-grabbing',
+            )}
+          >
+            {resolveName(persons, personId)}
+          </span>
+        ) : (
+          <span className="text-[10px] text-slate-700 italic flex-1">—</span>
+        )}
+        {onClear && personId && !isSelected && (
           <button
-            onClick={onClear}
+            onClick={e => { e.stopPropagation(); onClear() }}
             title="Przenieś do nieprzydzielonych"
             className="text-slate-600 hover:text-red-400 transition-colors shrink-0"
           >
@@ -892,10 +927,12 @@ export function CrewGeneratorPage() {
                     persons={personnel}
                     colorClass="text-brand-400"
                     borderClass="border-brand-900"
+                    slotKey="special:shift-commander"
+                    dnd={dnd}
                     onClear={assignment.shiftCommanderId ? () => clearSpecialRole('shiftCommander', assignment.shiftCommanderId!) : undefined}
                   />
                   {assignment.dutyOfficerIds.length > 0
-                    ? assignment.dutyOfficerIds.map(id => (
+                    ? assignment.dutyOfficerIds.map((id, idx) => (
                         <SpecialRoleCard
                           key={id}
                           title="Dyżurny"
@@ -903,6 +940,8 @@ export function CrewGeneratorPage() {
                           persons={personnel}
                           colorClass="text-amber-400"
                           borderClass="border-amber-900"
+                          slotKey={`special:duty-officer:${idx}`}
+                          dnd={dnd}
                           onClear={() => clearSpecialRole('dutyOfficer', id)}
                         />
                       ))
@@ -913,6 +952,8 @@ export function CrewGeneratorPage() {
                           persons={personnel}
                           colorClass="text-amber-400"
                           borderClass="border-amber-900"
+                          slotKey="special:duty-officer:0"
+                          dnd={dnd}
                         />
                       )
                   }

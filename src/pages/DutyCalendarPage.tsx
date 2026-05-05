@@ -193,9 +193,9 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
                   )}
                 />
               )}
-              {/* Billing period pip */}
+              {/* Billing period label */}
               {billing && (
-                <span className="absolute top-[1px] left-[1px] w-[3px] h-[3px] bg-yellow-400 rounded-sm" />
+                <span className="absolute top-[1px] left-[1px] text-[6px] font-bold leading-none text-yellow-400">OR</span>
               )}
             </div>
           )
@@ -356,7 +356,7 @@ export function DutyCalendarPage() {
         </div>
         <div className="flex items-center gap-2">
           <div className="relative w-4 h-4 rounded bg-yellow-900/25 flex-shrink-0">
-            <span className="absolute top-[2px] left-[2px] w-[3px] h-[3px] bg-yellow-400 rounded-sm" />
+            <span className="absolute top-[1px] left-[1px] text-[6px] font-bold leading-none text-yellow-400">OR</span>
           </div>
           <span>Okres rozliczeniowy (co 28 dni)</span>
         </div>

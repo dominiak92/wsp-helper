@@ -259,7 +259,7 @@ export function MobileCalendarPage() {
                   )}>
                     {day}
                     {billing && (
-                      <span className="absolute top-[2px] left-[2px] w-[3px] h-[3px] bg-yellow-400 rounded-sm" />
+                      <span className="absolute top-[1px] left-[1px] text-[6px] font-bold leading-none text-yellow-400">OR</span>
                     )}
                   </div>
                 )
@@ -305,9 +305,9 @@ export function MobileCalendarPage() {
                   {!myPerson && hasSaved && !isSelected && (
                     <span className="absolute top-[3px] right-[3px] w-[5px] h-[5px] rounded-full bg-emerald-400" />
                   )}
-                  {/* Billing period pip */}
+                  {/* Billing period label */}
                   {billing && (
-                    <span className="absolute top-[3px] left-[3px] w-[4px] h-[4px] bg-yellow-400 rounded-sm" />
+                    <span className="absolute top-[2px] left-[2px] text-[7px] font-bold leading-none text-yellow-400">OR</span>
                   )}
                 </button>
               )

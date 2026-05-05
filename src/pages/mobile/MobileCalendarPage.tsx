@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { isDutyDay, isBillingDay, ymdKey, todayYmdKey, formatDateShort, formatDateLong } from '../../lib/duty'
+import type { CalendarEvent } from '../../lib/duty'
 import { DutyAssignmentView } from '../../components/DutyAssignmentView'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
@@ -80,7 +81,17 @@ export function MobileCalendarPage() {
   const [assignmentMap, setAssignmentMap] = useState<Map<string, ShiftAssignment>>(new Map())
   const [assignmentLoading, setAssignmentLoading] = useState(false)
   const [monthLoading, setMonthLoading] = useState(false)
+  const [eventDates, setEventDates] = useState<Set<string>>(new Set())
   const todayK = todayYmdKey()
+
+  useEffect(() => {
+    supabase
+      .from('calendar_events')
+      .select('event_date')
+      .then(({ data }) => {
+        if (data) setEventDates(new Set((data as Pick<CalendarEvent, 'event_date'>[]).map(r => r.event_date)))
+      })
+  }, [])
 
   // Load personnel once
   useEffect(() => {
@@ -246,6 +257,7 @@ export function MobileCalendarPage() {
               const isSelected = key === selectedDate
 
               const billing = isBillingDay(year, month, day)
+              const hasEvent = eventDates.has(key)
 
               if (!duty) {
                 return (
@@ -253,13 +265,18 @@ export function MobileCalendarPage() {
                     'relative flex items-center justify-center aspect-square text-[12px] leading-none rounded-lg',
                     isToday
                       ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-surface-950 text-amber-400'
-                      : billing
-                        ? 'bg-yellow-900/20 text-yellow-400'
-                        : 'text-slate-700',
+                      : hasEvent
+                        ? 'bg-red-900/30 text-red-300'
+                        : billing
+                          ? 'bg-yellow-900/20 text-yellow-400'
+                          : 'text-slate-700',
                   )}>
                     {day}
                     {billing && (
                       <span className="absolute top-[1px] left-[1px] text-[6px] font-bold leading-none text-yellow-400">OR</span>
+                    )}
+                    {hasEvent && (
+                      <span className="absolute bottom-[2px] right-[2px] w-[3px] h-[3px] rounded-full bg-red-400" />
                     )}
                   </div>
                 )
@@ -308,6 +325,10 @@ export function MobileCalendarPage() {
                   {/* Billing period label */}
                   {billing && (
                     <span className="absolute top-[2px] left-[2px] text-[7px] font-bold leading-none text-yellow-400">OR</span>
+                  )}
+                  {/* Event indicator */}
+                  {hasEvent && (
+                    <span className="absolute bottom-[3px] right-[3px] w-[4px] h-[4px] rounded-full bg-red-400" />
                   )}
                 </button>
               )

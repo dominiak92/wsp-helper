@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar, ChevronDown, ChevronUp, Trash2, Plus } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
 import { isDutyDay, isBillingDay } from '../lib/duty'
+import type { CalendarEvent } from '../lib/duty'
 
 // Meeus/Jones/Butcher algorithm
 function getEaster(year: number): Date {
@@ -107,10 +108,11 @@ interface MonthProps {
   month: number
   holidays: Record<string, HolidayEntry>
   savedDates: Set<string>
+  eventDates: Set<string>
   onDutyDayClick: (key: string) => void
 }
 
-function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: MonthProps) {
+function MonthCalendar({ year, month, holidays, savedDates, eventDates, onDutyDayClick }: MonthProps) {
   const firstDow = new Date(Date.UTC(year, month, 1)).getUTCDay()
   const startOffset = firstDow === 0 ? 6 : firstDow - 1 // Mon = 0
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
@@ -150,6 +152,7 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
           const key = ymdKey(year, month, day)
           const duty = isDutyDay(year, month, day)
           const billing = isBillingDay(year, month, day)
+          const hasEvent = eventDates.has(key)
           const holiday = holidays[key]
           const isToday = key === todayKey
           const colIdx = i % 7
@@ -157,14 +160,17 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
           const isSun = colIdx === 6
           const hasSavedAssignment = savedDates.has(key)
 
+          const titleParts: string[] = []
+          if (hasSavedAssignment) titleParts.push('✓ Obsada zapisana')
+          if (billing) titleParts.push('Okres rozliczeniowy')
+          if (hasEvent) titleParts.push('Zdarzenie')
+          if (holiday) titleParts.push(holiday.name)
+          if (duty) titleParts.push('Kliknij aby otworzyć obsadę')
+
           return (
             <div
               key={key}
-              title={
-                duty
-                  ? `${hasSavedAssignment ? '✓ Obsada zapisana · ' : ''}${billing ? 'Okres rozliczeniowy · ' : ''}Kliknij aby otworzyć obsadę${holiday ? ` · ${holiday.name}` : ''}`
-                  : `${billing ? 'Okres rozliczeniowy' : ''}${holiday ? `${billing ? ' · ' : ''}${holiday.name}` : ''}` || undefined
-              }
+              title={titleParts.join(' · ') || undefined}
               onClick={duty ? () => onDutyDayClick(key) : undefined}
               className={cn(
                 'relative flex items-center justify-center aspect-square text-[11px] rounded leading-none select-none',
@@ -175,6 +181,7 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
                 !duty && holiday?.type === 'public' && 'text-amber-300',
                 !duty && holiday?.type === 'notable' && 'text-sky-300',
                 !duty && billing && 'bg-yellow-900/25 text-yellow-300',
+                !duty && hasEvent && 'bg-red-900/30 text-red-300',
                 isToday && 'ring-2 ring-amber-400 ring-offset-[1.5px] ring-offset-surface-800 z-10',
               )}
             >
@@ -197,6 +204,10 @@ function MonthCalendar({ year, month, holidays, savedDates, onDutyDayClick }: Mo
               {billing && (
                 <span className="absolute top-[1px] left-[1px] text-[6px] font-bold leading-none text-yellow-400">OR</span>
               )}
+              {/* Event indicator */}
+              {hasEvent && (
+                <span className="absolute bottom-[1px] right-[1px] w-[3px] h-[3px] rounded-full bg-red-400" />
+              )}
             </div>
           )
         })}
@@ -211,7 +222,9 @@ export function DutyCalendarPage() {
   const navigate = useNavigate()
   const [year, setYear] = useState(2026)
   const [savedDates, setSavedDates] = useState<Set<string>>(new Set())
+  const [events, setEvents] = useState<CalendarEvent[]>([])
   const holidays = useMemo(() => getHolidays(year), [year])
+  const eventDates = useMemo(() => new Set(events.map(e => e.event_date)), [events])
 
   useEffect(() => {
     supabase
@@ -220,7 +233,28 @@ export function DutyCalendarPage() {
       .then(({ data }) => {
         if (data) setSavedDates(new Set(data.map(r => r.duty_date as string)))
       })
+    supabase
+      .from('calendar_events')
+      .select('*')
+      .order('event_date')
+      .then(({ data }) => {
+        if (data) setEvents(data as CalendarEvent[])
+      })
   }, [])
+
+  async function addEvent(date: string, label: string) {
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .insert({ event_date: date, label })
+      .select()
+      .single()
+    if (!error && data) setEvents(prev => [...prev, data as CalendarEvent])
+  }
+
+  async function deleteEvent(id: string) {
+    const { error } = await supabase.from('calendar_events').delete().eq('id', id)
+    if (!error) setEvents(prev => prev.filter(e => e.id !== id))
+  }
 
   const { totalDutyDays, dutyOnHoliday } = useMemo(() => {
     let totalDutyDays = 0
@@ -311,6 +345,9 @@ export function DutyCalendarPage() {
         </div>
       )}
 
+      {/* Events manager */}
+      <EventsManager events={events} onAdd={addEvent} onDelete={deleteEvent} />
+
       {/* 12-month grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
         {Array.from({ length: 12 }, (_, m) => (
@@ -320,6 +357,7 @@ export function DutyCalendarPage() {
             month={m}
             holidays={holidays}
             savedDates={savedDates}
+            eventDates={eventDates}
             onDutyDayClick={key => navigate(`/crew-generator?date=${key}`)}
           />
         ))}
@@ -360,7 +398,116 @@ export function DutyCalendarPage() {
           </div>
           <span>Okres rozliczeniowy (co 28 dni)</span>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="relative w-4 h-4 rounded bg-red-900/30 flex-shrink-0">
+            <span className="absolute bottom-[1px] right-[1px] w-[3px] h-[3px] rounded-full bg-red-400" />
+          </div>
+          <span>Zdarzenie specjalne</span>
+        </div>
       </div>
+    </div>
+  )
+}
+
+// ── Events manager ────────────────────────────────────────────────────────────
+
+function EventsManager({
+  events,
+  onAdd,
+  onDelete,
+}: {
+  events: CalendarEvent[]
+  onAdd: (date: string, label: string) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [newDate, setNewDate] = useState('')
+  const [newLabel, setNewLabel] = useState('')
+  const [adding, setAdding] = useState(false)
+
+  async function handleAdd() {
+    if (!newDate || !newLabel.trim()) return
+    setAdding(true)
+    await onAdd(newDate, newLabel.trim())
+    setNewDate('')
+    setNewLabel('')
+    setAdding(false)
+  }
+
+  const sorted = [...events].sort((a, b) => a.event_date.localeCompare(b.event_date))
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between bg-surface-800 border border-slate-700/40 rounded-xl px-4 py-3 text-left hover:border-slate-600 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+          <p className="text-sm font-medium text-white">Zdarzenia specjalne</p>
+          {events.length > 0 && (
+            <span className="text-[11px] text-red-400 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-900/40">
+              {events.length}
+            </span>
+          )}
+        </div>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="mt-2 bg-surface-800 border border-slate-700/40 rounded-xl p-4 space-y-4">
+          {/* Add form */}
+          <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+            <input
+              type="date"
+              value={newDate}
+              onChange={e => setNewDate(e.target.value)}
+              className="bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+            />
+            <input
+              type="text"
+              value={newLabel}
+              onChange={e => setNewLabel(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+              placeholder="Opis zdarzenia…"
+              className="flex-1 min-w-0 bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 placeholder:text-slate-600"
+            />
+            <button
+              onClick={handleAdd}
+              disabled={adding || !newDate || !newLabel.trim()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-800 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Dodaj
+            </button>
+          </div>
+
+          {/* Events list */}
+          {sorted.length === 0 ? (
+            <p className="text-xs text-slate-600 text-center py-1">Brak zdarzeń</p>
+          ) : (
+            <div className="space-y-1">
+              {sorted.map(ev => (
+                <div key={ev.id} className="flex items-center gap-3 bg-surface-900/60 rounded-lg px-3 py-2">
+                  <span className="text-xs font-semibold text-red-400 shrink-0 tabular-nums">
+                    {formatDisplayDate(ev.event_date)}
+                  </span>
+                  <span className="text-sm text-slate-300 flex-1 min-w-0 truncate">{ev.label}</span>
+                  <button
+                    onClick={() => onDelete(ev.id)}
+                    className="text-slate-600 hover:text-red-400 transition-colors shrink-0"
+                    title="Usuń"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

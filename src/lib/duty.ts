@@ -9,6 +9,12 @@ export function isBillingDay(year: number, month: number, day: number): boolean 
   return ((Date.UTC(year, month, day) - BILLING_REF_UTC) / 86400000) % 28 === 0
 }
 
+export interface CalendarEvent {
+  id: string
+  event_date: string // YYYY-MM-DD
+  label: string
+}
+
 export function ymdKey(y: number, m: number, d: number): string {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }

@@ -8,7 +8,8 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays } from 'lucide-react'
+import type { CalendarEvent } from '../../lib/duty'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -273,6 +274,7 @@ export function MobileHomePage() {
 
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(true)
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([])
   // WeatherData = { morning, afternoon } — shape matches weather.js response
 
   useEffect(() => {
@@ -332,6 +334,18 @@ export function MobileHomePage() {
       if (noteData?.message) setAnnouncement(noteData.message)
       setLoading(false)
     })
+
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    supabase
+      .from('calendar_events')
+      .select('*')
+      .gte('event_date', todayStr)
+      .order('event_date')
+      .limit(5)
+      .then(({ data }) => {
+        if (data) setUpcomingEvents(data as CalendarEvent[])
+      })
   }, [dutyDate])
 
   useEffect(() => {
@@ -438,6 +452,29 @@ export function MobileHomePage() {
         <h2 className="text-2xl font-bold text-white">{formatDateShort(dutyDate)}</h2>
         <p className="text-xs text-slate-500 mt-0.5">{formatDateLong(dutyDate)}</p>
       </div>
+
+      {/* Upcoming events */}
+      {upcomingEvents.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600 mb-2">
+            Nadchodzące zdarzenia
+          </p>
+          <div className="space-y-2">
+            {upcomingEvents.map(ev => (
+              <div
+                key={ev.id}
+                className="flex items-center gap-3 bg-red-950/30 border border-red-900/50 rounded-xl px-4 py-3"
+              >
+                <CalendarDays className="w-4 h-4 text-red-400 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-red-200 truncate">{ev.label}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{formatDateShort(ev.event_date)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* My assignment */}
       {myPerson && (

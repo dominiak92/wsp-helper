@@ -352,8 +352,7 @@ export function MobileCalendarPage() {
         {(() => {
           const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
           const eventsInMonth = calEvents.filter(e => e.event_date.startsWith(monthPrefix))
-          if (!myPerson && eventsInMonth.length === 0 && dutyDaysInMonth.length === 0) return null
-          if (!myPerson && eventsInMonth.length === 0) return null
+          if (!myPerson && eventsInMonth.length === 0 && billingDaysInMonth.length === 0) return null
 
           const items: Array<{ date: string; kind: 'duty' | 'event' | 'billing'; ev?: CalendarEvent }> = [
             ...dutyDaysInMonth.map(date => ({ date, kind: 'duty' as const })),

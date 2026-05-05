@@ -200,15 +200,6 @@ export function MobileCalendarPage() {
     return days
   }, [year, month])
 
-  // Billing period end days in the current month
-  const billingDaysInMonth = useMemo(() => {
-    const days: string[] = []
-    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-    for (let d = 1; d <= daysInMonth; d++) {
-      if (isBillingDay(year, month, d)) days.push(ymdKey(year, month, d))
-    }
-    return days
-  }, [year, month])
 
   const selectedAssignment = selectedDate ? assignmentMap.get(selectedDate) ?? null : null
   const isLoading = selectedDate
@@ -352,12 +343,17 @@ export function MobileCalendarPage() {
         {(() => {
           const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
           const eventsInMonth = calEvents.filter(e => e.event_date.startsWith(monthPrefix))
-          if (!myPerson && eventsInMonth.length === 0 && billingDaysInMonth.length === 0) return null
+          const daysInMo = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+          const billingInMonth: string[] = []
+          for (let d = 1; d <= daysInMo; d++) {
+            if (isBillingDay(year, month, d)) billingInMonth.push(ymdKey(year, month, d))
+          }
+          if (!myPerson && eventsInMonth.length === 0 && billingInMonth.length === 0) return null
 
           const items: Array<{ date: string; kind: 'duty' | 'event' | 'billing'; ev?: CalendarEvent }> = [
             ...dutyDaysInMonth.map(date => ({ date, kind: 'duty' as const })),
             ...eventsInMonth.map(ev => ({ date: ev.event_date, kind: 'event' as const, ev })),
-            ...billingDaysInMonth.map(date => ({ date, kind: 'billing' as const })),
+            ...billingInMonth.map(date => ({ date, kind: 'billing' as const })),
           ].sort((a, b) => a.date.localeCompare(b.date))
 
           return (

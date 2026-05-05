@@ -200,6 +200,16 @@ export function MobileCalendarPage() {
     return days
   }, [year, month])
 
+  // Billing period end days in the current month
+  const billingDaysInMonth = useMemo(() => {
+    const days: string[] = []
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (isBillingDay(year, month, d)) days.push(ymdKey(year, month, d))
+    }
+    return days
+  }, [year, month])
+
   const selectedAssignment = selectedDate ? assignmentMap.get(selectedDate) ?? null : null
   const isLoading = selectedDate
     ? assignmentLoading && !assignmentMap.has(selectedDate)
@@ -345,9 +355,10 @@ export function MobileCalendarPage() {
           if (!myPerson && eventsInMonth.length === 0 && dutyDaysInMonth.length === 0) return null
           if (!myPerson && eventsInMonth.length === 0) return null
 
-          const items: Array<{ date: string; kind: 'duty' | 'event'; ev?: CalendarEvent }> = [
+          const items: Array<{ date: string; kind: 'duty' | 'event' | 'billing'; ev?: CalendarEvent }> = [
             ...dutyDaysInMonth.map(date => ({ date, kind: 'duty' as const })),
             ...eventsInMonth.map(ev => ({ date: ev.event_date, kind: 'event' as const, ev })),
+            ...billingDaysInMonth.map(date => ({ date, kind: 'billing' as const })),
           ].sort((a, b) => a.date.localeCompare(b.date))
 
           return (
@@ -357,6 +368,16 @@ export function MobileCalendarPage() {
               </p>
               <div className="space-y-0.5">
                 {items.map(item => {
+                  if (item.kind === 'billing') {
+                    return (
+                      <div key={`or-${item.date}`} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                        <span className="text-xs text-slate-400 shrink-0">{formatDateShort(item.date)}</span>
+                        <span className="text-[10px] font-medium text-yellow-400 bg-yellow-900/20 px-2 py-0.5 rounded border border-yellow-800/40">
+                          OR – koniec okresu
+                        </span>
+                      </div>
+                    )
+                  }
                   if (item.kind === 'event') {
                     return (
                       <div key={`ev-${item.ev!.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5">

@@ -6,7 +6,7 @@ import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS,
-  CREW_VEHICLE_NAMES, VEHICLE_SEATS, ROLE_SORT_ORDER,
+  CREW_VEHICLE_NAMES, VEHICLE_SEATS, VEHICLE_EXTRA_RESCUERS, ROLE_SORT_ORDER,
   DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, isPersonInAssignment,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
@@ -313,9 +313,16 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
   const vid = vehicleId as keyof typeof CREW_VEHICLE_NAMES
   const name = CREW_VEHICLE_NAMES[vid] ?? vehicleId
   const cap = VEHICLE_SEATS[vid as keyof typeof VEHICLE_SEATS] ?? 0
-  const filled = (commanderId ? 1 : 0) + (driverId && driverId !== commanderId ? 1 : 0) + rescuerIds.length
-  const full = filled >= cap
+  const extraCap = VEHICLE_EXTRA_RESCUERS[vid as keyof typeof VEHICLE_EXTRA_RESCUERS] ?? 0
   const pfx = `v:${vehicleId}`
+
+  const takenBySpecial = (commanderId ? 1 : 0) + (driverId && driverId !== commanderId ? 1 : 0)
+  const stdRescuerSlots = cap - takenBySpecial
+  const stdRescuers = rescuerIds.slice(0, stdRescuerSlots)
+  const extraRescuers = rescuerIds.slice(stdRescuerSlots)
+
+  const stdFilled = takenBySpecial + stdRescuers.length
+  const full = stdFilled >= cap
 
   return (
     <div className={cn(
@@ -324,12 +331,19 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
     )}>
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-bold text-white">{name}</h3>
-        <span className={cn(
-          'text-xs font-mono px-1.5 py-0.5 rounded font-semibold',
-          full ? 'bg-emerald-900/50 text-emerald-400' : 'bg-amber-900/30 text-amber-400'
-        )}>
-          {filled}/{cap}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={cn(
+            'text-xs font-mono px-1.5 py-0.5 rounded font-semibold',
+            full ? 'bg-emerald-900/50 text-emerald-400' : 'bg-amber-900/30 text-amber-400'
+          )}>
+            {stdFilled}/{cap}
+          </span>
+          {extraRescuers.length > 0 && (
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-semibold">
+              +{extraRescuers.length}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-2">
@@ -339,14 +353,33 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
         )}
         <SlotRow label="Kierowca" slotKey={`${pfx}:driver`} personId={driverId}
           persons={persons} empty={!driverId} dnd={dnd} />
-        {rescuerIds.map((id, i) => (
+        {stdRescuers.map((id, i) => (
           <SlotRow key={i} label="Ratownik" slotKey={`${pfx}:rescuer:${i}`} personId={id}
             persons={persons} dnd={dnd} />
         ))}
-        {Array.from({ length: Math.max(0, cap - filled) }).map((_, i) => (
-          <SlotRow key={`e${i}`} label="Ratownik" slotKey={`${pfx}:rescuer:${rescuerIds.length + i}`}
+        {Array.from({ length: Math.max(0, stdRescuerSlots - stdRescuers.length) }).map((_, i) => (
+          <SlotRow key={`e${i}`} label="Ratownik" slotKey={`${pfx}:rescuer:${stdRescuers.length + i}`}
             personId={null} persons={persons} empty dnd={dnd} />
         ))}
+        {extraCap > 0 && (
+          <>
+            <div className="border-t border-slate-700/40 my-1.5" />
+            {Array.from({ length: extraCap }).map((_, i) => {
+              const idx = stdRescuerSlots + i
+              return (
+                <SlotRow
+                  key={`x${i}`}
+                  label="Ratownik +"
+                  slotKey={`${pfx}:rescuer:${idx}`}
+                  personId={extraRescuers[i] ?? null}
+                  persons={persons}
+                  empty={!extraRescuers[i]}
+                  dnd={dnd}
+                />
+              )
+            })}
+          </>
+        )}
       </div>
     </div>
   )

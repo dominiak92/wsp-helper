@@ -57,6 +57,13 @@ export const VEHICLE_SEATS: Record<CrewVehicleId, number> = {
   gcba1060: 3,
 }
 
+// Extra rescuer slots shown below the divider — not counted in official capacity
+export const VEHICLE_EXTRA_RESCUERS: Record<CrewVehicleId, number> = {
+  gba: 2,
+  gcba532: 0,
+  gcba1060: 0,
+}
+
 export const CREW_VEHICLE_NAMES: Record<CrewVehicleId, string> = {
   gba: 'GBA 2,5/16',
   gcba532: 'GCBA 5/32',

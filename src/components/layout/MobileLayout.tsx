@@ -18,7 +18,7 @@ export function MobileLayout() {
 
   const navItems = [
     { to: '/mobile', label: 'Dziś', icon: Home, end: true },
-    { to: '/mobile/calendar', label: 'Kalendarz', icon: CalendarDays, end: false },
+    { to: '/mobile/calendar', label: 'Kalendarz służb', icon: CalendarDays, end: false },
     ...(user.role !== 'user'
       ? [{ to: '/mobile/crew-generator', label: 'Obsada', icon: Users, end: false }]
       : []),

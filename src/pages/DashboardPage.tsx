@@ -447,16 +447,21 @@ export function DashboardPage() {
                               {' '}
                               {new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                            {!msg.read_at && (
+                            {msg.read_at ? (
+                              <span className="text-[10px] font-semibold text-emerald-500 bg-emerald-950/40 border border-emerald-900/50 px-1.5 py-0.5 rounded-full">
+                                Potwierdzone
+                              </span>
+                            ) : (
                               <button
                                 onClick={async () => {
                                   await supabase.from('duty_messages').update({ read_at: new Date().toISOString() }).eq('id', msg.id)
                                   setDutyMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: new Date().toISOString() } : m))
                                 }}
-                                className="text-[10px] text-slate-600 hover:text-brand-400 transition-colors"
-                                title="Oznacz jako przeczytane"
+                                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-emerald-400 transition-colors px-1.5 py-0.5 rounded border border-slate-700 hover:border-emerald-800"
+                                title="Potwierdź odbiór wiadomości"
                               >
-                                <Check className="w-3.5 h-3.5" />
+                                <Check className="w-3 h-3" />
+                                Potwierdź
                               </button>
                             )}
                             <button

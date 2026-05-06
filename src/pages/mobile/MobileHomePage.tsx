@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -255,6 +255,15 @@ function StatCard({ value, label, sub, accent = 'slate' }: {
 
 // ── main page ─────────────────────────────────────────────────────────────────
 
+interface DutyMsg {
+  id: string
+  sender_login: string
+  sender_name: string | null
+  message: string
+  created_at: string
+  read_at: string | null
+}
+
 export function MobileHomePage() {
   const { user } = useAuth()
   const dutyDate = currentOrNextDutyDate()
@@ -269,6 +278,7 @@ export function MobileHomePage() {
   const [sendingMsg, setSendingMsg] = useState(false)
   const [msgSentOk, setMsgSentOk] = useState(false)
   const [msgError, setMsgError] = useState<string | null>(null)
+  const [myMessages, setMyMessages] = useState<DutyMsg[]>([])
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
 
@@ -355,6 +365,28 @@ export function MobileHomePage() {
       .catch(() => setWeatherLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function fetchMyMessages() {
+    if (!user) return
+    const { data } = await supabase
+      .from('duty_messages')
+      .select('*')
+      .eq('sender_login', user.login)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    if (data) setMyMessages(data as DutyMsg[])
+  }
+
+  useEffect(() => {
+    fetchMyMessages()
+  }, [user?.login]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll every 30s while there are pending (unconfirmed) messages
+  useEffect(() => {
+    if (!myMessages.some(m => !m.read_at)) return
+    const interval = setInterval(fetchMyMessages, 30_000)
+    return () => clearInterval(interval)
+  }, [myMessages]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) {
     return (
       <div className="px-3 sm:px-5 py-4 space-y-5 pb-8 animate-pulse">
@@ -425,6 +457,7 @@ export function MobileHomePage() {
         setMsgSentOk(true)
         setShowMsgForm(false)
         setTimeout(() => setMsgSentOk(false), 4000)
+        await fetchMyMessages()
       }
     } catch (err) {
       setMsgError('Błąd wysyłania: ' + (err instanceof Error ? err.message : 'nieznany błąd'))
@@ -573,6 +606,59 @@ export function MobileHomePage() {
           </div>
         )}
       </div>
+
+      {/* Moje wiadomości do dyżurnego */}
+      {myMessages.length > 0 && (
+        <div>
+          <SectionLabel>Moje wiadomości do dyżurnego</SectionLabel>
+          <div className="space-y-2">
+            {myMessages.map(msg => (
+              <div
+                key={msg.id}
+                className={cn(
+                  'bg-surface-800 rounded-xl border p-3 space-y-2',
+                  msg.read_at ? 'border-emerald-900/50' : 'border-amber-900/40',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={cn(
+                    'flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full border',
+                    msg.read_at
+                      ? 'text-emerald-400 bg-emerald-950/40 border-emerald-900/50'
+                      : 'text-amber-400 bg-amber-950/40 border-amber-900/40',
+                  )}>
+                    {msg.read_at
+                      ? <><CheckCircle className="w-3 h-3" /> Potwierdzona</>
+                      : <><Clock className="w-3 h-3" /> Oczekuje</>}
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] text-slate-600">
+                      {new Date(msg.created_at).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}
+                      {' '}
+                      {new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {msg.read_at && (
+                      <button
+                        onClick={async () => {
+                          await supabase.from('duty_messages').delete().eq('id', msg.id)
+                          setMyMessages(prev => prev.filter(m => m.id !== msg.id))
+                        }}
+                        className="text-slate-600 hover:text-red-400 transition-colors"
+                        title="Zamknij"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+                  {msg.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Crew counter */}
       <div>

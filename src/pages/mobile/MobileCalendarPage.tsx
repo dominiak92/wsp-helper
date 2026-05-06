@@ -377,13 +377,13 @@ export function MobileCalendarPage() {
                   if (!ev && !billing && (!duty || !myPerson)) return null
 
                   const orBadge = billing ? (
-                    <span className="text-[10px] font-medium text-yellow-400 bg-yellow-900/20 px-1.5 py-0.5 rounded border border-yellow-800/40 shrink-0">
-                      OR
+                    <span className="text-[10px] font-medium text-yellow-400 bg-yellow-900/20 px-1.5 py-0.5 rounded border border-yellow-800/40 shrink-0 whitespace-nowrap">
+                      Okres rozliczeniowy
                     </span>
                   ) : null
 
                   const eventBadge = ev ? (
-                    <span className="text-[10px] font-medium text-red-300 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-900/40 truncate max-w-[45%]">
+                    <span className="text-[10px] font-medium text-red-300 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-900/40 shrink-0 whitespace-nowrap">
                       {ev.label}
                     </span>
                   ) : null

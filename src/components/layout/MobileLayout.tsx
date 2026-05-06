@@ -25,7 +25,7 @@ export function MobileLayout() {
   ]
 
   return (
-    <div className="flex flex-col h-screen bg-surface-950 overflow-x-hidden">
+    <div className="flex flex-col bg-surface-950 overflow-x-hidden" style={{ height: '100dvh' }}>
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-surface-900 shrink-0">
         <div className="flex items-center gap-2.5">
@@ -53,7 +53,7 @@ export function MobileLayout() {
       </main>
 
       {/* Bottom navigation */}
-      <nav className="flex border-t border-slate-800 bg-surface-900 shrink-0">
+      <nav className="flex border-t border-slate-800 bg-surface-900 shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}

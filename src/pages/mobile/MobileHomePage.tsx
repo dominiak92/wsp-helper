@@ -115,7 +115,7 @@ function FireThreatCard({
         selected && 'ring-2 ring-brand-500 ring-offset-1 ring-offset-surface-800',
       )}
     >
-      <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
         {label}{time ? <span className="text-slate-600 font-normal"> · {time}</span> : null}
       </p>
       <p className={cn('text-sm font-bold leading-snug', reading ? ls.text : 'text-slate-600')}>
@@ -207,19 +207,19 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
                         <p className="text-sm font-bold text-white tabular-nums">
                           {displayed.temperature ? `${displayed.temperature}°` : '—'}
                         </p>
-                        <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
+                        <p className="text-[10px] text-slate-600 uppercase tracking-wide">temp.</p>
                       </div>
                       <div className="text-center bg-surface-700/30 rounded-lg py-2">
                         <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
                         <p className="text-sm font-bold text-white tabular-nums">{displayed.moisture ?? '—'}</p>
-                        <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
+                        <p className="text-[10px] text-slate-600 uppercase tracking-wide">ściółka</p>
                       </div>
                       <div className="text-center bg-surface-700/30 rounded-lg py-2">
                         <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
                         <p className="text-sm font-bold text-white tabular-nums">
-                          {displayed.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
+                          {displayed.humidity ?? '—'}<span className="text-[10px] font-normal text-slate-500">%</span>
                         </p>
-                        <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
+                        <p className="text-[10px] text-slate-600 uppercase tracking-wide">wilgotność</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
@@ -829,13 +829,13 @@ function VehicleReadinessStrip({ assignment }: { assignment: ShiftAssignment | n
             )}
           >
             <span className={cn(
-              'text-[9px] font-semibold truncate',
+              'text-[10px] font-semibold truncate',
               full ? 'text-emerald-300' : partial ? 'text-amber-300' : 'text-slate-500',
             )}>
               {label}
             </span>
             <span className={cn(
-              'flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0',
+              'flex items-center gap-0.5 text-[10px] font-bold tabular-nums shrink-0',
               full ? 'text-emerald-400' : partial ? 'text-amber-400' : 'text-slate-500',
             )}>
               <UsersRound className="w-2.5 h-2.5 shrink-0" />

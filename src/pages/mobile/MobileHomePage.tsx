@@ -176,8 +176,7 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
         <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </div>
 
-      <div className={cn('grid transition-all duration-300 ease-in-out', open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
-        <div className="overflow-hidden">
+        <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', open ? 'max-h-[450px] opacity-100' : 'max-h-0 opacity-0')}>
           <div className={cn('mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3', loading && 'opacity-50 pointer-events-none')}>
             {!data ? (
               <p className="text-xs text-slate-600 text-center py-2">Dane zostaną pobrane o godz. 9:00 i 13:00</p>
@@ -236,7 +235,6 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             )}
           </div>
         </div>
-      </div>
     </div>
   )
 }
@@ -611,30 +609,28 @@ export function MobileHomePage() {
           </div>
         )}
 
-        <div className={cn('grid transition-all duration-300 ease-in-out', showMsgForm ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
-          <div className="overflow-hidden">
-            <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-2">
-              <textarea
-                className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
-                rows={3}
-                value={msgText}
-                onChange={e => setMsgText(e.target.value)}
-                placeholder="Np. stan licznika GBA 2,5/16: 45231 km, zmiana kierowcy/ratownika: Kowalski ↔ Nowak..."
-                autoFocus={showMsgForm}
-              />
-              {msgError && (
-                <p className="text-[11px] text-red-400">{msgError}</p>
-              )}
-              <div className="flex justify-end">
-                <button
-                  onClick={sendDutyMessage}
-                  disabled={sendingMsg || !msgText.trim()}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
-                >
-                  <Send className="w-3 h-3" />
-                  {sendingMsg ? 'Wysyłanie…' : 'Wyślij'}
-                </button>
-              </div>
+        <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', showMsgForm ? 'max-h-[200px] opacity-100' : 'max-h-0 opacity-0')}>
+          <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-2">
+            <textarea
+              className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
+              rows={3}
+              value={msgText}
+              onChange={e => setMsgText(e.target.value)}
+              placeholder="Np. stan licznika GBA 2,5/16: 45231 km, zmiana kierowcy/ratownika: Kowalski ↔ Nowak..."
+              autoFocus={showMsgForm}
+            />
+            {msgError && (
+              <p className="text-[11px] text-red-400">{msgError}</p>
+            )}
+            <div className="flex justify-end">
+              <button
+                onClick={sendDutyMessage}
+                disabled={sendingMsg || !msgText.trim()}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
+              >
+                <Send className="w-3 h-3" />
+                {sendingMsg ? 'Wysyłanie…' : 'Wyślij'}
+              </button>
             </div>
           </div>
         </div>
@@ -833,8 +829,7 @@ function FullAssignmentCollapsible({ personnel, assignment, myPersonId }: {
         <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </button>
 
-      <div className={cn('grid transition-all duration-300 ease-in-out', open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
-        <div className="overflow-hidden">
+      <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', open ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0')}>
           <div className="space-y-2 mt-1">
             {/* Special roles */}
             <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
@@ -890,7 +885,6 @@ function FullAssignmentCollapsible({ personnel, assignment, myPersonId }: {
               </div>
             )}
           </div>
-        </div>
       </div>
     </div>
   )

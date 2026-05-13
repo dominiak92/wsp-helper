@@ -192,8 +192,7 @@ export function DailyWeatherCollapsible() {
         <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </div>
 
-      <div className={cn('grid transition-all duration-300 ease-in-out', open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
-        <div className="overflow-hidden">
+      <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', open ? 'max-h-[350px] opacity-100' : 'max-h-0 opacity-0')}>
           <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
             {!data ? (
               <p className="text-xs text-slate-600 text-center py-4">Brak danych pogodowych</p>
@@ -232,7 +231,6 @@ export function DailyWeatherCollapsible() {
               </>
             )}
           </div>
-        </div>
       </div>
     </div>
   )

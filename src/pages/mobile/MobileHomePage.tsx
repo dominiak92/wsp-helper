@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { DailyWeatherCollapsible } from '../../components/DailyWeatherWidget'
 import {
   currentOrNextDutyDate, todayYmdKey, isDutyDay, ymdKey,
   formatDateShort, formatDateLong,
@@ -140,7 +141,6 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
   const latest = data?.afternoon ?? data?.morning ?? null
   const level = parseFireLevel(latest?.fireThreat ?? null)
   const ls = FIRE_STYLES[level]
-  const todayLabel = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })
 
   return (
     <div>
@@ -155,14 +155,7 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <Flame className={cn('w-4 h-4 shrink-0', ls.text)} />
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
-              {!loading && data && (
-                <span className="text-[10px] font-medium text-slate-400 bg-surface-700 px-1.5 py-0.5 rounded border border-slate-600/50 shrink-0">
-                  dziś {todayLabel}
-                </span>
-              )}
-            </div>
+            <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
             {loading ? (
               <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                 <span className="inline-block w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse shrink-0" />
@@ -781,6 +774,9 @@ export function MobileHomePage() {
           )}
         </div>
       )}
+
+      {/* Pogoda godzinowa */}
+      <DailyWeatherCollapsible />
 
       {/* Zagrożenie pożarowe */}
       <WeatherCollapsible data={weather} loading={weatherLoading} />

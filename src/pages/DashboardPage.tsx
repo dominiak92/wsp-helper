@@ -13,6 +13,7 @@ import { cn } from '../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../lib/crew'
 import { ABSENCE_LABELS } from '../lib/crew'
 import { DutyAssignmentView } from '../components/DutyAssignmentView'
+import { DailyWeatherCard } from '../components/DailyWeatherWidget'
 import { useAuth } from '../lib/auth'
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -132,7 +133,6 @@ function WeatherWidget({
   const latest = data?.afternoon ?? data?.morning ?? null
   const level = parseFireLevel(latest?.fireThreat ?? null)
   const ls = FIRE_STYLES[level]
-  const todayLabel = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })
 
   return (
     <div className={cn('bg-surface-800 rounded-xl border p-4', ls.border)}>
@@ -140,11 +140,6 @@ function WeatherWidget({
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <Flame className={cn('w-4 h-4 shrink-0', ls.text)} />
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400 shrink-0">Zagrożenie pożarowe</p>
-          {!loading && data && (
-            <span className="text-[10px] font-medium text-slate-400 bg-surface-700 px-1.5 py-0.5 rounded border border-slate-600/50 shrink-0">
-              dziś {todayLabel}
-            </span>
-          )}
           {loading && data && (
             <span className="text-[11px] text-slate-500 flex items-center gap-1.5 shrink-0">
               <span className="inline-block w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse" />
@@ -524,6 +519,9 @@ export function DashboardPage() {
 
             {/* Zagrożenie pożarowe */}
             <WeatherWidget data={weather} loading={weatherLoading} onRefresh={fetchWeather} />
+
+            {/* Pogoda godzinowa */}
+            <DailyWeatherCard />
 
             {/* Nieobecni */}
             {absentPersonnel.length > 0 && (

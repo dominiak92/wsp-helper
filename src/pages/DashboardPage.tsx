@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Pencil, X, Check, RefreshCw, MessageSquare, Bell, Trash2, Flame, Wind, Thermometer, Droplets, Leaf, Utensils } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -121,14 +121,11 @@ function WeatherWidget({
   onRefresh: () => void
 }) {
   const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>('morning')
-  const slotInit = useRef(false)
 
   useEffect(() => {
-    if (data && !slotInit.current) {
-      slotInit.current = true
-      const hour = new Date().getHours()
-      setSelectedSlot(hour >= 12 && data.afternoon ? 'afternoon' : 'morning')
-    }
+    if (!data) return
+    const hour = new Date().getHours()
+    setSelectedSlot(hour >= 12 && data.afternoon ? 'afternoon' : 'morning')
   }, [data])
 
   const displayed = data?.[selectedSlot] ?? data?.afternoon ?? data?.morning ?? null

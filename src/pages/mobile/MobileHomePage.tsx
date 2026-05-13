@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   currentOrNextDutyDate, todayYmdKey, isDutyDay, ymdKey,
@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, RefreshCw } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -126,17 +126,14 @@ function FireThreatCard({
   )
 }
 
-function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loading: boolean }) {
+function WeatherCollapsible({ data, loading, onRefresh }: { data: WeatherData | null; loading: boolean; onRefresh: () => void }) {
   const [open, setOpen] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>('morning')
-  const slotInit = useRef(false)
 
   useEffect(() => {
-    if (data && !slotInit.current) {
-      slotInit.current = true
-      const hour = new Date().getHours()
-      setSelectedSlot(hour >= 12 && data.afternoon ? 'afternoon' : 'morning')
-    }
+    if (!data) return
+    const hour = new Date().getHours()
+    setSelectedSlot(hour >= 12 && data.afternoon ? 'afternoon' : 'morning')
   }, [data])
 
   const displayed = data?.[selectedSlot] ?? data?.afternoon ?? data?.morning ?? null
@@ -147,16 +144,17 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
 
   return (
     <div>
-      <button
-        onClick={() => setOpen(v => !v)}
+      <div
         className={cn(
-          'w-full flex items-center justify-between bg-surface-800 rounded-xl border px-4 py-3 text-left transition-colors',
+          'w-full flex items-center justify-between bg-surface-800 rounded-xl border px-4 py-3 transition-colors cursor-pointer',
           ls.border,
         )}
+        onClick={() => setOpen(v => !v)}
+        role="button"
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <Flame className={cn('w-4 h-4 shrink-0', ls.text)} />
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
             {loading ? (
               <p className="text-[11px] text-slate-500">Ładowanie…</p>
@@ -170,10 +168,20 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             )}
           </div>
         </div>
-        {open
-          ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
-          : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
-      </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={e => { e.stopPropagation(); onRefresh() }}
+            disabled={loading}
+            className="text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-40 p-0.5"
+            title="Odśwież"
+          >
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          </button>
+          {open
+            ? <ChevronUp className="w-4 h-4 text-slate-500" />
+            : <ChevronDown className="w-4 h-4 text-slate-500" />}
+        </div>
+      </div>
 
       {open && (
         <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3">
@@ -371,7 +379,8 @@ export function MobileHomePage() {
       })
   }, [dutyDate])
 
-  useEffect(() => {
+  function fetchWeather() {
+    setWeatherLoading(true)
     fetch('/.netlify/functions/weather')
       .then(r => (r.ok ? r.json() : null))
       .then((data: WeatherData | null) => {
@@ -381,11 +390,15 @@ export function MobileHomePage() {
             ? new Date(ca).toLocaleDateString('en-CA') === new Date().toLocaleDateString('en-CA')
             : false
           setWeather(isForToday ? data : null)
+        } else {
+          setWeather(null)
         }
         setWeatherLoading(false)
       })
       .catch(() => setWeatherLoading(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }
+
+  useEffect(() => { fetchWeather() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const now = new Date()
@@ -769,7 +782,7 @@ export function MobileHomePage() {
       )}
 
       {/* Zagrożenie pożarowe */}
-      <WeatherCollapsible data={weather} loading={weatherLoading} />
+      <WeatherCollapsible data={weather} loading={weatherLoading} onRefresh={fetchWeather} />
 
       {/* Obiad */}
       {assignment && (

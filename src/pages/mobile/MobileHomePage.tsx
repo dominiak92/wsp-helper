@@ -155,16 +155,25 @@ function WeatherCollapsible({ data, loading, onRefresh }: { data: WeatherData | 
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <Flame className={cn('w-4 h-4 shrink-0', ls.text)} />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
+              {!loading && data && (
+                <span className="text-[10px] font-medium text-slate-400 bg-surface-700 px-1.5 py-0.5 rounded border border-slate-600/50 shrink-0">
+                  dziś {todayLabel}
+                </span>
+              )}
+            </div>
             {loading ? (
-              <p className="text-[11px] text-slate-500">Ładowanie…</p>
+              <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                <span className="inline-block w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse shrink-0" />
+                {data ? 'Odświeżanie…' : 'Ładowanie…'}
+              </p>
             ) : data ? (
-              <span className={cn('text-[11px] font-semibold', ls.text)}>
+              <p className={cn('text-[11px] font-semibold mt-0.5', ls.text)}>
                 {latest?.fireThreat ?? 'Brak danych'}
-                <span className="text-slate-600 font-normal"> · dziś {todayLabel}</span>
-              </span>
+              </p>
             ) : (
-              <p className="text-[11px] text-slate-500">Oczekiwanie na dane dnia</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Oczekiwanie na dane dnia</p>
             )}
           </div>
         </div>
@@ -184,7 +193,7 @@ function WeatherCollapsible({ data, loading, onRefresh }: { data: WeatherData | 
       </div>
 
       {open && (
-        <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3">
+        <div className={cn('mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3 transition-opacity duration-200', loading && 'opacity-50 pointer-events-none')}>
           {!data ? (
             <p className="text-xs text-slate-600 text-center py-2">Dane zostaną pobrane o godz. 9:00 i 13:00</p>
           ) : (

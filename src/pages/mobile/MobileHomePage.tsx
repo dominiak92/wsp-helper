@@ -9,7 +9,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 
@@ -173,72 +173,70 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             )}
           </div>
         </div>
-        <div className="shrink-0">
-          {open
-            ? <ChevronUp className="w-4 h-4 text-slate-500" />
-            : <ChevronDown className="w-4 h-4 text-slate-500" />}
-        </div>
+        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </div>
 
-      {open && (
-        <div className={cn('mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3 transition-opacity duration-200', loading && 'opacity-50 pointer-events-none')}>
-          {!data ? (
-            <p className="text-xs text-slate-600 text-center py-2">Dane zostaną pobrane o godz. 9:00 i 13:00</p>
-          ) : (
-            <>
-              {/* Dwa pomiary — klikalne */}
-              <div className="grid grid-cols-2 gap-2">
-                <FireThreatCard
-                  label="Godz. 9"
-                  reading={data.morning}
-                  selected={selectedSlot === 'morning'}
-                  onClick={() => setSelectedSlot('morning')}
-                />
-                <FireThreatCard
-                  label="Godz. 13"
-                  reading={data.afternoon}
-                  selected={selectedSlot === 'afternoon'}
-                  onClick={() => setSelectedSlot('afternoon')}
-                />
-              </div>
+      <div className={cn('grid transition-all duration-300 ease-in-out', open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+        <div className="overflow-hidden">
+          <div className={cn('mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3', loading && 'opacity-50 pointer-events-none')}>
+            {!data ? (
+              <p className="text-xs text-slate-600 text-center py-2">Dane zostaną pobrane o godz. 9:00 i 13:00</p>
+            ) : (
+              <>
+                {/* Dwa pomiary — klikalne */}
+                <div className="grid grid-cols-2 gap-2">
+                  <FireThreatCard
+                    label="Godz. 9"
+                    reading={data.morning}
+                    selected={selectedSlot === 'morning'}
+                    onClick={() => setSelectedSlot('morning')}
+                  />
+                  <FireThreatCard
+                    label="Godz. 13"
+                    reading={data.afternoon}
+                    selected={selectedSlot === 'afternoon'}
+                    onClick={() => setSelectedSlot('afternoon')}
+                  />
+                </div>
 
-              {/* Dane meteorologiczne dla wybranego odczytu */}
-              {displayed && (
-                <>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center bg-surface-700/30 rounded-lg py-2">
-                      <Thermometer className="w-3.5 h-3.5 text-red-400 mx-auto mb-0.5" />
-                      <p className="text-sm font-bold text-white tabular-nums">
-                        {displayed.temperature ? `${displayed.temperature}°` : '—'}
-                      </p>
-                      <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
+                {/* Dane meteorologiczne dla wybranego odczytu */}
+                {displayed && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                        <Thermometer className="w-3.5 h-3.5 text-red-400 mx-auto mb-0.5" />
+                        <p className="text-sm font-bold text-white tabular-nums">
+                          {displayed.temperature ? `${displayed.temperature}°` : '—'}
+                        </p>
+                        <p className="text-[9px] text-slate-600 uppercase tracking-wide">temp.</p>
+                      </div>
+                      <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                        <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
+                        <p className="text-sm font-bold text-white tabular-nums">{displayed.moisture ?? '—'}</p>
+                        <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
+                      </div>
+                      <div className="text-center bg-surface-700/30 rounded-lg py-2">
+                        <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
+                        <p className="text-sm font-bold text-white tabular-nums">
+                          {displayed.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
+                        </p>
+                        <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
+                      </div>
                     </div>
-                    <div className="text-center bg-surface-700/30 rounded-lg py-2">
-                      <Leaf className="w-3.5 h-3.5 text-amber-500 mx-auto mb-0.5" />
-                      <p className="text-sm font-bold text-white tabular-nums">{displayed.moisture ?? '—'}</p>
-                      <p className="text-[9px] text-slate-600 uppercase tracking-wide">ściółka</p>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
+                      <span className="flex items-center gap-1">
+                        <Wind className="w-3 h-3 text-slate-600" />
+                        <span className="text-slate-400">{displayed.windSpeed ?? '—'} m/s {displayed.windDir ?? ''}</span>
+                      </span>
+                      <span>Opady: <span className="text-slate-400">{displayed.precipitation ?? '0'} mm</span></span>
                     </div>
-                    <div className="text-center bg-surface-700/30 rounded-lg py-2">
-                      <Droplets className="w-3.5 h-3.5 text-blue-400 mx-auto mb-0.5" />
-                      <p className="text-sm font-bold text-white tabular-nums">
-                        {displayed.humidity ?? '—'}<span className="text-[9px] font-normal text-slate-500">%</span>
-                      </p>
-                      <p className="text-[9px] text-slate-600 uppercase tracking-wide">wilgotność</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
-                    <span className="flex items-center gap-1">
-                      <Wind className="w-3 h-3 text-slate-600" />
-                      <span className="text-slate-400">{displayed.windSpeed ?? '—'} m/s {displayed.windDir ?? ''}</span>
-                    </span>
-                    <span>Opady: <span className="text-slate-400">{displayed.precipitation ?? '0'} mm</span></span>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -603,9 +601,7 @@ export function MobileHomePage() {
               <p className="text-[11px] text-slate-500">Stan licznika, zmiana w służbach, inne</p>
             </div>
           </div>
-          {showMsgForm
-            ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
-            : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
+          <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', showMsgForm && 'rotate-180')} />
         </button>
 
         {msgSentOk && (
@@ -615,31 +611,33 @@ export function MobileHomePage() {
           </div>
         )}
 
-        {showMsgForm && (
-          <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-2">
-            <textarea
-              className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
-              rows={3}
-              value={msgText}
-              onChange={e => setMsgText(e.target.value)}
-              placeholder="Np. stan licznika GBA 2,5/16: 45231 km, zmiana kierowcy/ratownika: Kowalski ↔ Nowak..."
-              autoFocus
-            />
-            {msgError && (
-              <p className="text-[11px] text-red-400">{msgError}</p>
-            )}
-            <div className="flex justify-end">
-              <button
-                onClick={sendDutyMessage}
-                disabled={sendingMsg || !msgText.trim()}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
-              >
-                <Send className="w-3 h-3" />
-                {sendingMsg ? 'Wysyłanie…' : 'Wyślij'}
-              </button>
+        <div className={cn('grid transition-all duration-300 ease-in-out', showMsgForm ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+          <div className="overflow-hidden">
+            <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-2">
+              <textarea
+                className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
+                rows={3}
+                value={msgText}
+                onChange={e => setMsgText(e.target.value)}
+                placeholder="Np. stan licznika GBA 2,5/16: 45231 km, zmiana kierowcy/ratownika: Kowalski ↔ Nowak..."
+                autoFocus={showMsgForm}
+              />
+              {msgError && (
+                <p className="text-[11px] text-red-400">{msgError}</p>
+              )}
+              <div className="flex justify-end">
+                <button
+                  onClick={sendDutyMessage}
+                  disabled={sendingMsg || !msgText.trim()}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
+                >
+                  <Send className="w-3 h-3" />
+                  {sendingMsg ? 'Wysyłanie…' : 'Wyślij'}
+                </button>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Moje wiadomości do dyżurnego */}
@@ -832,68 +830,68 @@ function FullAssignmentCollapsible({ personnel, assignment, myPersonId }: {
           <Users className="w-4 h-4 text-brand-400 shrink-0" />
           <p className="text-sm font-medium text-white">Pełna obsada służby</p>
         </div>
-        {open
-          ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
-          : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
+        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </button>
 
-      {open && (
-        <div className="space-y-2 mt-1">
-          {/* Special roles */}
-          <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
-            <RowInline label="Dowódca zmiany" value={name(assignment.shiftCommanderId)} Icon={Star} iconClass="text-brand-400" isMe={isMe(assignment.shiftCommanderId)} />
-            {assignment.dutyOfficerIds.map(id => (
-              <RowInline key={id} label="Dyżurny" value={name(id)} Icon={ClipboardList} iconClass="text-amber-400" isMe={isMe(id)} />
-            ))}
-          </div>
+      <div className={cn('grid transition-all duration-300 ease-in-out', open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+        <div className="overflow-hidden">
+          <div className="space-y-2 mt-1">
+            {/* Special roles */}
+            <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
+              <RowInline label="Dowódca zmiany" value={name(assignment.shiftCommanderId)} Icon={Star} iconClass="text-brand-400" isMe={isMe(assignment.shiftCommanderId)} />
+              {assignment.dutyOfficerIds.map(id => (
+                <RowInline key={id} label="Dyżurny" value={name(id)} Icon={ClipboardList} iconClass="text-amber-400" isMe={isMe(id)} />
+              ))}
+            </div>
 
-          {/* Vehicles */}
-          {assignment.vehicles.map(v => {
-            const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
-            const rows: { label: string; id: string; Icon: LucideIcon; iconClass: string }[] = []
-            if (v.commanderId) rows.push({ label: 'Dowódca zastępu', id: v.commanderId, Icon: Shield, iconClass: 'text-purple-400' })
-            if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId, Icon: Truck, iconClass: 'text-emerald-400' })
-            v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id, Icon: HeartPulse, iconClass: 'text-sky-400' }))
-            if (!rows.length) return null
-            return (
-              <div key={v.vehicleId} className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 px-4 py-2 border-b border-slate-800">
-                  {vName}
+            {/* Vehicles */}
+            {assignment.vehicles.map(v => {
+              const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
+              const rows: { label: string; id: string; Icon: LucideIcon; iconClass: string }[] = []
+              if (v.commanderId) rows.push({ label: 'Dowódca zastępu', id: v.commanderId, Icon: Shield, iconClass: 'text-purple-400' })
+              if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId, Icon: Truck, iconClass: 'text-emerald-400' })
+              v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id, Icon: HeartPulse, iconClass: 'text-sky-400' }))
+              if (!rows.length) return null
+              return (
+                <div key={v.vehicleId} className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 px-4 py-2 border-b border-slate-800">
+                    {vName}
+                  </p>
+                  <div className="divide-y divide-slate-800/60">
+                    {rows.map((r, i) => (
+                      <RowInline key={i} label={r.label} value={name(r.id)} Icon={r.Icon} iconClass={r.iconClass} isMe={isMe(r.id)} />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Reserve */}
+            {assignment.unassignedIds.length > 0 && (
+              <div className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 px-4 py-2 border-b border-slate-800">
+                  Rezerwa / Dyżur
                 </p>
-                <div className="divide-y divide-slate-800/60">
-                  {rows.map((r, i) => (
-                    <RowInline key={i} label={r.label} value={name(r.id)} Icon={r.Icon} iconClass={r.iconClass} isMe={isMe(r.id)} />
+                <div className="flex flex-wrap gap-2 px-4 py-3">
+                  {assignment.unassignedIds.map(id => (
+                    <span
+                      key={id}
+                      className={cn(
+                        'text-sm rounded-lg px-3 py-1.5 border',
+                        isMe(id)
+                          ? 'text-brand-200 bg-brand-950/40 border-brand-700/60 font-semibold'
+                          : 'text-slate-300 bg-surface-900 border-slate-700',
+                      )}
+                    >
+                      {name(id)}
+                    </span>
                   ))}
                 </div>
               </div>
-            )
-          })}
-
-          {/* Reserve */}
-          {assignment.unassignedIds.length > 0 && (
-            <div className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 px-4 py-2 border-b border-slate-800">
-                Rezerwa / Dyżur
-              </p>
-              <div className="flex flex-wrap gap-2 px-4 py-3">
-                {assignment.unassignedIds.map(id => (
-                  <span
-                    key={id}
-                    className={cn(
-                      'text-sm rounded-lg px-3 py-1.5 border',
-                      isMe(id)
-                        ? 'text-brand-200 bg-brand-950/40 border-brand-700/60 font-semibold'
-                        : 'text-slate-300 bg-surface-900 border-slate-700',
-                    )}
-                  >
-                    {name(id)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

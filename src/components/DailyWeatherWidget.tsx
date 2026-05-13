@@ -2,7 +2,7 @@
 // Fetches directly from Open-Meteo (free, no API key)
 
 import { useState, useEffect, useRef } from 'react'
-import { Cloud, Droplets, Wind, ChevronDown, ChevronUp } from 'lucide-react'
+import { Cloud, Droplets, Wind, ChevronDown } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 interface HourlyForecast {
@@ -189,51 +189,51 @@ export function DailyWeatherCollapsible() {
             )}
           </div>
         </div>
-        <div className="shrink-0">
-          {open ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-        </div>
+        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </div>
 
-      {open && (
-        <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
-          {!data ? (
-            <p className="text-xs text-slate-600 text-center py-4">Brak danych pogodowych</p>
-          ) : (
-            <>
-              <div ref={scrollRef} className="flex overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                {data.time.map((t, i) => (
-                  <HourCard
-                    key={t}
-                    hour={hourOf(t)}
-                    emoji={wmoEmoji(data.weathercode[i])}
-                    temp={data.temperature_2m[i]}
-                    prob={data.precipitation_probability[i]}
-                    precip={data.precipitation[i]}
-                    current={hourOf(t) === currentHour}
-                  />
-                ))}
-              </div>
-              {summary && (
-                <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-700/40 text-[11px]">
-                  <span className="flex items-center gap-1 text-slate-500 shrink-0">
-                    <Wind className="w-3 h-3 text-slate-600" />
-                    <span className="text-slate-400">{Math.round(summary.maxWind)} km/h</span>
-                  </span>
-                  <span className="flex-1 min-w-0 text-center text-slate-500 truncate">
-                    {wmoLabel(summary.dominantCode)}
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-500 shrink-0">
-                    <Droplets className="w-3 h-3 text-blue-600" />
-                    <span className="text-slate-400">
-                      {summary.totalPrecip > 0 ? `${summary.totalPrecip.toFixed(1)} mm` : 'Sucho'}
-                    </span>
-                  </span>
+      <div className={cn('grid transition-all duration-300 ease-in-out', open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+        <div className="overflow-hidden">
+          <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
+            {!data ? (
+              <p className="text-xs text-slate-600 text-center py-4">Brak danych pogodowych</p>
+            ) : (
+              <>
+                <div ref={scrollRef} className="flex overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                  {data.time.map((t, i) => (
+                    <HourCard
+                      key={t}
+                      hour={hourOf(t)}
+                      emoji={wmoEmoji(data.weathercode[i])}
+                      temp={data.temperature_2m[i]}
+                      prob={data.precipitation_probability[i]}
+                      precip={data.precipitation[i]}
+                      current={hourOf(t) === currentHour}
+                    />
+                  ))}
                 </div>
-              )}
-            </>
-          )}
+                {summary && (
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-700/40 text-[11px]">
+                    <span className="flex items-center gap-1 text-slate-500 shrink-0">
+                      <Wind className="w-3 h-3 text-slate-600" />
+                      <span className="text-slate-400">{Math.round(summary.maxWind)} km/h</span>
+                    </span>
+                    <span className="flex-1 min-w-0 text-center text-slate-500 truncate">
+                      {wmoLabel(summary.dominantCode)}
+                    </span>
+                    <span className="flex items-center gap-1 text-slate-500 shrink-0">
+                      <Droplets className="w-3 h-3 text-blue-600" />
+                      <span className="text-slate-400">
+                        {summary.totalPrecip > 0 ? `${summary.totalPrecip.toFixed(1)} mm` : 'Sucho'}
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

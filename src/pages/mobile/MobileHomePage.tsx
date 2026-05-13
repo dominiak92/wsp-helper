@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, RefreshCw } from 'lucide-react'
+import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ function FireThreatCard({
   )
 }
 
-function WeatherCollapsible({ data, loading, onRefresh }: { data: WeatherData | null; loading: boolean; onRefresh: () => void }) {
+function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loading: boolean }) {
   const [open, setOpen] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>('morning')
 
@@ -177,15 +177,7 @@ function WeatherCollapsible({ data, loading, onRefresh }: { data: WeatherData | 
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={e => { e.stopPropagation(); onRefresh() }}
-            disabled={loading}
-            className="text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-40 p-0.5"
-            title="Odśwież"
-          >
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-          </button>
+        <div className="shrink-0">
           {open
             ? <ChevronUp className="w-4 h-4 text-slate-500" />
             : <ChevronDown className="w-4 h-4 text-slate-500" />}
@@ -791,7 +783,7 @@ export function MobileHomePage() {
       )}
 
       {/* Zagrożenie pożarowe */}
-      <WeatherCollapsible data={weather} loading={weatherLoading} onRefresh={fetchWeather} />
+      <WeatherCollapsible data={weather} loading={weatherLoading} />
 
       {/* Obiad */}
       {assignment && (

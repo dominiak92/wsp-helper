@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   currentOrNextDutyDate, todayYmdKey, isDutyDay, ymdKey,
@@ -68,6 +68,7 @@ interface WeatherReading {
   fireThreat: string | null
   fireThreatForecast: string | null
   updatedAt: string | null
+  cachedAt?: string | null
 }
 
 interface WeatherData {
@@ -127,13 +128,22 @@ function FireThreatCard({
 
 function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loading: boolean }) {
   const [open, setOpen] = useState(false)
-  const defaultSlot: 'morning' | 'afternoon' = data?.afternoon ? 'afternoon' : 'morning'
-  const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>(defaultSlot)
+  const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>('morning')
+  const slotInit = useRef(false)
+
+  useEffect(() => {
+    if (data && !slotInit.current) {
+      slotInit.current = true
+      const hour = new Date().getHours()
+      setSelectedSlot(hour >= 12 && data.afternoon ? 'afternoon' : 'morning')
+    }
+  }, [data])
 
   const displayed = data?.[selectedSlot] ?? data?.afternoon ?? data?.morning ?? null
   const latest = data?.afternoon ?? data?.morning ?? null
   const level = parseFireLevel(latest?.fireThreat ?? null)
   const ls = FIRE_STYLES[level]
+  const todayLabel = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })
 
   return (
     <div>
@@ -150,10 +160,13 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
             <p className="text-sm font-medium text-white">Zagrożenie pożarowe</p>
             {loading ? (
               <p className="text-[11px] text-slate-500">Ładowanie…</p>
-            ) : (
+            ) : data ? (
               <span className={cn('text-[11px] font-semibold', ls.text)}>
                 {latest?.fireThreat ?? 'Brak danych'}
+                <span className="text-slate-600 font-normal"> · dziś {todayLabel}</span>
               </span>
+            ) : (
+              <p className="text-[11px] text-slate-500">Oczekiwanie na dane dnia</p>
             )}
           </div>
         </div>
@@ -165,7 +178,7 @@ function WeatherCollapsible({ data, loading }: { data: WeatherData | null; loadi
       {open && (
         <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-4 space-y-3">
           {!data ? (
-            <p className="text-xs text-slate-600 text-center py-2">Brak danych pogodowych</p>
+            <p className="text-xs text-slate-600 text-center py-2">Dane zostaną pobrane o godz. 9:00 i 13:00</p>
           ) : (
             <>
               {/* Dwa pomiary — klikalne */}
@@ -361,9 +374,25 @@ export function MobileHomePage() {
   useEffect(() => {
     fetch('/.netlify/functions/weather')
       .then(r => (r.ok ? r.json() : null))
-      .then(data => { setWeather(data); setWeatherLoading(false) })
+      .then((data: WeatherData | null) => {
+        if (data) {
+          const ca = data.morning?.cachedAt ?? data.afternoon?.cachedAt
+          const isForToday = ca
+            ? new Date(ca).toLocaleDateString('en-CA') === new Date().toLocaleDateString('en-CA')
+            : false
+          setWeather(isForToday ? data : null)
+        }
+        setWeatherLoading(false)
+      })
       .catch(() => setWeatherLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const now = new Date()
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    const timer = setTimeout(() => setWeather(null), midnight.getTime() - now.getTime())
+    return () => clearTimeout(timer)
+  }, [])
 
   async function fetchMyMessages() {
     if (!user) return

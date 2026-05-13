@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Pencil, X, Check, RefreshCw, MessageSquare, Bell, Trash2, Flame, Wind, Thermometer, Droplets, Leaf, Utensils } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -53,6 +53,7 @@ interface WeatherReading {
   fireThreat: string | null
   fireThreatForecast: string | null
   updatedAt: string | null
+  cachedAt?: string | null
 }
 
 interface WeatherData {
@@ -119,8 +120,16 @@ function WeatherWidget({
   loading: boolean
   onRefresh: () => void
 }) {
-  const defaultSlot: 'morning' | 'afternoon' = data?.afternoon ? 'afternoon' : 'morning'
-  const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>(defaultSlot)
+  const [selectedSlot, setSelectedSlot] = useState<'morning' | 'afternoon'>('morning')
+  const slotInit = useRef(false)
+
+  useEffect(() => {
+    if (data && !slotInit.current) {
+      slotInit.current = true
+      const hour = new Date().getHours()
+      setSelectedSlot(hour >= 12 && data.afternoon ? 'afternoon' : 'morning')
+    }
+  }, [data])
 
   const displayed = data?.[selectedSlot] ?? data?.afternoon ?? data?.morning ?? null
   const latest = data?.afternoon ?? data?.morning ?? null
@@ -298,11 +307,29 @@ export function DashboardPage() {
     setWeatherLoading(true)
     fetch('/.netlify/functions/weather')
       .then(r => (r.ok ? r.json() : null))
-      .then(data => { setWeather(data); setWeatherLoading(false) })
+      .then((data: WeatherData | null) => {
+        if (data) {
+          const ca = data.morning?.cachedAt ?? data.afternoon?.cachedAt
+          const isForToday = ca
+            ? new Date(ca).toLocaleDateString('en-CA') === new Date().toLocaleDateString('en-CA')
+            : false
+          setWeather(isForToday ? data : null)
+        } else {
+          setWeather(null)
+        }
+        setWeatherLoading(false)
+      })
       .catch(() => setWeatherLoading(false))
   }
 
   useEffect(() => { fetchWeather() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const now = new Date()
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    const timer = setTimeout(() => setWeather(null), midnight.getTime() - now.getTime())
+    return () => clearTimeout(timer)
+  }, [])
 
   async function saveAnnouncement() {
     setSavingNote(true)

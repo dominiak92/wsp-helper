@@ -350,7 +350,7 @@ function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, persons, dn
 
       <div className="mt-2">
         {commanderId && (
-          <SlotRow label="Ddca zast." slotKey={`${pfx}:commander`} personId={commanderId}
+          <SlotRow label="Dowódca zastępu" slotKey={`${pfx}:commander`} personId={commanderId}
             persons={persons} highlight dnd={dnd} />
         )}
         <SlotRow label="Kierowca" slotKey={`${pfx}:driver`} personId={driverId}
@@ -474,7 +474,7 @@ function PrevDutyCompact({ assignment, personnel }: {
       <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-xs">
         {assignment.shiftCommanderId && (
           <span className="text-slate-500">
-            Ddca: <span className="text-brand-300 font-semibold">{n(assignment.shiftCommanderId)}</span>
+            Dowódca: <span className="text-brand-300 font-semibold">{n(assignment.shiftCommanderId)}</span>
           </span>
         )}
         {assignment.dutyOfficerIds.map(id => (

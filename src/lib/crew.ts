@@ -14,8 +14,8 @@ export const ALL_ROLES: RoleType[] = [
 ]
 
 export const ROLE_LABELS: Record<RoleType, string> = {
-  SHIFT_COMMANDER: 'Ddca zmiany',
-  VEHICLE_COMMANDER: 'Ddca zastępu',
+  SHIFT_COMMANDER: 'Dowódca zmiany',
+  VEHICLE_COMMANDER: 'Dowódca zastępu',
   DUTY_OFFICER: 'Dyżurny',
   DRIVER_RESCUER: 'Kier.-ratownik',
   RESCUER: 'Ratownik',

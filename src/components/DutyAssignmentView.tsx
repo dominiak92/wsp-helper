@@ -46,7 +46,7 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {assignment.vehicles.map(v => {
           const rows: { label: string; id: string | null }[] = []
-          if (v.commanderId) rows.push({ label: 'Ddca zast.', id: v.commanderId })
+          if (v.commanderId) rows.push({ label: 'Dowódca zastępu', id: v.commanderId })
           if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId })
           v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id }))
           if (!rows.length) return null

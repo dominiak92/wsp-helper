@@ -36,7 +36,7 @@ function resolveUserStatus(
   for (const v of assignment.vehicles) {
     const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
     if (v.commanderId === personId)
-      return { kind: 'assigned', role: 'Ddca zastępu', vehicle: vName }
+      return { kind: 'assigned', role: 'Dowódca zastępu', vehicle: vName }
     if (v.driverId === personId)
       return { kind: 'assigned', role: 'Kierowca', vehicle: vName }
     if (v.rescuerIds.includes(personId))

@@ -114,7 +114,7 @@ function BayCard({ bay, va, hasAssignment, name }: BayCardProps) {
         ) : va ? (
           <div className="space-y-1.5">
             {va.commanderId && (
-              <CrewRow role="Ddca" personName={name(va.commanderId)} />
+              <CrewRow role="Dowódca zastępu" personName={name(va.commanderId)} />
             )}
             {va.driverId && va.driverId !== va.commanderId && (
               <CrewRow role="Kier." personName={name(va.driverId)} />
@@ -211,7 +211,7 @@ export function GaragePage() {
         <div className="flex flex-wrap gap-3 mb-6">
           {shiftCommanderId && (
             <div className="flex items-center gap-2 bg-brand-900/30 border border-brand-800/50 rounded-lg px-3 py-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-brand-500">Ddca zmiany</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-brand-500">Dowódca zmiany</span>
               <span className="text-sm font-semibold text-white">{name(shiftCommanderId)}</span>
             </div>
           )}

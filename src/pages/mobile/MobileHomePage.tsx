@@ -810,7 +810,7 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
           {assignment.vehicles.map(v => {
             const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
             const rows: { label: string; id: string | null }[] = []
-            if (v.commanderId) rows.push({ label: 'Ddca zast.', id: v.commanderId })
+            if (v.commanderId) rows.push({ label: 'Dowódca zastępu', id: v.commanderId })
             if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId })
             v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id }))
             if (!rows.length) return null

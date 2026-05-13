@@ -349,7 +349,7 @@ export function MobileCrewPage() {
             </p>
             <div className="px-4 pb-3">
               <SlotRow
-                label="Ddca zmiany"
+                label="Dowódca zmiany"
                 value={assignment.shiftCommanderId}
                 slotKey="shift-commander"
                 personnel={availablePersonnel}
@@ -399,7 +399,7 @@ export function MobileCrewPage() {
                 </div>
                 <div className="px-4 pb-3">
                   <SlotRow
-                    label="Ddca zast."
+                    label="Dowódca zastępu"
                     value={v.commanderId}
                     slotKey={`${pfx}:commander`}
                     personnel={availablePersonnel}

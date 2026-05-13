@@ -9,7 +9,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, UsersRound, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 
@@ -835,10 +835,10 @@ function VehicleReadinessStrip({ assignment }: { assignment: ShiftAssignment | n
               {label}
             </span>
             <span className={cn(
-              'flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0 leading-none',
+              'flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0',
               full ? 'text-emerald-400' : partial ? 'text-amber-400' : 'text-slate-500',
             )}>
-              <Users className="w-2.5 h-2.5 shrink-0 translate-y-px" />
+              <UsersRound className="w-2.5 h-2.5 shrink-0" />
               {filled}/{cap}
             </span>
           </div>

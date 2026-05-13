@@ -7,7 +7,7 @@ import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS,
   CREW_VEHICLE_NAMES, VEHICLE_SEATS, VEHICLE_EXTRA_RESCUERS, ROLE_SORT_ORDER,
-  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, isPersonInAssignment,
+  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, isPersonInAssignment, removePersonFromAssignment,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
 
@@ -662,11 +662,10 @@ export function CrewGeneratorPage() {
   function updatePerson(updated: Person) {
     setPersonnel(prev => prev.map(p => p.id === updated.id ? updated : p))
 
-    // Keep absenceMap in sync. Multi-status is intentional — a person can be
-    // in a slot AND marked absent simultaneously (formal status vs. slot assignment).
     if (assignment) {
       let next = assignment
       if (updated.absence !== null) {
+        next = removePersonFromAssignment(next, updated.id)
         next = { ...next, absenceMap: { ...(next.absenceMap ?? {}), [updated.id]: updated.absence } }
       } else {
         const newMap = { ...(next.absenceMap ?? {}) }

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Shield, Eye, EyeOff, Lock, User } from 'lucide-react'
+import { Eye, EyeOff, Lock, User } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { cn } from '../lib/utils'
@@ -51,9 +51,7 @@ export function LoginPage() {
       <div className="relative w-full max-w-sm">
         {/* Logo block */}
         <div className="flex flex-col items-center mb-8 gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-brand-700/80 border border-brand-500/40 flex items-center justify-center shadow-lg shadow-brand-900/40">
-            <Shield className="w-8 h-8 text-brand-200" />
-          </div>
+          <img src="/logo.png" alt="WSP" className="w-24 h-24 object-contain" />
           <div className="text-center">
             <h1 className="text-xl font-bold text-slate-100 tracking-tight">System Przebiegu Służby</h1>
             <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest">

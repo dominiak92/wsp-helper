@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Navigate } from 'react-router-dom'
-import { Shield, Home, CalendarDays, Users } from 'lucide-react'
+import { Home, CalendarDays, Users } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
 
@@ -29,9 +29,7 @@ export function MobileLayout() {
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-surface-900 shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md bg-brand-600 flex items-center justify-center shrink-0">
-            <Shield className="w-4 h-4 text-white" />
-          </div>
+          <img src="/logo.png" alt="WSP" className="w-8 h-8 object-contain shrink-0" />
           <div>
             <p className="text-xs font-bold text-white leading-tight">WSP - System Przebiegu Służby</p>
             <p className="text-[10px] text-slate-500 leading-tight">{user.displayName}</p>

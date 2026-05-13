@@ -49,9 +49,11 @@ export function Sidebar({ collapsed }: SidebarProps) {
           collapsed && 'justify-center px-2'
         )}
       >
-        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-sm">
-          WSP
-        </div>
+        <img
+          src="/logo.png"
+          alt="WSP"
+          className="flex-shrink-0 w-10 h-10 object-contain"
+        />
         {!collapsed && (
           <div>
             <p className="text-xs font-bold text-white leading-tight">II Zmiana</p>

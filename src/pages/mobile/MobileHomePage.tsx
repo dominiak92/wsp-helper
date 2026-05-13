@@ -835,10 +835,10 @@ function VehicleReadinessStrip({ assignment }: { assignment: ShiftAssignment | n
               {label}
             </span>
             <span className={cn(
-              'flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0',
+              'flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0 leading-none',
               full ? 'text-emerald-400' : partial ? 'text-amber-400' : 'text-slate-500',
             )}>
-              <Users className="w-2.5 h-2.5 shrink-0" />
+              <Users className="w-2.5 h-2.5 shrink-0 translate-y-px" />
               {filled}/{cap}
             </span>
           </div>

@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
 import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
@@ -714,6 +714,7 @@ export function MobileHomePage() {
             />
           </div>
         )}
+        <VehicleReadinessStrip assignment={assignment} />
       </div>
 
       {/* Full assignment summary — under Stan obsady */}
@@ -796,6 +797,53 @@ export function MobileHomePage() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Vehicle readiness strip ───────────────────────────────────────────────────
+
+function VehicleReadinessStrip({ assignment }: { assignment: ShiftAssignment | null }) {
+  if (!assignment) return null
+
+  return (
+    <div className="flex gap-2 mt-2">
+      {CREW_VEHICLE_IDS.map(id => {
+        const v = assignment.vehicles.find(v => v.vehicleId === id)
+        const cap = VEHICLE_SEATS[id]
+        const filled = v
+          ? (v.commanderId ? 1 : 0) + (v.driverId ? 1 : 0) + v.rescuerIds.length
+          : 0
+        const full    = filled === cap
+        const partial = filled > 0 && filled < cap
+        const label   = CREW_VEHICLE_NAMES[id]
+
+        return (
+          <div
+            key={id}
+            className={cn(
+              'flex-1 flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 border',
+              full    ? 'bg-emerald-950/40 border-emerald-800/60' :
+              partial ? 'bg-amber-950/40   border-amber-800/60'   :
+                        'bg-surface-700/50 border-slate-700/40',
+            )}
+          >
+            <span className={cn(
+              'text-[9px] font-semibold truncate',
+              full ? 'text-emerald-300' : partial ? 'text-amber-300' : 'text-slate-500',
+            )}>
+              {label}
+            </span>
+            <span className={cn(
+              'flex items-center gap-0.5 text-[9px] font-bold tabular-nums shrink-0',
+              full ? 'text-emerald-400' : partial ? 'text-amber-400' : 'text-slate-500',
+            )}>
+              <Users className="w-2.5 h-2.5 shrink-0" />
+              {filled}/{cap}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }

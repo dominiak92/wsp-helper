@@ -104,8 +104,8 @@ function FireReadingCard({
         {reading?.fireThreat ?? '—'}
       </p>
       {reading?.fireThreatForecast && (
-        <p className="text-[10px] text-slate-500 mt-0.5">
-          prognoza: <span className="text-slate-400">{reading.fireThreatForecast}</span>
+        <p className="text-[10px] text-slate-500 mt-0.5 break-words">
+          prognoza: {reading.fireThreatForecast}
         </p>
       )}
     </button>

@@ -9,7 +9,8 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
-import { UserCircle, Truck, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock } from 'lucide-react'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, ChevronUp, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -19,27 +20,29 @@ interface MyRole {
   vehicle: string | null
   colorClass: string
   borderClass: string
+  Icon: LucideIcon
+  iconClass: string
 }
 
 function resolveMyRole(assignment: ShiftAssignment, personId: string): MyRole | null {
   if (assignment.shiftCommanderId === personId)
-    return { label: 'Dowódca zmiany', vehicle: null, colorClass: 'text-brand-300', borderClass: 'border-brand-800' }
+    return { label: 'Dowódca zmiany', vehicle: null, colorClass: 'text-brand-300', borderClass: 'border-brand-800', Icon: Star, iconClass: 'text-brand-400' }
 
   if (assignment.dutyOfficerIds.includes(personId))
-    return { label: 'Dyżurny', vehicle: null, colorClass: 'text-amber-300', borderClass: 'border-amber-800' }
+    return { label: 'Dyżurny', vehicle: null, colorClass: 'text-amber-300', borderClass: 'border-amber-800', Icon: ClipboardList, iconClass: 'text-amber-400' }
 
   for (const v of assignment.vehicles) {
     const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
     if (v.commanderId === personId)
-      return { label: 'Dowódca zastępu', vehicle: vName, colorClass: 'text-purple-300', borderClass: 'border-purple-800' }
+      return { label: 'Dowódca zastępu', vehicle: vName, colorClass: 'text-purple-300', borderClass: 'border-purple-800', Icon: Shield, iconClass: 'text-purple-400' }
     if (v.driverId === personId)
-      return { label: 'Kierowca-ratownik', vehicle: vName, colorClass: 'text-emerald-300', borderClass: 'border-emerald-800' }
+      return { label: 'Kierowca-ratownik', vehicle: vName, colorClass: 'text-emerald-300', borderClass: 'border-emerald-800', Icon: Truck, iconClass: 'text-emerald-400' }
     if (v.rescuerIds.includes(personId))
-      return { label: 'Ratownik', vehicle: vName, colorClass: 'text-sky-300', borderClass: 'border-sky-800' }
+      return { label: 'Ratownik', vehicle: vName, colorClass: 'text-sky-300', borderClass: 'border-sky-800', Icon: HeartPulse, iconClass: 'text-sky-400' }
   }
 
   if (assignment.unassignedIds.includes(personId))
-    return { label: 'Rezerwa / Dyżur', vehicle: null, colorClass: 'text-slate-400', borderClass: 'border-slate-700' }
+    return { label: 'Rezerwa / Dyżur', vehicle: null, colorClass: 'text-slate-400', borderClass: 'border-slate-700', Icon: Users, iconClass: 'text-slate-500' }
 
   return null // absent from this duty
 }
@@ -557,11 +560,7 @@ export function MobileHomePage() {
             </div>
           ) : myRole ? (
             <div className={cn('bg-surface-800 rounded-xl border p-4 flex items-center gap-4', myRole.borderClass)}>
-              {myRole.vehicle ? (
-                <Truck className="w-7 h-7 text-slate-500 shrink-0" />
-              ) : (
-                <UserCircle className="w-7 h-7 text-slate-500 shrink-0" />
-              )}
+              <myRole.Icon className={cn('w-7 h-7 shrink-0', myRole.iconClass)} />
               <div className="min-w-0">
                 <p className={cn('text-base font-bold truncate', myRole.colorClass)}>{myRole.label}</p>
                 {myRole.vehicle && (
@@ -725,7 +724,7 @@ export function MobileHomePage() {
 
       {/* Full assignment summary — under Stan obsady */}
       {assignment && (
-        <FullAssignmentCollapsible personnel={personnel} assignment={assignment} />
+        <FullAssignmentCollapsible personnel={personnel} assignment={assignment} myPersonId={myPerson?.id ?? null} />
       )}
 
       {/* Absent personnel */}
@@ -809,9 +808,10 @@ export function MobileHomePage() {
 
 // ── Collapsible full assignment ───────────────────────────────────────────────
 
-function FullAssignmentCollapsible({ personnel, assignment }: {
+function FullAssignmentCollapsible({ personnel, assignment, myPersonId }: {
   personnel: Person[]
   assignment: ShiftAssignment
+  myPersonId: string | null
 }) {
   const [open, setOpen] = useState(false)
 
@@ -819,6 +819,8 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
     if (!id) return '—'
     return personnel.find(p => p.id === id)?.name ?? '—'
   }
+
+  const isMe = (id: string | null) => !!id && id === myPersonId
 
   return (
     <div>
@@ -839,19 +841,19 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
         <div className="space-y-2 mt-1">
           {/* Special roles */}
           <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
-            <RowInline label="Dowódca zmiany" value={name(assignment.shiftCommanderId)} />
+            <RowInline label="Dowódca zmiany" value={name(assignment.shiftCommanderId)} Icon={Star} iconClass="text-brand-400" isMe={isMe(assignment.shiftCommanderId)} />
             {assignment.dutyOfficerIds.map(id => (
-              <RowInline key={id} label="Dyżurny" value={name(id)} />
+              <RowInline key={id} label="Dyżurny" value={name(id)} Icon={ClipboardList} iconClass="text-amber-400" isMe={isMe(id)} />
             ))}
           </div>
 
           {/* Vehicles */}
           {assignment.vehicles.map(v => {
             const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
-            const rows: { label: string; id: string | null }[] = []
-            if (v.commanderId) rows.push({ label: 'Dowódca zastępu', id: v.commanderId })
-            if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId })
-            v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id }))
+            const rows: { label: string; id: string; Icon: LucideIcon; iconClass: string }[] = []
+            if (v.commanderId) rows.push({ label: 'Dowódca zastępu', id: v.commanderId, Icon: Shield, iconClass: 'text-purple-400' })
+            if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId, Icon: Truck, iconClass: 'text-emerald-400' })
+            v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id, Icon: HeartPulse, iconClass: 'text-sky-400' }))
             if (!rows.length) return null
             return (
               <div key={v.vehicleId} className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
@@ -859,7 +861,9 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
                   {vName}
                 </p>
                 <div className="divide-y divide-slate-800/60">
-                  {rows.map((r, i) => <RowInline key={i} label={r.label} value={name(r.id)} />)}
+                  {rows.map((r, i) => (
+                    <RowInline key={i} label={r.label} value={name(r.id)} Icon={r.Icon} iconClass={r.iconClass} isMe={isMe(r.id)} />
+                  ))}
                 </div>
               </div>
             )
@@ -873,7 +877,15 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
               </p>
               <div className="flex flex-wrap gap-2 px-4 py-3">
                 {assignment.unassignedIds.map(id => (
-                  <span key={id} className="text-sm text-slate-300 bg-surface-900 rounded-lg px-3 py-1.5 border border-slate-700">
+                  <span
+                    key={id}
+                    className={cn(
+                      'text-sm rounded-lg px-3 py-1.5 border',
+                      isMe(id)
+                        ? 'text-brand-200 bg-brand-950/40 border-brand-700/60 font-semibold'
+                        : 'text-slate-300 bg-surface-900 border-slate-700',
+                    )}
+                  >
                     {name(id)}
                   </span>
                 ))}
@@ -886,12 +898,26 @@ function FullAssignmentCollapsible({ personnel, assignment }: {
   )
 }
 
-
-function RowInline({ label, value }: { label: string; value: string }) {
+function RowInline({ label, value, Icon, iconClass, isMe }: {
+  label: string
+  value: string
+  Icon?: LucideIcon
+  iconClass?: string
+  isMe?: boolean
+}) {
   return (
-    <div className="flex items-center justify-between gap-2 px-4 py-2.5">
-      <span className="text-xs text-slate-500 shrink-0">{label}</span>
-      <span className="text-sm font-semibold text-white truncate text-right">{value}</span>
+    <div className={cn(
+      'flex items-center justify-between gap-2 py-2.5',
+      isMe ? 'px-3 border-l-2 border-brand-500 bg-brand-950/40' : 'px-4',
+    )}>
+      <span className={cn('flex items-center gap-1.5 text-xs shrink-0', isMe ? 'text-brand-300/80' : 'text-slate-500')}>
+        {Icon && <Icon className={cn('w-3 h-3 shrink-0', iconClass)} />}
+        {label}
+      </span>
+      <span className={cn('text-sm font-semibold truncate text-right', isMe ? 'text-brand-200' : 'text-white')}>
+        {isMe && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-400 mr-1.5 mb-0.5 shrink-0" />}
+        {value}
+      </span>
     </div>
   )
 }

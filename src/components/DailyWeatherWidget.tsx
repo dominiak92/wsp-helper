@@ -214,18 +214,20 @@ export function DailyWeatherCollapsible() {
                 ))}
               </div>
               {summary && (
-                <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-700/40 text-[11px]">
-                  <span className="flex items-center gap-1 text-slate-500">
+                <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-700/40 text-[11px]">
+                  <span className="flex items-center gap-1 text-slate-500 shrink-0">
                     <Wind className="w-3 h-3 text-slate-600" />
-                    <span className="text-slate-400">{Math.round(summary.maxWind)} km/h max</span>
+                    <span className="text-slate-400">{Math.round(summary.maxWind)} km/h</span>
                   </span>
-                  <span className="flex items-center gap-1 text-slate-500">
+                  <span className="flex-1 min-w-0 text-center text-slate-500 truncate">
+                    {wmoLabel(summary.dominantCode)}
+                  </span>
+                  <span className="flex items-center gap-1 text-slate-500 shrink-0">
                     <Droplets className="w-3 h-3 text-blue-600" />
                     <span className="text-slate-400">
-                      {summary.totalPrecip > 0 ? `${summary.totalPrecip.toFixed(1)} mm łącznie` : 'Bez opadów'}
+                      {summary.totalPrecip > 0 ? `${summary.totalPrecip.toFixed(1)} mm` : 'Sucho'}
                     </span>
                   </span>
-                  <span className="text-slate-500 text-right">{wmoLabel(summary.dominantCode)}</span>
                 </div>
               )}
             </>
@@ -257,20 +259,20 @@ export function DailyWeatherCard({ className }: { className?: string }) {
 
   return (
     <div className={cn('bg-surface-800 rounded-xl border border-slate-700/40', className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800">
+        <div className="flex items-center gap-2 min-w-0">
           <Cloud className="w-4 h-4 text-slate-400 shrink-0" />
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Pogoda na dziś</p>
-          {!loading && (
-            <span className="text-[10px] font-medium text-slate-400 bg-surface-700 px-1.5 py-0.5 rounded border border-slate-600/50">
-              {todayLabel} · Sulęcin
-            </span>
-          )}
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Pogoda na dziś</p>
+            {!loading && (
+              <p className="text-[10px] text-slate-500 mt-0.5">{todayLabel} · Sulęcin</p>
+            )}
+          </div>
         </div>
         {summary && !loading && (
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-400 shrink-0">
             {Math.round(summary.minTemp)}°–{Math.round(summary.maxTemp)}°
-            {summary.totalPrecip > 0 ? ` · 💧 ${summary.totalPrecip.toFixed(1)} mm` : ''}
+            {summary.totalPrecip > 0 ? ` · 💧 ${summary.totalPrecip.toFixed(1)}` : ''}
           </p>
         )}
       </div>
@@ -297,18 +299,20 @@ export function DailyWeatherCard({ className }: { className?: string }) {
             ))}
           </div>
           {summary && (
-            <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-800/60 text-[11px]">
-              <span className="flex items-center gap-1 text-slate-500">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-800/60 text-[11px]">
+              <span className="flex items-center gap-1 text-slate-500 shrink-0">
                 <Wind className="w-3 h-3 text-slate-600" />
-                <span className="text-slate-400">{Math.round(summary.maxWind)} km/h max</span>
+                <span className="text-slate-400">{Math.round(summary.maxWind)} km/h</span>
               </span>
-              <span className="flex items-center gap-1 text-slate-500">
+              <span className="flex-1 min-w-0 text-center text-slate-500 truncate">
+                {wmoLabel(summary.dominantCode)}
+              </span>
+              <span className="flex items-center gap-1 text-slate-500 shrink-0">
                 <Droplets className="w-3 h-3 text-blue-600" />
                 <span className="text-slate-400">
-                  {summary.totalPrecip > 0 ? `${summary.totalPrecip.toFixed(1)} mm łącznie` : 'Bez opadów'}
+                  {summary.totalPrecip > 0 ? `${summary.totalPrecip.toFixed(1)} mm` : 'Sucho'}
                 </span>
               </span>
-              <span className="text-slate-500">{wmoLabel(summary.dominantCode)}</span>
             </div>
           )}
         </>

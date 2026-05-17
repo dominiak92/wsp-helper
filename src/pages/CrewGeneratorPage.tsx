@@ -44,6 +44,8 @@ export function CrewGeneratorPage() {
 
   const assignmentIdRef = useRef<string | null>(null)
 
+  const [dataLoading, setDataLoading] = useState(!!dutyDate)
+
   const [showPersonnel, setShowPersonnel] = useState(false)
   const [addingPerson, setAddingPerson] = useState(false)
   const [dragSource, setDragSource] = useState<string | null>(null)
@@ -78,6 +80,8 @@ export function CrewGeneratorPage() {
   // Absence for a given date lives exclusively in assignment.absenceMap, not in personnel table.
   useEffect(() => {
     if (!dutyDate) return
+    setDataLoading(true)
+    setAssignment(null)
     const prevDate = previousDutyDate(dutyDate)
     Promise.all([
       supabase.from('personnel').select('*'),
@@ -114,6 +118,7 @@ export function CrewGeneratorPage() {
       if (loadedAssignment) setAssignment(loadedAssignment)
       const prevParsed = parseShiftAssignment(prevData?.[0]?.assignment_json)
       if (prevParsed) setPrevAssignment(prevParsed)
+      setDataLoading(false)
     })
   }, [dutyDate])
 
@@ -447,7 +452,11 @@ export function CrewGeneratorPage() {
 
         {/* Assignment board */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-6">
-          {!assignment ? (
+          {dataLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : !assignment ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-700 gap-4 pb-16">
               <Zap className="w-12 h-12 opacity-20" />
               <div className="text-center">

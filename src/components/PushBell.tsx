@@ -7,9 +7,10 @@ interface Props {
   userLogin: string
   userRole: string
   className?: string
+  onSubscribedChange?: (subscribed: boolean) => void
 }
 
-export function PushBell({ userLogin, userRole, className }: Props) {
+export function PushBell({ userLogin, userRole, className, onSubscribedChange }: Props) {
   const [subscribed, setSubscribed]   = useState(false)
   const [permission, setPermission]   = useState<NotificationPermission | null>(null)
   const [loading, setLoading]         = useState(false)
@@ -32,11 +33,13 @@ export function PushBell({ userLogin, userRole, className }: Props) {
       if (subscribed) {
         await unsubscribePush(userLogin)
         setSubscribed(false)
+        onSubscribedChange?.(false)
       } else {
         const result = await subscribePush(userLogin, userRole)
         if (result === 'ok') {
           setSubscribed(true)
           setPermission('granted')
+          onSubscribedChange?.(true)
         } else if (result === 'denied') {
           setPermission('denied')
         }

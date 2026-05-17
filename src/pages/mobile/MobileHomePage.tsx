@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { DailyWeatherCollapsible } from '../../components/DailyWeatherWidget'
 import { PushBell } from '../../components/PushBell'
-import { sendPushTrigger } from '../../lib/pushNotifications'
+import { sendPushTrigger, isSubscribed, isPushSupported } from '../../lib/pushNotifications'
 import {
   currentOrNextDutyDate, todayYmdKey, isDutyDay, ymdKey,
   formatDateShort, formatDateLong,
@@ -295,6 +295,7 @@ export function MobileHomePage() {
   const [msgSentOk, setMsgSentOk] = useState(false)
   const [msgError, setMsgError] = useState<string | null>(null)
   const [myMessages, setMyMessages] = useState<DutyMsg[]>([])
+  const [pushSubscribed, setPushSubscribed] = useState(false)
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
 
@@ -416,6 +417,10 @@ export function MobileHomePage() {
   useEffect(() => {
     fetchMyMessages()
   }, [user?.login]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    isSubscribed().then(setPushSubscribed)
+  }, [])
 
   // Poll every 30s while there are pending (unconfirmed) messages
   useEffect(() => {
@@ -606,13 +611,21 @@ export function MobileHomePage() {
             </div>
             <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', showMsgForm && 'rotate-180')} />
           </button>
-          {user && <PushBell userLogin={user.login} userRole={user.role} />}
+          {user && <PushBell userLogin={user.login} userRole={user.role} onSubscribedChange={setPushSubscribed} />}
         </div>
 
         {msgSentOk && (
           <div className="mt-2 flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
             <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
             <p className="text-sm text-emerald-300">Wiadomość wysłana do dyżurnego</p>
+          </div>
+        )}
+        {msgSentOk && !pushSubscribed && isPushSupported() && (
+          <div className="mt-1.5 flex items-center gap-3 bg-brand-950/50 border border-brand-800/60 rounded-xl px-4 py-3">
+            <p className="text-[12px] text-brand-300 flex-1 leading-snug">
+              Włącz 🔔 powiadomienia, żeby dostać info kiedy dyżurny potwierdzi
+            </p>
+            <PushBell userLogin={user!.login} userRole={user!.role} onSubscribedChange={setPushSubscribed} />
           </div>
         )}
 

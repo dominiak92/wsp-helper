@@ -330,7 +330,10 @@ export function DashboardPage() {
   }
 
   const availableCount = personnel.filter(p => !p.absence).length
-  const absentPersonnel = personnel.filter(p => p.absence)
+  const ABSENCE_ORDER: AbsenceType[] = ['WH', '8W', 'W', 'oddelegowanie', 'L4']
+  const absentPersonnel = personnel
+    .filter(p => p.absence)
+    .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))
   const total = personnel.length
   const isAdmin = user?.role === 'admin'
 

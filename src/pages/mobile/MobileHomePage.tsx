@@ -11,7 +11,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, isPersonInAssignment, parseShiftAssignment } from '../../lib/crew'
-import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, UsersRound, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 import type { WeatherReading, WeatherData } from '../../lib/weather'
@@ -677,29 +677,36 @@ export function MobileHomePage() {
       {/* Crew counter */}
       <div>
         <SectionLabel>Stan obsady</SectionLabel>
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            value={availableCount}
-            label="Dostępnych"
-            sub={`z ${total} ogółem`}
-            accent="green"
-          />
-          <StatCard
-            value={absentPersonnel.length}
-            label="Nieobecnych"
-            accent={absentPersonnel.length > 0 ? 'red' : 'slate'}
-          />
-        </div>
-        {/* progress bar */}
-        {total > 0 && (
-          <div className="mt-2 h-1.5 rounded-full bg-surface-700 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-emerald-500 transition-all"
-              style={{ width: `${(availableCount / total) * 100}%` }}
-            />
+        <div className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
+          <div className="flex items-center gap-4 px-4 pt-4 pb-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold tabular-nums text-emerald-400">{availableCount}</span>
+                <span className="text-sm text-slate-500">/ {total} dostępnych</span>
+              </div>
+              {total > 0 && (
+                <div className="mt-2 h-2 rounded-full bg-surface-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${(availableCount / total) * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+            {absentPersonnel.length > 0 ? (
+              <div className="shrink-0 text-center">
+                <span className="text-2xl font-bold tabular-nums text-red-400">{absentPersonnel.length}</span>
+                <p className="text-[11px] text-slate-500">nieobecnych</p>
+              </div>
+            ) : (
+              <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-medium text-emerald-400 bg-emerald-950/40 px-2.5 py-1.5 rounded-lg border border-emerald-900/40">
+                <CheckCircle className="w-3.5 h-3.5" />
+                Pełna obsada
+              </div>
+            )}
           </div>
-        )}
-        <VehicleReadinessStrip assignment={assignment} />
+          <VehicleReadinessStrip assignment={assignment} />
+        </div>
       </div>
 
       {/* Full assignment summary — under Stan obsady */}
@@ -792,38 +799,40 @@ function VehicleReadinessStrip({ assignment }: { assignment: ShiftAssignment | n
   if (!assignment) return null
 
   return (
-    <div className="flex gap-2 mt-2">
-      {CREW_VEHICLE_IDS.map(id => {
+    <div className="border-t border-slate-800">
+      {CREW_VEHICLE_IDS.map((id, i) => {
         const v = assignment.vehicles.find(v => v.vehicleId === id)
         const cap = VEHICLE_SEATS[id]
-        const filled = v
-          ? (v.commanderId ? 1 : 0) + (v.driverId ? 1 : 0) + v.rescuerIds.length
-          : 0
-        const full    = filled === cap
+        const rescuerCap = cap - 2
+        const commanderFilled = !!v?.commanderId
+        const driverFilled = !!v?.driverId
+        const rescuersFilled = v?.rescuerIds.length ?? 0
+        const filled = (commanderFilled ? 1 : 0) + (driverFilled ? 1 : 0) + rescuersFilled
+        const full = filled === cap
         const partial = filled > 0 && filled < cap
-        const label   = CREW_VEHICLE_NAMES[id]
 
         return (
           <div
             key={id}
-            className={cn(
-              'flex-1 flex items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 border',
-              full    ? 'bg-emerald-950/40 border-emerald-800/60' :
-              partial ? 'bg-amber-950/40   border-amber-800/60'   :
-                        'bg-surface-700/50 border-slate-700/40',
-            )}
+            className={cn('flex items-center gap-3 px-4 py-2.5', i > 0 && 'border-t border-slate-800/60')}
           >
             <span className={cn(
-              'text-[10px] font-semibold truncate',
+              'text-xs font-semibold w-24 shrink-0 truncate',
               full ? 'text-emerald-300' : partial ? 'text-amber-300' : 'text-slate-500',
             )}>
-              {label}
+              {CREW_VEHICLE_NAMES[id]}
             </span>
+            <div className="flex items-center gap-2 flex-1">
+              <Shield className={cn('w-3.5 h-3.5 shrink-0 transition-colors', commanderFilled ? 'text-purple-400' : 'text-slate-700')} />
+              <Truck className={cn('w-3.5 h-3.5 shrink-0 transition-colors', driverFilled ? 'text-emerald-400' : 'text-slate-700')} />
+              {Array.from({ length: rescuerCap }, (_, j) => (
+                <HeartPulse key={j} className={cn('w-3.5 h-3.5 shrink-0 transition-colors', j < rescuersFilled ? 'text-sky-400' : 'text-slate-700')} />
+              ))}
+            </div>
             <span className={cn(
-              'flex items-center gap-0.5 text-[10px] font-bold tabular-nums shrink-0',
+              'text-xs font-bold tabular-nums shrink-0',
               full ? 'text-emerald-400' : partial ? 'text-amber-400' : 'text-slate-500',
             )}>
-              <UsersRound className="w-2.5 h-2.5 shrink-0" />
               {filled}/{cap}
             </span>
           </div>

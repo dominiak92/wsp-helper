@@ -273,7 +273,16 @@ function setPersonAtSlot(a: ShiftAssignment, key: string, personId: string | nul
     return { ...a, unassignedIds: a.unassignedIds.map(id => id === oldId ? personId : id) }
   }
   if (ns === 'special') {
-    if (vid === 'shift-commander') return { ...a, shiftCommanderId: personId }
+    if (vid === 'shift-commander') {
+      // GBA commander is always the shift commander — keep them in sync
+      return {
+        ...a,
+        shiftCommanderId: personId,
+        vehicles: a.vehicles.map(v =>
+          v.vehicleId === 'gba' ? { ...v, commanderId: personId } : v
+        ),
+      }
+    }
     if (vid === 'duty-officer') {
       const idx = Number(role)
       if (personId === null)
@@ -301,7 +310,12 @@ function setPersonAtSlot(a: ShiftAssignment, key: string, personId: string | nul
     }
     return v
   })
-  return { ...a, vehicles }
+  const result = { ...a, vehicles }
+  // GBA commander is always the shift commander — keep them in sync
+  if (vid === 'gba' && role === 'commander') {
+    return { ...result, shiftCommanderId: personId }
+  }
+  return result
 }
 
 export function applyDrop(a: ShiftAssignment, srcKey: string, dstKey: string): ShiftAssignment {

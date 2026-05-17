@@ -125,10 +125,8 @@ export function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, pers
       </div>
 
       <div className="mt-2">
-        {(commanderId || vehicleId !== 'gba') && (
-          <SlotRow label="Dowódca zastępu" slotKey={`${pfx}:commander`} personId={commanderId}
-            persons={persons} highlight empty={!commanderId} dnd={dnd} />
-        )}
+        <SlotRow label="Dowódca zastępu" slotKey={`${pfx}:commander`} personId={commanderId}
+          persons={persons} highlight empty={!commanderId} dnd={dnd} />
         <SlotRow label="Kierowca" slotKey={`${pfx}:driver`} personId={driverId}
           persons={persons} empty={!driverId} dnd={dnd} />
         {stdRescuers.map((id, i) => (

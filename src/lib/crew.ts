@@ -39,6 +39,8 @@ export const ABSENCE_LABELS: Record<AbsenceType, string> = {
   L4: 'L4',
 }
 
+export const ABSENCE_ORDER: AbsenceType[] = ['WH', '8W', 'W', 'oddelegowanie', 'L4']
+
 export interface Person {
   id: string
   name: string

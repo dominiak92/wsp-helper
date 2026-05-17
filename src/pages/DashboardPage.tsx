@@ -13,7 +13,7 @@ import {
 } from '../lib/duty'
 import { cn } from '../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../lib/crew'
-import { ABSENCE_LABELS, parseShiftAssignment } from '../lib/crew'
+import { ABSENCE_LABELS, ABSENCE_ORDER, parseShiftAssignment } from '../lib/crew'
 import { DutyAssignmentView } from '../components/DutyAssignmentView'
 import { DailyWeatherCard } from '../components/DailyWeatherWidget'
 import { useAuth } from '../lib/auth'
@@ -330,7 +330,6 @@ export function DashboardPage() {
   }
 
   const availableCount = personnel.filter(p => !p.absence).length
-  const ABSENCE_ORDER: AbsenceType[] = ['WH', '8W', 'W', 'oddelegowanie', 'L4']
   const absentPersonnel = personnel
     .filter(p => p.absence)
     .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))

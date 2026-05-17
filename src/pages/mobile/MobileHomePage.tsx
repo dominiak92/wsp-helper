@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, isPersonInAssignment, parseShiftAssignment } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment } from '../../lib/crew'
 import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
@@ -410,7 +410,9 @@ export function MobileHomePage() {
   const myAbsenceNow = myPerson?.absence ?? null
   const isAbsentNow = myAbsenceNow != null
 
-  const absentPersonnel = personnel.filter(p => p.absence)
+  const absentPersonnel = personnel
+    .filter(p => p.absence)
+    .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))
   const availableCount = personnel.length - absentPersonnel.length
   const total = personnel.length
 

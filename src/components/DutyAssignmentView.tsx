@@ -1,5 +1,5 @@
 import type { Person, ShiftAssignment } from '../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, resolveName } from '../lib/crew'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, resolveName } from '../lib/crew'
 import { cn } from '../lib/utils'
 
 interface Props {
@@ -26,6 +26,10 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
       </div>
     )
   }
+
+  const absentPersonnel = personnel
+    .filter(p => p.absence)
+    .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))
 
   return (
     <div className="px-3 sm:px-4 pb-6 pt-3 space-y-3">
@@ -70,9 +74,9 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
       )}
 
       {/* Absent personnel */}
-      {!hideAbsent && personnel.filter(p => p.absence).length > 0 && (
-        <Card label={`Nieobecni (${personnel.filter(p => p.absence).length})`} labelColor="text-red-400">
-          {personnel.filter(p => p.absence).map(p => (
+      {!hideAbsent && absentPersonnel.length > 0 && (
+        <Card label={`Nieobecni (${absentPersonnel.length})`} labelColor="text-red-400">
+          {absentPersonnel.map(p => (
             <div key={p.id} className="flex items-center justify-between gap-2 px-4 py-2.5">
               <span className="text-sm text-slate-500 line-through truncate">{p.name}</span>
               <span className="text-[11px] font-medium text-red-400 shrink-0 bg-red-950/40 px-2 py-0.5 rounded border border-red-900/40">

@@ -8,7 +8,7 @@ import { cn } from '../../lib/utils'
 import type { Person, RoleType, AbsenceType, ShiftAssignment } from '../../lib/crew'
 import { parseShiftAssignment } from '../../lib/crew'
 import {
-  ABSENCE_LABELS, CREW_VEHICLE_NAMES, VEHICLE_SEATS,
+  ABSENCE_LABELS, ABSENCE_ORDER, CREW_VEHICLE_NAMES, VEHICLE_SEATS,
   generateCrew, removePersonFromAssignment, isPersonInAssignment,
 } from '../../lib/crew'
 import { supabase } from '../../lib/supabase'
@@ -228,7 +228,9 @@ export function MobileCrewPage() {
   }
 
   const availablePersonnel = personnel.filter(p => !p.absence)
-  const absentPersonnel = personnel.filter(p => p.absence)
+  const absentPersonnel = personnel
+    .filter(p => p.absence)
+    .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))
 
   return (
     <div className="px-3 sm:px-5 py-4 space-y-4 pb-8">

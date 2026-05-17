@@ -5,7 +5,7 @@ import { previousDutyDate, nextDutyDate, formatDateShort, MONTHS_GEN } from '../
 import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
-  ABSENCE_LABELS, ROLE_SORT_ORDER,
+  ABSENCE_LABELS, ABSENCE_ORDER, ROLE_SORT_ORDER,
   DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, isPersonInAssignment, removePersonFromAssignment,
   parseShiftAssignment,
 } from '../lib/crew'
@@ -642,7 +642,7 @@ export function CrewGeneratorPage() {
                         Nieobecni ({personnel.filter(p => p.absence).length})
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {personnel.filter(p => p.absence).map(p => (
+                        {personnel.filter(p => p.absence).sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!)).map(p => (
                           <span
                             key={p.id}
                             className="text-sm px-3 py-1.5 rounded-lg bg-surface-800 border border-red-900/40 text-slate-500 flex items-center gap-2"

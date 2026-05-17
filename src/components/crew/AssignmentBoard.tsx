@@ -94,12 +94,11 @@ export function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, pers
   const extraCap = VEHICLE_EXTRA_RESCUERS[vid as keyof typeof VEHICLE_EXTRA_RESCUERS] ?? 0
   const pfx = `v:${vehicleId}`
 
-  const cmdSlot = commanderId ? 1 : 0
-  const stdRescuerSlots = cap - cmdSlot - 1
+  const stdRescuerSlots = cap - 1 - 1  // always reserve commander + driver seats
   const stdRescuers = rescuerIds.slice(0, stdRescuerSlots)
   const extraRescuers = rescuerIds.slice(stdRescuerSlots)
 
-  const takenBySpecial = cmdSlot + (driverId && driverId !== commanderId ? 1 : 0)
+  const takenBySpecial = (commanderId ? 1 : 0) + (driverId && driverId !== commanderId ? 1 : 0)
   const stdFilled = takenBySpecial + stdRescuers.length
   const full = stdFilled >= cap
 
@@ -126,10 +125,8 @@ export function VehicleCard({ vehicleId, commanderId, driverId, rescuerIds, pers
       </div>
 
       <div className="mt-2">
-        {commanderId && (
-          <SlotRow label="Dowódca zastępu" slotKey={`${pfx}:commander`} personId={commanderId}
-            persons={persons} highlight dnd={dnd} />
-        )}
+        <SlotRow label="Dowódca zastępu" slotKey={`${pfx}:commander`} personId={commanderId}
+          persons={persons} highlight empty={!commanderId} dnd={dnd} />
         <SlotRow label="Kierowca" slotKey={`${pfx}:driver`} personId={driverId}
           persons={persons} empty={!driverId} dnd={dnd} />
         {stdRescuers.map((id, i) => (

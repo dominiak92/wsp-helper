@@ -21,18 +21,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Resolve slot from schedule or manual input
+      - name: Fetch and cache weather data
         run: |
           if [ -n "${{ inputs.slot }}" ]; then
-            echo "SLOT=${{ inputs.slot }}" >> $GITHUB_ENV
+            export SLOT="${{ inputs.slot }}"
           elif [ "${{ github.event.schedule }}" = "15 7 * * *" ]; then
-            echo "SLOT=morning" >> $GITHUB_ENV
+            export SLOT="morning"
           else
-            echo "SLOT=afternoon" >> $GITHUB_ENV
+            export SLOT="afternoon"
           fi
-      - name: Fetch and cache weather data
-        run: node scripts/fetch-weather.mjs
+          echo "Slot: $SLOT"
+          node scripts/fetch-weather.mjs
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          SLOT: ${{ env.SLOT }}

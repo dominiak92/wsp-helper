@@ -93,17 +93,31 @@ export const handler = async (event) => {
       })
 
   const results = await Promise.allSettled(
-    rows.map(row => webpush.sendNotification(row.subscription, pushPayload))
+    rows.map(async (row) => {
+      try {
+        await webpush.sendNotification(row.subscription, pushPayload)
+      } catch (err) {
+        // 410 Gone / 404 Not Found = subskrypcja wygasła, usuń z Supabase
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          const endpoint = row.subscription?.endpoint
+          console.warn(`[push-notify] Martwa subskrypcja (${err.statusCode}), usuwam: ${endpoint?.slice(-30)}`)
+          await fetch(
+            `${SUPABASE_URL}/rest/v1/push_subscriptions?subscription->>endpoint=eq.${encodeURIComponent(endpoint)}`,
+            {
+              method: 'DELETE',
+              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'return=minimal' },
+            },
+          ).catch(() => {})
+        } else {
+          console.error(`[push-notify] sendNotification failed: ${err.statusCode}`, err.message)
+        }
+        throw err
+      }
+    })
   )
 
   const sent   = results.filter(r => r.status === 'fulfilled').length
   const failed = results.filter(r => r.status === 'rejected').length
-
-  results.forEach((r, i) => {
-    if (r.status === 'rejected') {
-      console.error(`[push-notify] sendNotification[${i}] failed:`, r.reason?.statusCode, r.reason?.message)
-    }
-  })
 
   console.log(`[push-notify] Wynik: sent=${sent} failed=${failed}`)
 

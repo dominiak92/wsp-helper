@@ -218,25 +218,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-function StatCard({ value, label, sub, accent = 'slate' }: {
-  value: string | number
-  label: string
-  sub?: string
-  accent?: 'green' | 'red' | 'slate'
-}) {
-  const colors = {
-    green: 'text-emerald-400',
-    red: 'text-red-400',
-    slate: 'text-white',
-  }
-  return (
-    <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-4 flex flex-col gap-1">
-      <span className={cn('text-2xl font-bold tabular-nums', colors[accent])}>{value}</span>
-      <span className="text-xs font-medium text-slate-400">{label}</span>
-      {sub && <span className="text-[11px] text-slate-600">{sub}</span>}
-    </div>
-  )
-}
 
 // ── main page ─────────────────────────────────────────────────────────────────
 

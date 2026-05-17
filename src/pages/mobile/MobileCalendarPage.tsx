@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { isDutyDay, isBillingDay, ymdKey, todayYmdKey, formatDateShort, formatDateLong } from '../../lib/duty'
+import { isDutyDay, isBillingDay, ymdKey, todayYmdKey, formatDateShort, formatDateShortWithDay, formatDateLong } from '../../lib/duty'
 import type { CalendarEvent } from '../../lib/duty'
 import { DutyAssignmentView } from '../../components/DutyAssignmentView'
 import { useAuth } from '../../lib/auth'
@@ -394,7 +394,7 @@ export function MobileCalendarPage() {
                           selectedDate === date ? 'bg-brand-900/40' : 'hover:bg-surface-800',
                         )}
                       >
-                        <span className="text-xs text-slate-400 shrink-0">{formatDateShort(date)}</span>
+                        <span className="text-xs text-slate-400 shrink-0">{formatDateShortWithDay(date)}</span>
                         <div className="flex items-center gap-1.5 justify-end min-w-0">
                           {eventBadge}
                           {orBadge}
@@ -406,7 +406,7 @@ export function MobileCalendarPage() {
 
                   return (
                     <div key={date} className="flex items-center justify-between gap-2 px-2 py-1.5">
-                      <span className="text-xs text-slate-400 shrink-0">{formatDateShort(date)}</span>
+                      <span className="text-xs text-slate-400 shrink-0">{formatDateShortWithDay(date)}</span>
                       <div className="flex items-center gap-1.5 justify-end min-w-0">
                         {eventBadge}
                         {orBadge}

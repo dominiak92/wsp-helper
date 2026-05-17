@@ -60,6 +60,12 @@ export function formatDateShort(key: string): string {
   return `${d} ${MONTHS_GEN[m - 1]}`
 }
 
+export function formatDateShortWithDay(key: string): string {
+  const [y, m, d] = key.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return `${d} ${MONTHS_GEN[m - 1]} — ${WEEKDAYS[date.getDay()]}`
+}
+
 export function formatDateLong(key: string): string {
   const [y, m, d] = key.split('-').map(Number)
   const date = new Date(y, m - 1, d)

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { DailyWeatherCollapsible } from '../../components/DailyWeatherWidget'
+import { PushBell } from '../../components/PushBell'
+import { sendPushTrigger } from '../../lib/pushNotifications'
 import {
   currentOrNextDutyDate, todayYmdKey, isDutyDay, ymdKey,
   formatDateShort, formatDateLong,
@@ -479,11 +481,12 @@ export function MobileHomePage() {
     if (!user || !msgText.trim()) return
     setSendingMsg(true)
     setMsgError(null)
+    const text = msgText.trim()
     try {
       const { error } = await supabase.from('duty_messages').insert({
         sender_login: user.login,
         sender_name: user.displayName,
-        message: msgText.trim(),
+        message: text,
       })
       if (error) {
         setMsgError('Błąd wysyłania: ' + error.message)
@@ -493,6 +496,7 @@ export function MobileHomePage() {
         setShowMsgForm(false)
         setTimeout(() => setMsgSentOk(false), 4000)
         await fetchMyMessages()
+        sendPushTrigger({ type: 'new_message', senderLogin: user.login, senderName: user.displayName, message: text })
       }
     } catch (err) {
       setMsgError('Błąd wysyłania: ' + (err instanceof Error ? err.message : 'nieznany błąd'))
@@ -588,19 +592,22 @@ export function MobileHomePage() {
 
       {/* Informacja dla dyżurnego */}
       <div>
-        <button
-          onClick={() => setShowMsgForm(v => !v)}
-          className="w-full flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
-            <Send className="w-4 h-4 text-brand-400 shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-white">Informacja dla dyżurnego</p>
-              <p className="text-[11px] text-slate-500">Stan licznika, zmiana w służbach, inne</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowMsgForm(v => !v)}
+            className="flex-1 flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <Send className="w-4 h-4 text-brand-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-white">Informacja dla dyżurnego</p>
+                <p className="text-[11px] text-slate-500">Stan licznika, zmiana w służbach, inne</p>
+              </div>
             </div>
-          </div>
-          <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', showMsgForm && 'rotate-180')} />
-        </button>
+            <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', showMsgForm && 'rotate-180')} />
+          </button>
+          {user && <PushBell userLogin={user.login} userRole={user.role} />}
+        </div>
 
         {msgSentOk && (
           <div className="mt-2 flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">

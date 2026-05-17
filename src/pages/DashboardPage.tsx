@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Pencil, X, Check, RefreshCw, MessageSquare, Bell, Trash2, Flame, Wind, Thermometer, Droplets, Leaf, Utensils } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { PushBell } from '../components/PushBell'
+import { sendPushTrigger } from '../lib/pushNotifications'
 import {
   currentOrNextDutyDate,
   previousDutyDate,
@@ -447,6 +449,7 @@ export function DashboardPage() {
                       {dutyMessages.filter(m => !m.read_at).length}
                     </span>
                   )}
+                  {user && <PushBell userLogin={user.login} userRole={user.role} className="ml-auto" />}
                 </div>
                 {dutyMessages.length === 0 ? (
                   <div className="flex items-center gap-2.5 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
@@ -487,6 +490,7 @@ export function DashboardPage() {
                                 onClick={async () => {
                                   await supabase.from('duty_messages').update({ read_at: new Date().toISOString() }).eq('id', msg.id)
                                   setDutyMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: new Date().toISOString() } : m))
+                                  sendPushTrigger({ type: 'confirmed', targetLogin: msg.sender_login })
                                 }}
                                 className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-emerald-400 transition-colors px-1.5 py-0.5 rounded border border-slate-700 hover:border-emerald-800"
                                 title="Potwierdź odbiór wiadomości"

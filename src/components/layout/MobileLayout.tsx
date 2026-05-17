@@ -27,7 +27,7 @@ export function MobileLayout() {
   return (
     <div className="flex flex-col bg-surface-950 overflow-x-hidden" style={{ height: '100dvh' }}>
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-surface-900 shrink-0">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-surface-900 shrink-0" style={{ paddingTop: 'max(env(safe-area-inset-top), 0.75rem)' }}>
         <div className="flex items-center gap-2.5">
           <img src="/logo.png" alt="WSP" className="w-8 h-8 object-contain shrink-0" />
           <div>

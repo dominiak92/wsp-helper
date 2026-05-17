@@ -37,7 +37,7 @@ export function TopBar({ sidebarCollapsed, onToggleSidebar }: TopBarProps) {
   }, [user?.role])
 
   return (
-    <header className="flex items-center h-14 px-4 bg-surface-900 border-b border-slate-800 gap-4 flex-shrink-0">
+    <header className="flex items-center px-4 bg-surface-900 border-b border-slate-800 gap-4 flex-shrink-0" style={{ minHeight: '3.5rem', paddingTop: 'max(env(safe-area-inset-top), 0px)' }}>
       {/* Sidebar toggle */}
       <Button
         variant="ghost"

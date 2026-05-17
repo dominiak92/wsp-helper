@@ -356,7 +356,7 @@ export function DashboardPage() {
       </div>
 
       {/* ── Two-column layout ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] lg:flex-1 lg:overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[460px_1fr] lg:flex-1 lg:overflow-hidden">
 
         {/* LEFT — info sidebar */}
         <div className="px-4 sm:px-5 py-5 space-y-5 lg:overflow-y-auto lg:border-r lg:border-slate-800">
@@ -364,7 +364,7 @@ export function DashboardPage() {
           {/* Stan obsady */}
           <div>
             <SectionLabel>Stan obsady</SectionLabel>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-3">
               <StatCard value={total} label="Ogółem" />
               <StatCard value={availableCount} label="Dostępnych" accent="green" />
               <StatCard

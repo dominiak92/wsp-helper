@@ -182,6 +182,9 @@ export function CrewGeneratorPage() {
         const newMap = { ...(next.absenceMap ?? {}) }
         delete newMap[updated.id]
         next = { ...next, absenceMap: Object.keys(newMap).length > 0 ? newMap : undefined }
+        if (!isPersonInAssignment(next, updated.id)) {
+          next = { ...next, unassignedIds: [...next.unassignedIds, updated.id] }
+        }
       }
       if (next !== assignment) applyAssignment(next)
     }

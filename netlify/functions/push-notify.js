@@ -8,7 +8,6 @@ export const handler = async (event) => {
   const VAPID_SUBJECT  = process.env.VAPID_SUBJECT
   const VAPID_PUBLIC   = process.env.VAPID_PUBLIC_KEY
   const VAPID_PRIVATE  = process.env.VAPID_PRIVATE_KEY
-  // Używamy tych samych zmiennych co weather.js — są już ustawione w Netlify
   const SUPABASE_URL   = process.env.VITE_SUPABASE_URL
   const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
 
@@ -39,28 +38,38 @@ export const handler = async (event) => {
   }
 
   const { type, senderLogin, senderName, message, targetLogin } = body
+  console.log(`[push-notify] type=${type} targetLogin=${targetLogin ?? '-'} senderLogin=${senderLogin ?? '-'}`)
 
   // Zbuduj filtr Supabase
   let filterParam
   if (type === 'new_message') {
-    // Powiadom wszystkich adminów i dyżurnych
     filterParam = 'user_role=in.(admin,officer)'
-  } else if (type === 'confirmed' && targetLogin) {
-    // Powiadom konkretnego nadawcę
+  } else if (type === 'confirmed') {
+    if (!targetLogin) {
+      console.error('[push-notify] confirmed: brak targetLogin')
+      return { statusCode: 400, body: 'Missing targetLogin for confirmed type' }
+    }
     filterParam = `user_login=eq.${encodeURIComponent(targetLogin)}`
   } else {
-    return { statusCode: 400, body: 'Invalid type or missing targetLogin' }
+    console.error('[push-notify] Nieznany type:', type)
+    return { statusCode: 400, body: `Unknown type: ${type}` }
   }
+
+  console.log(`[push-notify] Supabase filter: ${filterParam}`)
 
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/push_subscriptions?${filterParam}&select=subscription`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
   )
   if (!res.ok) {
+    const text = await res.text()
+    console.error(`[push-notify] Supabase error ${res.status}:`, text)
     return { statusCode: 502, body: `Supabase error: ${res.status}` }
   }
 
   const rows = await res.json()
+  console.log(`[push-notify] Znaleziono subskrypcji: ${rows.length}`)
+
   if (!rows.length) {
     return {
       statusCode: 200,
@@ -89,6 +98,14 @@ export const handler = async (event) => {
 
   const sent   = results.filter(r => r.status === 'fulfilled').length
   const failed = results.filter(r => r.status === 'rejected').length
+
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.error(`[push-notify] sendNotification[${i}] failed:`, r.reason?.statusCode, r.reason?.message)
+    }
+  })
+
+  console.log(`[push-notify] Wynik: sent=${sent} failed=${failed}`)
 
   return {
     statusCode: 200,

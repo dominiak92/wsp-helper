@@ -714,6 +714,14 @@ export function MobileHomePage() {
         </div>
       )}
 
+      {/* Upcoming absences across all personnel */}
+      <UpcomingDutyAbsencesCollapsible
+        personnel={personnel}
+        savedMap={savedMap}
+        currentDutyDate={dutyDate}
+        myPersonId={myPerson?.id ?? null}
+      />
+
       {/* Upcoming absences for logged-in user */}
       {myPerson && (
         <div>
@@ -770,6 +778,137 @@ export function MobileHomePage() {
               <p className="text-sm text-slate-500">Brak danych</p>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Upcoming duty absences ────────────────────────────────────────────────────
+
+function UpcomingDutyAbsencesCollapsible({
+  personnel,
+  savedMap,
+  currentDutyDate,
+  myPersonId,
+}: {
+  personnel: Person[]
+  savedMap: Map<string, ShiftAssignment>
+  currentDutyDate: string
+  myPersonId: string | null
+}) {
+  const [open, setOpen] = useState(false)
+
+  const upcoming5 = nextDutyKeys(6).filter(k => k !== currentDutyDate).slice(0, 5)
+
+  const rows = upcoming5.map(date => {
+    const a = savedMap.get(date) ?? null
+    if (!a) return { date, absent: null as null }
+    const absent = personnel
+      .filter(p => a.absenceMap?.[p.id])
+      .map(p => ({ id: p.id, name: p.name, absence: a.absenceMap![p.id] as AbsenceType }))
+      .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence) - ABSENCE_ORDER.indexOf(b.absence))
+    return { date, absent }
+  })
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <CalendarX className="w-4 h-4 text-red-400/70 shrink-0" />
+          <p className="text-sm font-medium text-white">Nieobecni na przyszłych służbach</p>
+        </div>
+        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
+      </button>
+
+      <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', open ? 'max-h-[1500px] opacity-100' : 'max-h-0 opacity-0')}>
+        <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
+          {rows.map(({ date, absent }) => (
+            <DutyDayAbsenceRow key={date} date={date} absent={absent} myPersonId={myPersonId} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DutyDayAbsenceRow({
+  date,
+  absent,
+  myPersonId,
+}: {
+  date: string
+  absent: { id: string; name: string; absence: AbsenceType }[] | null
+  myPersonId: string | null
+}) {
+  const [open, setOpen] = useState(false)
+  const weekday = formatDateLong(date).split(',')[0]
+  const hasAbsent = absent && absent.length > 0
+  const iAmAbsent = !!myPersonId && !!absent?.some(p => p.id === myPersonId)
+
+  return (
+    <div className={cn(iAmAbsent && 'border-l-2 border-amber-500')}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        disabled={!hasAbsent}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">{formatDateShort(date)}</p>
+          <p className="text-[11px] text-slate-500">{weekday}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {iAmAbsent && (
+            <span className="text-[11px] font-medium text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-900/40">
+              Twoja nieobecność
+            </span>
+          )}
+          {absent === null ? (
+            <span className="text-[11px] text-slate-600">Brak obsady</span>
+          ) : hasAbsent ? (
+            <span className="text-[11px] font-medium text-red-400 bg-red-950/40 px-2 py-0.5 rounded-md border border-red-900/40">
+              {absent.length} {absent.length === 1 ? 'nieobecny' : 'nieobecnych'}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+              <CheckCircle className="w-3 h-3" />
+              Wszyscy obecni
+            </span>
+          )}
+          {hasAbsent && (
+            <ChevronDown className={cn('w-3.5 h-3.5 text-slate-600 transition-transform duration-200', open && 'rotate-180')} />
+          )}
+        </div>
+      </button>
+
+      {hasAbsent && (
+        <div className={cn('overflow-hidden transition-all duration-200 ease-in-out', open ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0')}>
+          <div className="border-t border-slate-800/60 divide-y divide-slate-800/40">
+            {absent.map(p => {
+              const isMe = p.id === myPersonId
+              return (
+                <div key={p.id} className={cn(
+                  'flex items-center justify-between py-2.5 gap-2 bg-surface-900/40',
+                  isMe ? 'pl-3 pr-4 border-l-2 border-brand-500' : 'px-4',
+                )}>
+                  <span className={cn('text-sm truncate', isMe ? 'text-brand-200 font-semibold' : 'text-slate-400')}>
+                    {p.name}
+                  </span>
+                  <span className={cn(
+                    'text-[11px] font-medium shrink-0 px-2 py-0.5 rounded-md border',
+                    isMe
+                      ? 'text-amber-400 bg-amber-950/40 border-amber-900/40'
+                      : 'text-red-400 bg-red-950/40 border-red-900/40',
+                  )}>
+                    {ABSENCE_LABELS[p.absence]}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

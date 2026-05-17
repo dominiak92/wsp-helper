@@ -381,11 +381,14 @@ export function MobileHomePage() {
       .then(r => (r.ok ? r.json() : null))
       .then((data: WeatherData | null) => {
         if (data) {
-          const ca = data.morning?.cachedAt ?? data.afternoon?.cachedAt
-          const isForToday = ca
-            ? new Date(ca).toLocaleDateString('en-CA') === new Date().toLocaleDateString('en-CA')
-            : false
-          setWeather(isForToday ? data : null)
+          const today = new Date().toLocaleDateString('en-CA')
+          const slotIsToday = (r: WeatherData['morning']) =>
+            !!r?.updatedAt?.startsWith(today)
+          const cleaned: WeatherData = {
+            morning:   slotIsToday(data.morning)   ? data.morning   : null,
+            afternoon: slotIsToday(data.afternoon) ? data.afternoon : null,
+          }
+          setWeather(cleaned.morning || cleaned.afternoon ? cleaned : null)
         } else {
           setWeather(null)
         }

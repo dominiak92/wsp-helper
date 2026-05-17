@@ -1,4 +1,4 @@
-const CACHE = 'wsp-cc-v1';
+const CACHE = 'wsp-cc-v2';
 const OFFLINE_URLS = ['/'];
 
 self.addEventListener('install', (event) => {
@@ -36,10 +36,8 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(payload.title ?? 'WSP CC', {
       body: payload.body ?? '',
       icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
       data: { url: payload.url ?? '/' },
       tag: payload.tag ?? 'wsp-cc',
-      renotify: true,
     })
   );
 });

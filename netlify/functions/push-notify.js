@@ -8,14 +8,22 @@ export const handler = async (event) => {
   const VAPID_SUBJECT  = process.env.VAPID_SUBJECT
   const VAPID_PUBLIC   = process.env.VAPID_PUBLIC_KEY
   const VAPID_PRIVATE  = process.env.VAPID_PRIVATE_KEY
-  const SUPABASE_URL   = process.env.SUPABASE_URL
-  const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY
+  // Używamy tych samych zmiennych co weather.js — są już ustawione w Netlify
+  const SUPABASE_URL   = process.env.VITE_SUPABASE_URL
+  const SUPABASE_KEY   = process.env.SUPABASE_SERVICE_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
 
   if (!VAPID_PUBLIC || !VAPID_PRIVATE || !SUPABASE_URL || !SUPABASE_KEY) {
+    const missing = [
+      !VAPID_PUBLIC  && 'VAPID_PUBLIC_KEY',
+      !VAPID_PRIVATE && 'VAPID_PRIVATE_KEY',
+      !SUPABASE_URL  && 'VITE_SUPABASE_URL',
+      !SUPABASE_KEY  && 'SUPABASE_SERVICE_KEY / VITE_SUPABASE_ANON_KEY',
+    ].filter(Boolean)
+    console.error('[push-notify] Missing env vars:', missing.join(', '))
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Missing env vars' }),
+      body: JSON.stringify({ error: 'Missing env vars', missing }),
     }
   }
 

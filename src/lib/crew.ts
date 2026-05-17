@@ -103,6 +103,15 @@ export interface ShiftAssignment {
   dinner?: boolean | null
 }
 
+export function parseShiftAssignment(json: unknown): ShiftAssignment | null {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null
+  const obj = json as Record<string, unknown>
+  if (!Array.isArray(obj.dutyOfficerIds)) return null
+  if (!Array.isArray(obj.vehicles)) return null
+  if (!Array.isArray(obj.unassignedIds)) return null
+  return obj as unknown as ShiftAssignment
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
   for (let i = a.length - 1; i > 0; i--) {

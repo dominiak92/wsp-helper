@@ -6,6 +6,7 @@ import {
 } from '../../lib/duty'
 import { cn } from '../../lib/utils'
 import type { Person, RoleType, AbsenceType, ShiftAssignment } from '../../lib/crew'
+import { parseShiftAssignment } from '../../lib/crew'
 import {
   ABSENCE_LABELS, CREW_VEHICLE_NAMES, VEHICLE_SEATS,
   generateCrew, removePersonFromAssignment, isPersonInAssignment,
@@ -134,14 +135,8 @@ export function MobileCrewPage() {
         .limit(1),
     ]).then(([{ data: pData }, { data: aData }]) => {
       const row = aData?.[0]
-      let loaded: ShiftAssignment | null = null
-      if (row?.assignment_json) {
-        const parsed = row.assignment_json as ShiftAssignment
-        if (Array.isArray(parsed.dutyOfficerIds)) {
-          loaded = parsed
-          assignmentIdRef.current = row.id
-        }
-      }
+      const loaded = parseShiftAssignment(row?.assignment_json)
+      if (loaded) assignmentIdRef.current = row!.id
       if (pData && pData.length > 0) {
         setPersonnel(pData.map(r => ({
           id: r.id,

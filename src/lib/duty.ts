@@ -37,19 +37,19 @@ export function currentOrNextDutyDate(): string {
 
 export function previousDutyDate(from: string): string {
   const [y, m, d] = from.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  dt.setUTCDate(dt.getUTCDate() - 4)
-  return ymdKey(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate())
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() - 4)
+  return ymdKey(dt.getFullYear(), dt.getMonth(), dt.getDate())
 }
 
 export function nextDutyDate(from: string): string {
   const [y, m, d] = from.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  dt.setUTCDate(dt.getUTCDate() + 4)
-  return ymdKey(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate())
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + 4)
+  return ymdKey(dt.getFullYear(), dt.getMonth(), dt.getDate())
 }
 
-const MONTHS_GEN = [
+export const MONTHS_GEN = [
   'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
   'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',
 ]
@@ -62,6 +62,6 @@ export function formatDateShort(key: string): string {
 
 export function formatDateLong(key: string): string {
   const [y, m, d] = key.split('-').map(Number)
-  const date = new Date(Date.UTC(y, m - 1, d))
-  return `${WEEKDAYS[date.getUTCDay()]}, ${d} ${MONTHS_GEN[m - 1]} ${y}`
+  const date = new Date(y, m - 1, d)
+  return `${WEEKDAYS[date.getDay()]}, ${d} ${MONTHS_GEN[m - 1]} ${y}`
 }

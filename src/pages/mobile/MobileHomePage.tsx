@@ -10,10 +10,12 @@ import {
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, isPersonInAssignment } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, isPersonInAssignment, parseShiftAssignment } from '../../lib/crew'
 import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, UsersRound, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
+import type { WeatherReading, WeatherData } from '../../lib/weather'
+import { FIRE_STYLES, parseFireLevel } from '../../lib/weather'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,39 +65,6 @@ function nextDutyKeys(count: number): string[] {
 }
 
 // ── weather helpers ───────────────────────────────────────────────────────────
-
-interface WeatherReading {
-  moisture: string | null
-  temperature: string | null
-  humidity: string | null
-  precipitation: string | null
-  windSpeed: string | null
-  windDir: string | null
-  fireThreat: string | null
-  fireThreatForecast: string | null
-  updatedAt: string | null
-  cachedAt?: string | null
-}
-
-interface WeatherData {
-  morning: WeatherReading | null
-  afternoon: WeatherReading | null
-}
-
-const FIRE_STYLES: Record<number, { text: string; bg: string; border: string }> = {
-  0: { text: 'text-slate-400',   bg: 'bg-surface-700/50',  border: 'border-slate-700/40'   },
-  1: { text: 'text-emerald-400', bg: 'bg-emerald-950/40',  border: 'border-emerald-900/50' },
-  2: { text: 'text-amber-400',   bg: 'bg-amber-950/40',    border: 'border-amber-900/50'   },
-  3: { text: 'text-orange-400',  bg: 'bg-orange-950/40',   border: 'border-orange-900/50'  },
-  4: { text: 'text-red-400',     bg: 'bg-red-950/40',      border: 'border-red-900/50'     },
-  5: { text: 'text-red-300',     bg: 'bg-red-950/60',      border: 'border-red-800/60'     },
-}
-
-function parseFireLevel(threat: string | null): number {
-  if (!threat) return 0
-  const m = threat.match(/^(\d)/)
-  return m ? Math.min(5, Math.max(0, parseInt(m[1]))) : 0
-}
 
 function FireThreatCard({
   label, reading, selected, onClick,
@@ -328,11 +297,7 @@ export function MobileHomePage() {
     ]).then(([{ data: pData }, { data: aData }, { data: futureData }, { data: noteData }]) => {
       // Resolve assignment first so personnel absences can be derived from its absenceMap.
       const aRow = aData?.[0]
-      let loadedAssignment: ShiftAssignment | null = null
-      if (aRow?.assignment_json) {
-        const parsed = aRow.assignment_json as ShiftAssignment
-        if (Array.isArray(parsed.dutyOfficerIds)) loadedAssignment = parsed
-      }
+      const loadedAssignment = parseShiftAssignment(aRow?.assignment_json)
       if (pData) {
         setPersonnel(pData.map(row => ({
           id: row.id,
@@ -349,11 +314,8 @@ export function MobileHomePage() {
       if (futureData) {
         const m = new Map<string, ShiftAssignment>()
         for (const r of futureData) {
-          if (r.assignment_json) {
-            const parsed = r.assignment_json as ShiftAssignment
-            if (Array.isArray(parsed.dutyOfficerIds))
-              m.set(r.duty_date as string, parsed)
-          }
+          const parsed = parseShiftAssignment(r.assignment_json)
+          if (parsed) m.set(r.duty_date as string, parsed)
         }
         setSavedMap(m)
       }

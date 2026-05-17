@@ -4,6 +4,7 @@ import {
   currentOrNextDutyDate, todayYmdKey, formatDateShort, formatDateLong,
 } from '../lib/duty'
 import type { Person, ShiftAssignment, VehicleAssignment, RoleType, AbsenceType } from '../lib/crew'
+import { parseShiftAssignment } from '../lib/crew'
 
 // ── Static bay definitions ────────────────────────────────────────────────────
 
@@ -164,11 +165,8 @@ export function GaragePage() {
           login: row.login ?? null,
         })))
       }
-      const row = aData?.[0]
-      if (row?.assignment_json) {
-        const parsed = row.assignment_json as ShiftAssignment
-        if (Array.isArray(parsed.dutyOfficerIds)) setAssignment(parsed)
-      }
+      const parsed = parseShiftAssignment(aData?.[0]?.assignment_json)
+      if (parsed) setAssignment(parsed)
       setLoading(false)
     })
   }, [dutyDate])

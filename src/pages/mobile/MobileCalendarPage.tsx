@@ -7,7 +7,7 @@ import { DutyAssignmentView } from '../../components/DutyAssignmentView'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, parseShiftAssignment } from '../../lib/crew'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -126,8 +126,8 @@ export function MobileCalendarPage() {
       .then(({ data }) => {
         const m = new Map<string, ShiftAssignment>()
         for (const row of data ?? []) {
-          const parsed = row.assignment_json as ShiftAssignment
-          if (Array.isArray(parsed?.dutyOfficerIds)) {
+          const parsed = parseShiftAssignment(row.assignment_json)
+          if (parsed) {
             const existing = m.get(row.duty_date as string)
             if (!existing) m.set(row.duty_date as string, parsed)
           }
@@ -150,13 +150,8 @@ export function MobileCalendarPage() {
       .order('created_at', { ascending: false })
       .limit(1)
       .then(({ data }) => {
-        const row = data?.[0]
-        if (row?.assignment_json) {
-          const parsed = row.assignment_json as ShiftAssignment
-          if (Array.isArray(parsed.dutyOfficerIds)) {
-            setAssignmentMap(prev => new Map(prev).set(selectedDate, parsed))
-          }
-        }
+        const parsed = parseShiftAssignment(data?.[0]?.assignment_json)
+        if (parsed) setAssignmentMap(prev => new Map(prev).set(selectedDate, parsed))
         setAssignmentLoading(false)
       })
   }, [selectedDate])

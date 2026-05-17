@@ -92,15 +92,24 @@ export const handler = async (event) => {
         tag: 'duty-confirmed',
       })
 
+  const sendWithTimeout = (subscription) =>
+    Promise.race([
+      webpush.sendNotification(subscription, pushPayload),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(Object.assign(new Error('Timeout after 7s'), { statusCode: 0 })), 7000)
+      ),
+    ])
+
   const results = await Promise.allSettled(
     rows.map(async (row) => {
       try {
-        await webpush.sendNotification(row.subscription, pushPayload)
+        await sendWithTimeout(row.subscription)
       } catch (err) {
+        const code = err.statusCode
         // 410 Gone / 404 Not Found = subskrypcja wygasła, usuń z Supabase
-        if (err.statusCode === 410 || err.statusCode === 404) {
+        if (code === 410 || code === 404) {
           const endpoint = row.subscription?.endpoint
-          console.warn(`[push-notify] Martwa subskrypcja (${err.statusCode}), usuwam: ${endpoint?.slice(-30)}`)
+          console.warn(`[push-notify] Martwa subskrypcja (${code}), usuwam: ${endpoint?.slice(-40)}`)
           await fetch(
             `${SUPABASE_URL}/rest/v1/push_subscriptions?subscription->>endpoint=eq.${encodeURIComponent(endpoint)}`,
             {
@@ -109,7 +118,7 @@ export const handler = async (event) => {
             },
           ).catch(() => {})
         } else {
-          console.error(`[push-notify] sendNotification failed: ${err.statusCode}`, err.message)
+          console.error(`[push-notify] sendNotification failed: statusCode=${code}`, err.message)
         }
         throw err
       }

@@ -117,11 +117,12 @@ async function main() {
     updatedAt:          ts,
   }
 
-  // morning slot: hourUTC < 10 (runs at 7:15 UTC = 9:15 CEST summer / 8:15 CET winter)
-  // afternoon slot: hourUTC >= 10 (runs at 11:15 UTC = 13:15 CEST summer / 12:15 CET winter)
-  const hourUTC = new Date().getUTCHours()
-  const slot = hourUTC < 10 ? 'morning' : 'afternoon'
-  console.log(`UTC hour: ${hourUTC} → writing slot: ${slot}`)
+  // Slot is injected by the workflow (SLOT=morning|afternoon) so GitHub Actions
+  // delays don't accidentally flip the target slot based on wall-clock time.
+  const slot = process.env.SLOT
+  if (slot !== 'morning' && slot !== 'afternoon')
+    throw new Error(`Invalid SLOT env var: "${slot}" — must be 'morning' or 'afternoon'`)
+  console.log(`Writing slot: ${slot}`)
 
   // Read existing row to preserve the other slot
   const existingRes = await fetch(

@@ -863,7 +863,7 @@ function DutyDayAbsenceRow({
         <div className="flex items-center gap-2 shrink-0">
           {iAmAbsent && (
             <span className="text-[11px] font-medium text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-900/40">
-              Twoja nieobecność
+              Nieobecny
             </span>
           )}
           {absent === null ? (

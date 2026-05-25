@@ -283,13 +283,21 @@ function setPersonAtSlot(a: ShiftAssignment, key: string, personId: string | nul
       const gbaCurrentCmd = a.vehicles.find(v => v.vehicleId === 'gba')?.commanderId ?? null
       // Sync GBA only when GBA is already staffed (has a commander)
       if (gbaCurrentCmd !== null) {
-        return {
+        const withGba = {
           ...a,
           shiftCommanderId: personId,
           vehicles: a.vehicles.map(v =>
             v.vehicleId === 'gba' ? { ...v, commanderId: personId } : v
           ),
         }
+        // If clearing shift commander, fall back to first other vehicle commander
+        if (personId === null) {
+          const fallback = withGba.vehicles
+            .filter(v => v.vehicleId !== 'gba')
+            .find(v => v.commanderId !== null)?.commanderId ?? null
+          return { ...withGba, shiftCommanderId: fallback }
+        }
+        return withGba
       }
       return { ...a, shiftCommanderId: personId }
     }

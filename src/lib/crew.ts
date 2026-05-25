@@ -111,7 +111,13 @@ export function parseShiftAssignment(json: unknown): ShiftAssignment | null {
   if (!Array.isArray(obj.dutyOfficerIds)) return null
   if (!Array.isArray(obj.vehicles)) return null
   if (!Array.isArray(obj.unassignedIds)) return null
-  return obj as unknown as ShiftAssignment
+  const a = obj as unknown as ShiftAssignment
+  // Normalise: if shiftCommanderId is missing, derive from first vehicle commander
+  if (!a.shiftCommanderId) {
+    const fallback = a.vehicles.find(v => v.commanderId)?.commanderId ?? null
+    if (fallback) return { ...a, shiftCommanderId: fallback }
+  }
+  return a
 }
 
 function shuffle<T>(arr: T[]): T[] {

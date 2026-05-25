@@ -46,7 +46,7 @@ function resolveMyRole(assignment: ShiftAssignment, personId: string): MyRole | 
   }
 
   if (assignment.unassignedIds.includes(personId))
-    return { label: 'Rezerwa / Dyżur', vehicle: null, colorClass: 'text-slate-400', borderClass: 'border-slate-700', Icon: Users, iconClass: 'text-slate-500' }
+    return { label: 'Rezerwa', vehicle: null, colorClass: 'text-slate-400', borderClass: 'border-slate-700', Icon: Users, iconClass: 'text-slate-500' }
 
   return null // absent from this duty
 }
@@ -688,7 +688,7 @@ export function MobileHomePage() {
               </div>
             )}
           </div>
-          <VehicleReadinessStrip assignment={assignment} />
+          <VehicleReadinessStrip assignment={assignment} personnel={personnel} />
         </div>
       </div>
 
@@ -917,7 +917,7 @@ function DutyDayAbsenceRow({
 
 // ── Vehicle readiness strip ───────────────────────────────────────────────────
 
-function VehicleReadinessStrip({ assignment }: { assignment: ShiftAssignment | null }) {
+function VehicleReadinessStrip({ assignment, personnel }: { assignment: ShiftAssignment | null; personnel: Person[] }) {
   if (!assignment) return null
 
   return (
@@ -960,6 +960,17 @@ function VehicleReadinessStrip({ assignment }: { assignment: ShiftAssignment | n
           </div>
         )
       })}
+      {assignment.unassignedIds.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 border-t border-slate-800/60">
+          <span className="text-xs font-semibold w-24 shrink-0 truncate text-slate-400">Rezerwa</span>
+          <div className="flex-1 text-xs text-slate-400 truncate">
+            {assignment.unassignedIds.map(id => personnel.find(p => p.id === id)?.name ?? '—').join(', ')}
+          </div>
+          <span className="text-xs font-bold tabular-nums text-slate-400 shrink-0">
+            {assignment.unassignedIds.length}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -1029,7 +1040,7 @@ function FullAssignmentCollapsible({ personnel, assignment, myPersonId }: {
             {assignment.unassignedIds.length > 0 && (
               <div className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 px-4 py-2 border-b border-slate-800">
-                  Rezerwa / Dyżur
+                  Rezerwa
                 </p>
                 <div className="flex flex-wrap gap-2 px-4 py-3">
                   {assignment.unassignedIds.map(id => (

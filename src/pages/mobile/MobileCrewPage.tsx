@@ -438,7 +438,7 @@ export function MobileCrewPage() {
           {assignment.unassignedIds.length > 0 && (
             <div className="bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-2">
-                Rezerwa / Dyżur ({assignment.unassignedIds.length})
+                Rezerwa ({assignment.unassignedIds.length})
               </p>
               <div className="flex flex-wrap gap-2">
                 {assignment.unassignedIds.map(id => (

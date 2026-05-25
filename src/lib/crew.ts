@@ -189,8 +189,12 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
     if (p.absence) absenceMap[p.id] = p.absence
   }
 
+  // If no explicit shift commander, derive from first staffed vehicle commander
+  const derivedShiftCmdId =
+    shiftCommander?.id ?? vehicles.find(v => v.commanderId !== null)?.commanderId ?? null
+
   return {
-    shiftCommanderId: shiftCommander?.id ?? null,
+    shiftCommanderId: derivedShiftCmdId,
     dutyOfficerIds: dutyOfficers.map(p => p.id),
     vehicles,
     unassignedIds: available.filter(p => !assigned.has(p.id)).map(p => p.id),
@@ -276,14 +280,18 @@ function setPersonAtSlot(a: ShiftAssignment, key: string, personId: string | nul
   }
   if (ns === 'special') {
     if (vid === 'shift-commander') {
-      // GBA commander is always the shift commander — keep them in sync
-      return {
-        ...a,
-        shiftCommanderId: personId,
-        vehicles: a.vehicles.map(v =>
-          v.vehicleId === 'gba' ? { ...v, commanderId: personId } : v
-        ),
+      const gbaCurrentCmd = a.vehicles.find(v => v.vehicleId === 'gba')?.commanderId ?? null
+      // Sync GBA only when GBA is already staffed (has a commander)
+      if (gbaCurrentCmd !== null) {
+        return {
+          ...a,
+          shiftCommanderId: personId,
+          vehicles: a.vehicles.map(v =>
+            v.vehicleId === 'gba' ? { ...v, commanderId: personId } : v
+          ),
+        }
       }
+      return { ...a, shiftCommanderId: personId }
     }
     if (vid === 'duty-officer') {
       const idx = Number(role)
@@ -313,9 +321,15 @@ function setPersonAtSlot(a: ShiftAssignment, key: string, personId: string | nul
     return v
   })
   const result = { ...a, vehicles }
-  // GBA commander is always the shift commander — keep them in sync
+  // GBA commander drives shift commander — when GBA is cleared, fall back to next vehicle
   if (vid === 'gba' && role === 'commander') {
-    return { ...result, shiftCommanderId: personId }
+    if (personId !== null) {
+      return { ...result, shiftCommanderId: personId }
+    }
+    const fallback = result.vehicles
+      .filter(v => v.vehicleId !== 'gba')
+      .find(v => v.commanderId !== null)?.commanderId ?? null
+    return { ...result, shiftCommanderId: fallback }
   }
   return result
 }

@@ -62,7 +62,7 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
 
       {/* Reserve */}
       {assignment.unassignedIds.length > 0 && (
-        <Card label="Rezerwa / Dyżur" labelColor="text-slate-400">
+        <Card label="Rezerwa" labelColor="text-slate-400">
           <div className="flex flex-wrap gap-2 px-3 py-3">
             {assignment.unassignedIds.map(id => (
               <span key={id} className="text-sm text-slate-300 bg-surface-900 rounded-lg px-3 py-1.5 border border-slate-700">

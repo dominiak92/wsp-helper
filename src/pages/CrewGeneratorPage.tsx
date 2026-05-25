@@ -202,10 +202,26 @@ export function CrewGeneratorPage() {
 
   function clearSpecialRole(role: 'shiftCommander' | 'dutyOfficer', personId: string) {
     if (!assignment) return
-    const base = role === 'shiftCommander'
-      ? { ...assignment, shiftCommanderId: null }
-      : { ...assignment, dutyOfficerIds: assignment.dutyOfficerIds.filter(id => id !== personId) }
-    applyAssignment({ ...base, unassignedIds: [...base.unassignedIds, personId] })
+    if (role === 'shiftCommander') {
+      // Clear GBA commander if it's the same person, then derive fallback shift commander
+      const next: ShiftAssignment = {
+        ...assignment,
+        shiftCommanderId: null,
+        vehicles: assignment.vehicles.map(v =>
+          v.vehicleId === 'gba' && v.commanderId === personId
+            ? { ...v, commanderId: null }
+            : v
+        ),
+        unassignedIds: [...assignment.unassignedIds, personId],
+      }
+      const fallback = next.vehicles
+        .filter(v => v.vehicleId !== 'gba')
+        .find(v => v.commanderId !== null)?.commanderId ?? null
+      applyAssignment({ ...next, shiftCommanderId: fallback })
+    } else {
+      const base = { ...assignment, dutyOfficerIds: assignment.dutyOfficerIds.filter(id => id !== personId) }
+      applyAssignment({ ...base, unassignedIds: [...base.unassignedIds, personId] })
+    }
   }
 
   function handleGenerate() {
@@ -304,7 +320,7 @@ export function CrewGeneratorPage() {
 
   const absentCount = personnel.filter(p => p.absence).length
   const availableCount = personnel.length - absentCount
-  const isDragging = dragSource !== null
+
 
   return (
     <div className="flex flex-col h-full">
@@ -572,13 +588,11 @@ export function CrewGeneratorPage() {
               </div>
 
               {/* Rezerwa + Nieobecni */}
-              {(assignment.unassignedIds.length > 0 || isDragging || personnel.some(p => p.absence)) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {/* Rezerwa drop zone — always visible while dragging */}
-                  {(assignment.unassignedIds.length > 0 || isDragging) && (
-                    <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Rezerwa drop zone — always visible */}
+                  <div>
                       <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-3">
-                        Rezerwa / dyżur ({assignment.unassignedIds.length})
+                        Rezerwa ({assignment.unassignedIds.length})
                       </p>
                       <div
                         className={cn(
@@ -632,8 +646,7 @@ export function CrewGeneratorPage() {
                           </span>
                         )}
                       </div>
-                    </div>
-                  )}
+                  </div>
 
                   {/* Nieobecni */}
                   {personnel.some(p => p.absence) && (
@@ -655,7 +668,6 @@ export function CrewGeneratorPage() {
                     </div>
                   )}
                 </div>
-              )}
             </div>
           )}
         </main>

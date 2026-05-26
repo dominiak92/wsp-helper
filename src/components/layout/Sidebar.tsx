@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Truck,
   BookOpen,
+  Map,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
@@ -24,6 +25,7 @@ const navGroups = [
       { label: 'Kalendarz służb', icon: CalendarDays, path: '/duty-calendar' },
       { label: 'Garaż', icon: Truck, path: '/garage' },
       { label: 'Vademecum', icon: BookOpen, path: '/vademecum' },
+      { label: 'Mapa p.poż.', icon: Map, path: '/map' },
     ],
   },
 ]

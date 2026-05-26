@@ -296,7 +296,7 @@ export function DashboardPage() {
       .catch(() => setWeatherLoading(false))
   }
 
-  useEffect(() => { fetchWeather() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchWeather() }, [])
 
   useEffect(() => {
     const now = new Date()

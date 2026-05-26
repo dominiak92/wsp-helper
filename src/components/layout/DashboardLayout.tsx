@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Outlet, Navigate, useLocation } from 'react-router-dom'
+import { cn } from '../../lib/utils'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { useAuth } from '../../lib/auth'
-import { cn } from '../../lib/utils'
 
 export function DashboardLayout() {
   const { user, loading } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
+  const isMapPage = location.pathname === '/map'
 
   useEffect(() => {
     setMobileOpen(false)
@@ -60,7 +61,7 @@ export function DashboardLayout() {
           sidebarCollapsed={collapsed}
           onToggleSidebar={handleToggle}
         />
-        <main className="flex-1 overflow-y-auto">
+        <main className={cn('flex-1', isMapPage ? 'overflow-hidden' : 'overflow-y-auto')}>
           <Outlet />
         </main>
       </div>

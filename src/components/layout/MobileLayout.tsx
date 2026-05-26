@@ -1,10 +1,12 @@
-import { NavLink, Outlet, Navigate } from 'react-router-dom'
-import { Home, CalendarDays, Users } from 'lucide-react'
+import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
+import { Home, CalendarDays, Users, Map } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
 
 export function MobileLayout() {
   const { user, loading, signOut } = useAuth()
+  const location = useLocation()
+  const isMapPage = location.pathname === '/mobile/map'
 
   if (loading) {
     return (
@@ -18,7 +20,8 @@ export function MobileLayout() {
 
   const navItems = [
     { to: '/mobile', label: 'Dziś', icon: Home, end: true },
-    { to: '/mobile/calendar', label: 'Kalendarz służb', icon: CalendarDays, end: false },
+    { to: '/mobile/calendar', label: 'Kalendarz', icon: CalendarDays, end: false },
+    { to: '/mobile/map', label: 'Mapa', icon: Map, end: false },
     ...(user.role !== 'user'
       ? [{ to: '/mobile/crew-generator', label: 'Obsada', icon: Users, end: false }]
       : []),
@@ -43,11 +46,15 @@ export function MobileLayout() {
         </button>
       </header>
 
-      {/* Content — centered on wide screens */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto w-full">
+      {/* Content — map gets full height, other pages get scrollable centered wrapper */}
+      <main className={cn('flex-1', isMapPage ? 'overflow-hidden' : 'overflow-y-auto')}>
+        {isMapPage ? (
           <Outlet />
-        </div>
+        ) : (
+          <div className="max-w-2xl mx-auto w-full">
+            <Outlet />
+          </div>
+        )}
       </main>
 
       {/* Bottom navigation */}

@@ -12,6 +12,7 @@ import { VademecumPage } from './pages/VademecumPage'
 import { MobileHomePage } from './pages/mobile/MobileHomePage'
 import { MobileCalendarPage } from './pages/mobile/MobileCalendarPage'
 import { MobileCrewPage } from './pages/mobile/MobileCrewPage'
+import { FireMapPage } from './pages/FireMapPage'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="/mobile" element={<MobileHomePage />} />
             <Route path="/mobile/calendar" element={<MobileCalendarPage />} />
             <Route path="/mobile/crew-generator" element={<MobileCrewPage />} />
+            <Route path="/mobile/map" element={<FireMapPage />} />
           </Route>
 
           <Route element={<DashboardLayout />}>
@@ -33,6 +35,7 @@ export default function App() {
             <Route path="/duty-calendar" element={<DutyCalendarPage />} />
             <Route path="/garage" element={<GaragePage />} />
             <Route path="/vademecum" element={<VademecumPage />} />
+            <Route path="/map" element={<FireMapPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

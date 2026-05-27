@@ -566,14 +566,14 @@ export function FireMapPage() {
         <div className="absolute bottom-24 right-3 z-[1000] flex flex-col items-center gap-1 bg-surface-900/95 border border-slate-700/60 rounded-xl px-2 py-2 shadow-lg">
           <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-0.5">shift</div>
           <button
-            onClick={() => setGridShift(v => Math.round((v + 0.001) * 1e5) / 1e5)}
+            onClick={() => setGridShift(v => Math.round((v + 0.0001) * 1e6) / 1e6)}
             className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
           >▲</button>
           <div className="text-[10px] text-slate-400 text-center leading-4">
-            <div className="text-slate-500">{gridShift >= 0 ? '+' : ''}{gridShift.toFixed(3)}</div>
+            <div className="text-slate-500">{gridShift >= 0 ? '+' : ''}{gridShift.toFixed(4)}</div>
           </div>
           <button
-            onClick={() => setGridShift(v => Math.round((v - 0.001) * 1e5) / 1e5)}
+            onClick={() => setGridShift(v => Math.round((v - 0.0001) * 1e6) / 1e6)}
             className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
           >▼</button>
 
@@ -581,14 +581,14 @@ export function FireMapPage() {
 
           <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-0.5">skala</div>
           <button
-            onClick={() => setGridScale(v => Math.round((v + 0.005) * 1e4) / 1e4)}
+            onClick={() => setGridScale(v => Math.round((v + 0.001) * 1e4) / 1e4)}
             className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
           >+</button>
           <div className="text-[10px] text-slate-400 text-center leading-4">
             <div className="text-slate-500">{gridScale.toFixed(3)}</div>
           </div>
           <button
-            onClick={() => setGridScale(v => Math.round((v - 0.005) * 1e4) / 1e4)}
+            onClick={() => setGridScale(v => Math.round((v - 0.001) * 1e4) / 1e4)}
             className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
           >−</button>
         </div>

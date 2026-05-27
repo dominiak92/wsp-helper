@@ -132,10 +132,13 @@ export function FireMapPage() {
   const destMarkerRef = useRef<L.Marker | null>(null)
   const userPosRef = useRef<L.LatLng | null>(null)
   const gridLayersRef = useRef<L.Layer[]>([])
+  const overlayRef = useRef<L.ImageOverlay | null>(null)
 
   const [mode, setMode] = useState<AppMode>('roads')
   const [showGrid, setShowGrid] = useState(false)
   const [gridLoading, setGridLoading] = useState(false)
+  const [gridShift, setGridShift] = useState(0)
+  const [gridScale, setGridScale] = useState(1.0)
   const [userPos, setUserPos] = useState<L.LatLng | null>(null)
 
   const [query, setQuery] = useState('')
@@ -397,26 +400,42 @@ export function FireMapPage() {
   }, [routeTo])
 
   // ── Grid overlay — jeden obraz BDL imageOverlay dla całego OSPWL ──────────
+  const gridBounds = useCallback((): L.LatLngBounds => {
+    const center = (OSPWL.south + OSPWL.north) / 2
+    const half   = (OSPWL.north - OSPWL.south) / 2 * gridScale
+    return L.latLngBounds(
+      [center + gridShift - half, OSPWL.west],
+      [center + gridShift + half, OSPWL.east],
+    )
+  }, [gridShift, gridScale])
+
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
     gridLayersRef.current.forEach(l => map.removeLayer(l))
     gridLayersRef.current = []
+    overlayRef.current = null
 
     if (!showGrid) return
 
     setGridLoading(true)
     const overlay = L.imageOverlay(
       '/.netlify/functions/bdl-compartments?v=4',
-      [[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]],
+      gridBounds(),
       { opacity: 0.8, attribution: '© BDL Lasy Państwowe' },
     )
     overlay.on('load',  () => setGridLoading(false))
     overlay.on('error', () => setGridLoading(false))
     overlay.addTo(map)
+    overlayRef.current = overlay
     gridLayersRef.current.push(overlay)
   }, [showGrid]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!overlayRef.current) return
+    overlayRef.current.setBounds(gridBounds())
+  }, [gridShift, gridScale, gridBounds])
 
   function pickSuggestion(place: NominatimPlace) {
     routeTo(L.latLng(parseFloat(place.lat), parseFloat(place.lon)), place.display_name)
@@ -541,6 +560,39 @@ export function FireMapPage() {
           </div>
         )}
       </div>
+
+      {/* Grid calibration panel */}
+      {showGrid && (
+        <div className="absolute bottom-24 right-3 z-[1000] flex flex-col items-center gap-1 bg-surface-900/95 border border-slate-700/60 rounded-xl px-2 py-2 shadow-lg">
+          <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-0.5">shift</div>
+          <button
+            onClick={() => setGridShift(v => Math.round((v + 0.001) * 1e5) / 1e5)}
+            className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
+          >▲</button>
+          <div className="text-[10px] text-slate-400 text-center leading-4">
+            <div className="text-slate-500">{gridShift >= 0 ? '+' : ''}{gridShift.toFixed(3)}</div>
+          </div>
+          <button
+            onClick={() => setGridShift(v => Math.round((v - 0.001) * 1e5) / 1e5)}
+            className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
+          >▼</button>
+
+          <div className="w-full border-t border-slate-700/60 my-1" />
+
+          <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-0.5">skala</div>
+          <button
+            onClick={() => setGridScale(v => Math.round((v + 0.005) * 1e4) / 1e4)}
+            className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
+          >+</button>
+          <div className="text-[10px] text-slate-400 text-center leading-4">
+            <div className="text-slate-500">{gridScale.toFixed(3)}</div>
+          </div>
+          <button
+            onClick={() => setGridScale(v => Math.round((v - 0.005) * 1e4) / 1e4)}
+            className="w-10 h-7 rounded bg-surface-800 text-slate-200 text-sm hover:bg-surface-700"
+          >−</button>
+        </div>
+      )}
 
       {/* Grid + GPS + Follow buttons */}
       <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">

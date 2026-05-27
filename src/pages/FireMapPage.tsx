@@ -560,12 +560,12 @@ export function FireMapPage() {
 
       {/* Grid label toast */}
       <div className={cn(
-        'absolute bottom-[7.5rem] right-3 z-[1000]',
+        'absolute bottom-[5.5rem] right-14 z-[1000]',
         'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
         'bg-surface-900/95 border border-slate-700/60 backdrop-blur-sm',
         'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
         'transition-all duration-300',
-        gridToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1',
+        gridToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
       )}>
         <Milestone className="w-3.5 h-3.5 text-brand-400 shrink-0" />
         Granice oddziału

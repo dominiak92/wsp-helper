@@ -1,60 +1,64 @@
-// Proxy do BDL ArcGIS REST — pobiera granice oddziałów leśnych (Mapa_podstawowa_BDL)
-// dla rejonu OSPWL i zwraca GeoJSON. Serwer-side omija blokadę 403 na kliencie.
+// Tile proxy dla BDL Mapa_podstawowa_BDL — warstwa Oddziały (layer show:3)
+// Pobiera kafelki PNG z serwera BDL (server-side omija CORS) i zwraca je klientowi.
 
 const BASE = 'https://mapserver.bdl.lasy.gov.pl/ArcGIS/rest/services/Mapa_podstawowa_BDL/MapServer'
-const OSPWL_BBOX = '14.98,52.37,15.35,52.52' // west,south,east,north (WGS84)
 
-const HEADERS = {
-  Referer: 'https://mapy.bdl.lasy.gov.pl/',
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+// Zamiana tile z/x/y na bbox w układzie Web Mercator (EPSG:3857 / 102100)
+function tileBbox(z, x, y) {
+  const k = 20037508.3428
+  const size = (2 * k) / Math.pow(2, z)
+  return {
+    west:  x * size - k,
+    east:  (x + 1) * size - k,
+    north: k - y * size,
+    south: k - (y + 1) * size,
+  }
 }
 
-export const handler = async () => {
-  try {
-    // Znajdź warstwę "Oddziały" w serwisie BDL
-    let layerId = 3 // fallback — prawdopodobna pozycja warstwy
-    const infoRes = await fetch(`${BASE}?f=json`, { headers: HEADERS })
-    if (infoRes.ok) {
-      const info = await infoRes.json()
-      const match = (info.layers ?? []).find(
-        l => typeof l.name === 'string' && l.name.toLowerCase().includes('oddzia'),
-      )
-      if (match != null) layerId = match.id
-    }
+export const handler = async (event) => {
+  const z = parseInt(event.queryStringParameters?.z ?? '12')
+  const x = parseInt(event.queryStringParameters?.x ?? '0')
+  const y = parseInt(event.queryStringParameters?.y ?? '0')
 
-    // Zapytaj o cechy w bbox OSPWL
-    const params = new URLSearchParams({
-      where: '1=1',
-      geometryType: 'esriGeometryEnvelope',
-      geometry: OSPWL_BBOX,
-      inSR: '4326',
-      spatialRel: 'esriSpatialRelIntersects',
-      outSR: '4326',
-      outFields: '*',
-      returnGeometry: 'true',
-      resultRecordCount: '5000',
-      f: 'geojson',
+  if (isNaN(z) || isNaN(x) || isNaN(y)) {
+    return { statusCode: 400, body: 'Invalid tile coordinates' }
+  }
+
+  const { west, south, east, north } = tileBbox(z, x, y)
+
+  const params = new URLSearchParams({
+    dpi: '96',
+    transparent: 'true',
+    format: 'png32',
+    bbox: `${west},${south},${east},${north}`,
+    bboxSR: '102100',
+    imageSR: '102100',
+    size: '256,256',
+    layers: 'show:3',
+    f: 'image',
+  })
+
+  try {
+    const res = await fetch(`${BASE}/export?${params}`, {
+      headers: {
+        Referer: 'https://www.bdl.lasy.gov.pl/portal/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
     })
 
-    const featRes = await fetch(`${BASE}/${layerId}/query?${params}`, { headers: HEADERS })
-    if (!featRes.ok) {
-      return { statusCode: featRes.status, body: `BDL error: ${featRes.status}` }
-    }
+    if (!res.ok) return { statusCode: res.status, body: `BDL export: ${res.status}` }
 
-    const data = await featRes.json()
+    const buf = await res.arrayBuffer()
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=86400',
       },
-      body: JSON.stringify(data),
+      body: Buffer.from(buf).toString('base64'),
+      isBase64Encoded: true,
     }
   } catch (err) {
-    return {
-      statusCode: 502,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: String(err) }),
-    }
+    return { statusCode: 502, body: String(err) }
   }
 }

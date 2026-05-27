@@ -406,30 +406,15 @@ export function FireMapPage() {
       return
     }
 
-    fetch('/.netlify/functions/bdl-compartments')
-      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
-      .then((data: GeoJSON.FeatureCollection) => {
-        if (!mapRef.current) return
-        gridLayersRef.current.forEach(l => map.removeLayer(l))
-        gridLayersRef.current = []
+    gridLayersRef.current.forEach(l => map.removeLayer(l))
+    gridLayersRef.current = []
 
-        const layer = L.geoJSON(data, {
-          style: { color: '#4ade80', weight: 1.5, opacity: 0.8, dashArray: '6 5', fillOpacity: 0 },
-          onEachFeature(feature, lyr) {
-            const p = feature.properties ?? {}
-            const ref: string =
-              p.ODDZIAL ?? p.oddzial ?? p.NR_ODDZIALU ?? p.nr_oddzialu ??
-              p.OZNACZENIE ?? p.oznaczenie ?? p.ref ?? p.NR ?? p.nr ?? ''
-            if (ref) {
-              lyr.bindTooltip(String(ref), {
-                permanent: true, direction: 'center', className: 'forest-label',
-              })
-            }
-          },
-        }).addTo(map)
-        gridLayersRef.current.push(layer)
-      })
-      .catch(() => { /* BDL niedostępny */ })
+    const tileLayer = L.tileLayer(
+      '/.netlify/functions/bdl-compartments?z={z}&x={x}&y={y}',
+      { opacity: 0.8, minZoom: 12, maxZoom: 19, attribution: '© BDL Lasy Państwowe' },
+    )
+    tileLayer.addTo(map)
+    gridLayersRef.current.push(tileLayer)
   }, [showGrid])
 
   function pickSuggestion(place: NominatimPlace) {

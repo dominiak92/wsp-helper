@@ -12,11 +12,11 @@ const HEADERS = {
 // ArcGIS stretches the rendered image by ~3.2% relative to the requested BBOX.
 // These values are calibrated from 4 ground-truth points so the returned image
 // aligns with the Leaflet overlay. Regression: content_y = 1.032*requested_y - 217323
-const BBOX = { west: 1667564, south: 6853896, east: 1708753, north: 6891032 }
+const BBOX = { west: 1667564, south: 6850129, east: 1708753, north: 6888440 }
 
-// W: 41189m, H: 37136m → ratio 1.1091 → IMG_H = round(4096/1.1091) = 3694
+// W: 41189m, H: 38311m → ratio 1.0751 → IMG_H = round(4096/1.0751) = 3810
 const IMG_W = 4096
-const IMG_H = 3694
+const IMG_H = 3810
 
 // Moduł-level cache (działa dla warm-start Lambda)
 let _layerId = null

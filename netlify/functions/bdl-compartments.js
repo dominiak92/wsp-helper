@@ -1,6 +1,6 @@
-// Tile proxy dla BDL Mapa_podstawowa_BDL — warstwa Oddziały PGL LP
-// 1. Pobiera info o serwisie żeby znaleźć właściwy layer ID
-// 2. Proxuje kafelki PNG z /export (omija blokadę 403 po stronie klienta)
+// Pobiera jeden duży obraz PNG podziału powierzchniowego BDL dla rejonu OSPWL.
+// Używa /export w skali ~zoom 14 (gdzie warstwa Oddziałów jest widoczna).
+// imageOverlay zamiast kafelków → brak artefaktów przy zoomowaniu.
 
 const BASE = 'https://mapserver.bdl.lasy.gov.pl/ArcGIS/rest/services/Mapa_podstawowa_BDL/MapServer'
 const HEADERS = {
@@ -8,43 +8,30 @@ const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 }
 
-// Zamiana tile z/x/y → bbox w Web Mercator (EPSG:3857 / 102100)
-function tileBbox(z, x, y) {
-  const k = 20037508.3428
-  const size = (2 * k) / Math.pow(2, z)
-  return [
-    x * size - k,           // west
-    k - (y + 1) * size,     // south
-    (x + 1) * size - k,     // east
-    k - y * size,           // north
-  ].map(v => v.toFixed(4)).join(',')
-}
+// OSPWL w EPSG:3857 (Web Mercator)
+const BBOX = { west: 1667286, south: 6859282, east: 1708460, north: 6892384 }
 
-// Próbuje znaleźć layer ID dla "Oddziały" z metadanych serwisu BDL
+// Rozmiar obrazu utrzymujący aspect ratio i skalę ≈ 1:38 000 (zoom 14)
+// scale = (41174m / 4096px) * (96dpi / 0.0254) ≈ 38 000 — warstwa Oddziałów widoczna
+const IMG_W = 4096
+const IMG_H = 3300
+
+// Moduł-level cache (działa dla warm-start Lambda)
+let _layerId = null
+
 async function resolveLayerId() {
+  if (_layerId !== null) return _layerId
   try {
     const res = await fetch(`${BASE}?f=json`, { headers: HEADERS })
     if (!res.ok) return null
-    const info = await res.json()
-    const match = (info.layers ?? []).find(
-      l => typeof l.name === 'string' && l.name.toLowerCase().includes('oddzia'),
-    )
-    return match ? String(match.id) : null
-  } catch {
-    return null
-  }
+    const { layers = [] } = await res.json()
+    const found = layers.find(l => typeof l.name === 'string' && l.name.toLowerCase().includes('oddzia'))
+    _layerId = found ? String(found.id) : null
+  } catch { /* ignore */ }
+  return _layerId
 }
 
-export const handler = async (event) => {
-  const z = parseInt(event.queryStringParameters?.z ?? '12')
-  const x = parseInt(event.queryStringParameters?.x ?? '0')
-  const y = parseInt(event.queryStringParameters?.y ?? '0')
-
-  if ([z, x, y].some(isNaN)) {
-    return { statusCode: 400, body: 'Invalid tile coordinates' }
-  }
-
-  // Auto-wykryj warstwę Oddziały; fallback: pokaż warstwy 0-6 (cała hierarchia LP)
+export const handler = async () => {
   const layerId = await resolveLayerId()
   const layers = layerId ? `show:${layerId}` : 'show:0,1,2,3,4,5,6'
 
@@ -52,10 +39,10 @@ export const handler = async (event) => {
     dpi: '96',
     transparent: 'true',
     format: 'png8',
-    bbox: tileBbox(z, x, y),
+    bbox: `${BBOX.west},${BBOX.south},${BBOX.east},${BBOX.north}`,
     bboxSR: '102100',
     imageSR: '102100',
-    size: '256,256',
+    size: `${IMG_W},${IMG_H}`,
     layers,
     f: 'image',
   })

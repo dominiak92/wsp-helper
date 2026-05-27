@@ -135,6 +135,7 @@ export function FireMapPage() {
 
   const [mode, setMode] = useState<AppMode>('roads')
   const [showGrid, setShowGrid] = useState(false)
+  const [gridLoading, setGridLoading] = useState(false)
   const [userPos, setUserPos] = useState<L.LatLng | null>(null)
 
   const [query, setQuery] = useState('')
@@ -395,26 +396,26 @@ export function FireMapPage() {
     }
   }, [routeTo])
 
-  // ── Grid overlay (local GeoJSON — public/data/forest-grid.geojson) ────────
+  // ── Grid overlay — jeden obraz BDL imageOverlay dla całego OSPWL ──────────
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
-    if (!showGrid) {
-      gridLayersRef.current.forEach(l => map.removeLayer(l))
-      gridLayersRef.current = []
-      return
-    }
-
     gridLayersRef.current.forEach(l => map.removeLayer(l))
     gridLayersRef.current = []
 
-    const tileLayer = L.tileLayer(
-      '/.netlify/functions/bdl-compartments?z={z}&x={x}&y={y}',
-      { opacity: 0.8, minZoom: 12, maxZoom: 19, attribution: '© BDL Lasy Państwowe' },
+    if (!showGrid) return
+
+    setGridLoading(true)
+    const overlay = L.imageOverlay(
+      '/.netlify/functions/bdl-compartments',
+      [[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]],
+      { opacity: 0.8, attribution: '© BDL Lasy Państwowe' },
     )
-    tileLayer.addTo(map)
-    gridLayersRef.current.push(tileLayer)
+    overlay.on('load',  () => setGridLoading(false))
+    overlay.on('error', () => setGridLoading(false))
+    overlay.addTo(map)
+    gridLayersRef.current.push(overlay)
   }, [showGrid])
 
   function pickSuggestion(place: NominatimPlace) {
@@ -557,7 +558,9 @@ export function FireMapPage() {
               : 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200',
           )}
         >
-          <LayoutGrid className="w-4 h-4" />
+          {gridLoading
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <LayoutGrid className="w-4 h-4" />}
         </button>
       <div className="flex gap-2">
         <button

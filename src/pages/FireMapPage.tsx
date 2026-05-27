@@ -178,7 +178,7 @@ export function FireMapPage() {
     })
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map)
-    map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
+    map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, 15.52]], { padding: [20, 20] })
 
     map.on('dragstart', () => {
       if (followingRef.current) {

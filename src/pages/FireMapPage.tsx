@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Navigation2, Search, X, AlertCircle, Loader2, Truck } from 'lucide-react'
+import { Navigation2, Search, X, AlertCircle, Loader2, Truck, LocateFixed, LayoutGrid } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MAP_CENTER: [number, number] = [52.420, 15.210]
 const MAP_ZOOM = 12
-const MIN_SEARCH_ZOOM = 11
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
 
 const COUNTY = { south: 52.15, north: 52.62, west: 14.85, east: 15.50 }
+const OSPWL  = { south: 52.37, north: 52.52, west: 14.98, east: 15.35 }
 const STATION = L.latLng(52.43626, 15.18625)
 const NOMINATIM_VIEWBOX = `${COUNTY.west},${COUNTY.north},${COUNTY.east},${COUNTY.south}`
 
@@ -40,23 +40,20 @@ declare global {
 }
 
 type AppMode = 'roads' | 'navigate'
-type SearchState = 'idle' | 'loading' | 'found' | 'notfound' | 'error' | 'zoom'
+type SearchState = 'idle' | 'loading' | 'found' | 'notfound' | 'error'
 type NavState = 'idle' | 'routing' | 'routed' | 'error'
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
-function buildBbox(bounds: L.LatLngBounds): string {
-  const sw = bounds.getSouthWest()
-  const ne = bounds.getNorthEast()
-  const south = Math.max(sw.lat, COUNTY.south).toFixed(6)
-  const west  = Math.max(sw.lng, COUNTY.west).toFixed(6)
-  const north = Math.min(ne.lat, COUNTY.north).toFixed(6)
-  const east  = Math.min(ne.lng, COUNTY.east).toFixed(6)
-  return `${south},${west},${north},${east}`
-}
-
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function buildRoadRegex(q: string): string {
+  const e = escapeRegex(q)
+  const pre = /^[0-9]/.test(q) ? '(^|[^0-9])' : ''
+  const suf = /[0-9]$/.test(q) ? '([^0-9]|$)' : ''
+  return `${pre}${e}${suf}`
 }
 
 async function overpassFetch(ql: string): Promise<OsmWay[]> {
@@ -134,8 +131,10 @@ export function FireMapPage() {
   const routeLayerRef = useRef<L.Polyline | null>(null)
   const destMarkerRef = useRef<L.Marker | null>(null)
   const userPosRef = useRef<L.LatLng | null>(null)
+  const gridLayersRef = useRef<L.Layer[]>([])
 
   const [mode, setMode] = useState<AppMode>('roads')
+  const [showGrid, setShowGrid] = useState(false)
   const [userPos, setUserPos] = useState<L.LatLng | null>(null)
 
   const [query, setQuery] = useState('')
@@ -150,8 +149,11 @@ export function FireMapPage() {
   const [startMode, setStartMode] = useState<'gps' | 'station'>('gps')
   const startModeRef = useRef<'gps' | 'station'>('gps')
   const currentDestRef = useRef<{ latlng: L.LatLng; name: string } | null>(null)
+  const [following, setFollowing] = useState(false)
+  const followingRef = useRef(false)
 
   useEffect(() => { userPosRef.current = userPos }, [userPos])
+  useEffect(() => { followingRef.current = following }, [following])
   useEffect(() => {
     startModeRef.current = startMode
     // Re-route automatically when start point changes and destination is already set
@@ -173,6 +175,14 @@ export function FireMapPage() {
     })
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map)
+    map.fitBounds([[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
+
+    map.on('dragstart', () => {
+      if (followingRef.current) {
+        followingRef.current = false
+        setFollowing(false)
+      }
+    })
 
     // Dark-themed popup styles
     const style = document.createElement('style')
@@ -183,6 +193,9 @@ export function FireMapPage() {
       '.wsp-popup .leaflet-popup-tip{background:rgba(8,15,30,0.97)}',
       '.wsp-popup .leaflet-popup-content{margin:10px 14px}',
       '.wsp-popup .leaflet-popup-close-button{display:none!important}',
+      '.forest-label{background:transparent!important;border:none!important;box-shadow:none!important;',
+        'font-size:9px;font-weight:700;color:#4ade80;',
+        'text-shadow:0 0 3px #000,0 0 2px #000;white-space:nowrap}',
     ].join('')
     document.head.appendChild(style)
 
@@ -237,6 +250,7 @@ export function FireMapPage() {
         }).addTo(map)
       }
       setUserPos(e.latlng)
+      if (followingRef.current) map.setView(e.latlng, map.getZoom())
     }
 
     map.on('locationfound', onLocationFound)
@@ -276,15 +290,15 @@ export function FireMapPage() {
     const clean = nr.trim()
     if (!clean || !mapRef.current) return
     const map = mapRef.current
-    if (map.getZoom() < MIN_SEARCH_ZOOM) { setSearchState('zoom'); return }
 
     clearRoads()
     setSearchState('loading')
     setRoadsError('')
 
+    const ospwlBbox = `${OSPWL.south},${OSPWL.west},${OSPWL.north},${OSPWL.east}`
     const ql = [
       '[out:json][timeout:25];',
-      `way["name"~"${escapeRegex(clean)}",i](${buildBbox(map.getBounds())});`,
+      `way["name"~"${buildRoadRegex(clean)}",i](${ospwlBbox});`,
       'out geom;',
     ].join('')
 
@@ -381,6 +395,43 @@ export function FireMapPage() {
     }
   }, [routeTo])
 
+  // ── Grid overlay (local GeoJSON — public/data/forest-grid.geojson) ────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (!showGrid) {
+      gridLayersRef.current.forEach(l => map.removeLayer(l))
+      gridLayersRef.current = []
+      return
+    }
+
+    fetch('/.netlify/functions/bdl-compartments')
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
+      .then((data: GeoJSON.FeatureCollection) => {
+        if (!mapRef.current) return
+        gridLayersRef.current.forEach(l => map.removeLayer(l))
+        gridLayersRef.current = []
+
+        const layer = L.geoJSON(data, {
+          style: { color: '#4ade80', weight: 1.5, opacity: 0.8, dashArray: '6 5', fillOpacity: 0 },
+          onEachFeature(feature, lyr) {
+            const p = feature.properties ?? {}
+            const ref: string =
+              p.ODDZIAL ?? p.oddzial ?? p.NR_ODDZIALU ?? p.nr_oddzialu ??
+              p.OZNACZENIE ?? p.oznaczenie ?? p.ref ?? p.NR ?? p.nr ?? ''
+            if (ref) {
+              lyr.bindTooltip(String(ref), {
+                permanent: true, direction: 'center', className: 'forest-label',
+              })
+            }
+          },
+        }).addTo(map)
+        gridLayersRef.current.push(layer)
+      })
+      .catch(() => { /* BDL niedostępny */ })
+  }, [showGrid])
+
   function pickSuggestion(place: NominatimPlace) {
     routeTo(L.latLng(parseFloat(place.lat), parseFloat(place.lon)), place.display_name)
   }
@@ -469,12 +520,6 @@ export function FireMapPage() {
         </div>
 
         {/* Alerts — only negative states */}
-        {mode === 'roads' && searchState === 'zoom' && (
-          <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-amber-800/40 rounded-full px-4 py-2 text-[11px] text-amber-400 shadow-lg">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            Przybliż mapę przed wyszukiwaniem
-          </div>
-        )}
         {mode === 'roads' && searchState === 'notfound' && (
           <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-amber-800/40 rounded-full px-4 py-2 text-[11px] text-amber-400 shadow-lg">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -515,20 +560,55 @@ export function FireMapPage() {
         )}
       </div>
 
-      {/* GPS button */}
-      <button
-        onClick={centerOnMe}
-        disabled={!userPos}
-        title={userPos ? 'Wyśrodkuj na mojej pozycji' : 'Oczekiwanie na GPS…'}
-        className={cn(
-          'absolute bottom-5 right-3 z-[1000] w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
-          userPos
-            ? 'bg-brand-600 hover:bg-brand-500 text-white border-brand-500'
-            : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
-        )}
-      >
-        <Navigation2 className="w-4 h-4" />
-      </button>
+      {/* Grid + GPS + Follow buttons */}
+      <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">
+        <button
+          onClick={() => setShowGrid(v => !v)}
+          title={showGrid ? 'Ukryj podział powierzchniowy' : 'Pokaż podział powierzchniowy'}
+          className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            showGrid
+              ? 'bg-brand-600 text-white border-brand-500'
+              : 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200',
+          )}
+        >
+          <LayoutGrid className="w-4 h-4" />
+        </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            const next = !following
+            setFollowing(next)
+            if (next && userPos) mapRef.current?.setView(userPos, 15)
+          }}
+          disabled={!userPos}
+          title={following ? 'Wyłącz śledzenie pozycji' : 'Śledź moją pozycję'}
+          className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            following
+              ? 'bg-brand-600 text-white border-brand-500'
+              : userPos
+                ? 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200'
+                : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
+          )}
+        >
+          <LocateFixed className="w-4 h-4" />
+        </button>
+        <button
+          onClick={centerOnMe}
+          disabled={!userPos}
+          title={userPos ? 'Wyśrodkuj na mojej pozycji' : 'Oczekiwanie na GPS…'}
+          className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            userPos
+              ? 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200'
+              : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
+          )}
+        >
+          <Navigation2 className="w-4 h-4" />
+        </button>
+        </div>
+      </div>
 
       <div className="absolute bottom-2 left-2 z-[1000] text-[9px] text-slate-600/70 bg-surface-900/50 px-1.5 py-0.5 rounded-md">
         © OpenStreetMap · OSRM

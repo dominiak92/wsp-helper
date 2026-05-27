@@ -59,7 +59,7 @@ export const handler = async () => {
       statusCode: 200,
       headers: {
         'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=86400',
+        'Cache-Control': 'public, max-age=3600',
       },
       body: Buffer.from(buf).toString('base64'),
       isBase64Encoded: true,

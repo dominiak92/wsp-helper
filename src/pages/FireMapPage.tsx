@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Navigation2, Search, X, AlertCircle, Loader2, Truck, LocateFixed, LayoutGrid } from 'lucide-react'
+import { Navigation2, Search, X, AlertCircle, Loader2, Truck, LocateFixed, TreePine } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -408,7 +408,7 @@ export function FireMapPage() {
 
     setGridLoading(true)
     const overlay = L.imageOverlay(
-      '/.netlify/functions/bdl-compartments',
+      '/.netlify/functions/bdl-compartments?v=2',
       [[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]],
       { opacity: 0.8, attribution: '© BDL Lasy Państwowe' },
     )
@@ -434,10 +434,6 @@ export function FireMapPage() {
     setQuery('')
     setSearchState('idle')
     clearRoads()
-  }
-
-  function centerOnMe() {
-    if (userPos && mapRef.current) mapRef.current.setView(userPos, 14)
   }
 
   const isSearchBusy = searchState === 'loading' || suggestLoading || navState === 'routing'
@@ -560,9 +556,8 @@ export function FireMapPage() {
         >
           {gridLoading
             ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <LayoutGrid className="w-4 h-4" />}
+            : <TreePine className="w-4 h-4" />}
         </button>
-      <div className="flex gap-2">
         <button
           onClick={() => {
             const next = !following
@@ -582,24 +577,6 @@ export function FireMapPage() {
         >
           <LocateFixed className="w-4 h-4" />
         </button>
-        <button
-          onClick={centerOnMe}
-          disabled={!userPos}
-          title={userPos ? 'Wyśrodkuj na mojej pozycji' : 'Oczekiwanie na GPS…'}
-          className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
-            userPos
-              ? 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200'
-              : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
-          )}
-        >
-          <Navigation2 className="w-4 h-4" />
-        </button>
-        </div>
-      </div>
-
-      <div className="absolute bottom-2 left-2 z-[1000] text-[9px] text-slate-600/70 bg-surface-900/50 px-1.5 py-0.5 rounded-md">
-        © OpenStreetMap · OSRM
       </div>
     </div>
   )

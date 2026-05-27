@@ -13,7 +13,7 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
 
 const COUNTY = { south: 52.15, north: 52.62, west: 14.85, east: 15.50 }
-const OSPWL  = { south: 52.37, north: 52.52, west: 14.98, east: 15.35 }
+const OSPWL  = { south: 52.31, north: 52.52, west: 14.98, east: 15.35 }
 const STATION = L.latLng(52.43626, 15.18625)
 const NOMINATIM_VIEWBOX = `${COUNTY.west},${COUNTY.north},${COUNTY.east},${COUNTY.south}`
 

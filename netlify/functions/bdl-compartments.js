@@ -8,13 +8,16 @@ const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 }
 
-// OSPWL w EPSG:3857 (Web Mercator)
-const BBOX = { west: 1667286, south: 6859282, east: 1708460, north: 6892384 }
+// OSPWL w EPSG:3857 (Web Mercator) — odpowiada dokładnie granicom Leaflet overlay
+// [[52.31, 14.98], [52.52, 15.35]] przeliczone formułą sferycznego Mercatora (R=6378137)
+// x = R*λ_rad ; y = R*ln(tan(π/4 + φ/2))
+const BBOX = { west: 1667564, south: 6858940, east: 1708753, north: 6898510 }
 
 // Rozmiar obrazu utrzymujący aspect ratio i skalę ≈ 1:38 000 (zoom 14)
-// scale = (41174m / 4096px) * (96dpi / 0.0254) ≈ 38 000 — warstwa Oddziałów widoczna
+// W: 41189m, H: 39570m → ratio 1.041 → IMG_H = round(4096/1.041)
+// scale = (41189m / 4096px) * (96dpi / 0.0254) ≈ 38 000 — warstwa Oddziałów widoczna
 const IMG_W = 4096
-const IMG_H = 3300
+const IMG_H = 3934
 
 // Moduł-level cache (działa dla warm-start Lambda)
 let _layerId = null

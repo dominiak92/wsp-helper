@@ -137,6 +137,7 @@ export function FireMapPage() {
   const [showGrid, setShowGrid] = useState(false)
   const [gridLoading, setGridLoading] = useState(false)
   const [gridToast, setGridToast] = useState(false)
+  const [gpsToast, setGpsToast] = useState(false)
   const [userPos, setUserPos] = useState<L.LatLng | null>(null)
 
   const [query, setQuery] = useState('')
@@ -177,7 +178,7 @@ export function FireMapPage() {
     })
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map)
-    map.fitBounds([[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
+    map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
 
     map.on('dragstart', () => {
       if (followingRef.current) {
@@ -426,6 +427,13 @@ export function FireMapPage() {
     return () => clearTimeout(t)
   }, [showGrid])
 
+  useEffect(() => {
+    if (!following) return
+    setGpsToast(true)
+    const t = setTimeout(() => setGpsToast(false), 3000)
+    return () => clearTimeout(t)
+  }, [following])
+
   function pickSuggestion(place: NominatimPlace) {
     routeTo(L.latLng(parseFloat(place.lat), parseFloat(place.lon)), place.display_name)
   }
@@ -560,7 +568,20 @@ export function FireMapPage() {
         gridToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1',
       )}>
         <Milestone className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-        Podział powierzchniowy BDL
+        Granice oddziału
+      </div>
+
+      {/* GPS label toast */}
+      <div className={cn(
+        'absolute bottom-5 right-14 z-[1000]',
+        'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
+        'bg-surface-900/95 border border-slate-700/60 backdrop-blur-sm',
+        'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
+        'transition-all duration-300',
+        gpsToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
+      )}>
+        <LocateFixed className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+        Śledź moją pozycję
       </div>
 
       {/* Grid + GPS + Follow buttons */}

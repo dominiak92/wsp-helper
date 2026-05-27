@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Navigation2, Search, X, AlertCircle, Loader2, Truck, LocateFixed, TreePine } from 'lucide-react'
+import { Navigation2, Search, X, AlertCircle, Loader2, Truck, LocateFixed, Milestone } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -136,6 +136,7 @@ export function FireMapPage() {
   const [mode, setMode] = useState<AppMode>('roads')
   const [showGrid, setShowGrid] = useState(false)
   const [gridLoading, setGridLoading] = useState(false)
+  const [gridToast, setGridToast] = useState(false)
   const [userPos, setUserPos] = useState<L.LatLng | null>(null)
 
   const [query, setQuery] = useState('')
@@ -418,6 +419,13 @@ export function FireMapPage() {
     gridLayersRef.current.push(overlay)
   }, [showGrid]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!showGrid) return
+    setGridToast(true)
+    const t = setTimeout(() => setGridToast(false), 3000)
+    return () => clearTimeout(t)
+  }, [showGrid])
+
   function pickSuggestion(place: NominatimPlace) {
     routeTo(L.latLng(parseFloat(place.lat), parseFloat(place.lon)), place.display_name)
   }
@@ -542,6 +550,19 @@ export function FireMapPage() {
         )}
       </div>
 
+      {/* Grid label toast */}
+      <div className={cn(
+        'absolute bottom-[7.5rem] right-3 z-[1000]',
+        'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
+        'bg-surface-900/95 border border-slate-700/60 backdrop-blur-sm',
+        'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
+        'transition-all duration-300',
+        gridToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1',
+      )}>
+        <Milestone className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+        Podział powierzchniowy BDL
+      </div>
+
       {/* Grid + GPS + Follow buttons */}
       <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">
         <button
@@ -556,7 +577,7 @@ export function FireMapPage() {
         >
           {gridLoading
             ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <TreePine className="w-4 h-4" />}
+            : <Milestone className="w-4 h-4" />}
         </button>
         <button
           onClick={() => {

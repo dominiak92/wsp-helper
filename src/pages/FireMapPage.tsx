@@ -408,7 +408,7 @@ export function FireMapPage() {
 
     setGridLoading(true)
     const overlay = L.imageOverlay(
-      '/.netlify/functions/bdl-compartments?v=2',
+      '/.netlify/functions/bdl-compartments?v=3',
       [[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]],
       { opacity: 0.8, attribution: '© BDL Lasy Państwowe' },
     )

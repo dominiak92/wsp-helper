@@ -115,11 +115,15 @@ create policy "public write map_alerts"
 create table if not exists live_locations (
   user_login   text primary key,
   display_name text,
+  vehicle      text,
   lat          double precision not null,
   lng          double precision not null,
   expires_at   timestamptz not null,
   updated_at   timestamptz default now()
 );
+
+-- Gdy tabela już istnieje (migracja):
+alter table live_locations add column if not exists vehicle text;
 
 alter table live_locations enable row level security;
 

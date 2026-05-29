@@ -17,6 +17,9 @@ import {
   upsertLiveLocation, removeLiveLocation,
   type AlertPoint, type LiveLocation,
 } from '../lib/liveMap'
+import { supabase } from '../lib/supabase'
+import { CREW_VEHICLE_NAMES, findPersonVehicleId, parseShiftAssignment } from '../lib/crew'
+import { currentOrNextDutyDate } from '../lib/duty'
 
 const SHARE_MS = 30 * 60 * 1000
 const SHARE_KEY = 'wsp-share-until'
@@ -262,6 +265,8 @@ export function FireMapPage() {
   const [alertBusy, setAlertBusy] = useState(false)
   const [sharingUntil, setSharingUntil] = useState<number | null>(null)
   const [shareRemainingMin, setShareRemainingMin] = useState<number | null>(null)
+  const [myVehicle, setMyVehicle] = useState<string | null>(null)
+  const myVehicleRef = useRef<string | null>(null)
 
   const myLogin = user?.login ?? null
   const myName = user?.displayName ?? user?.login ?? null
@@ -303,6 +308,26 @@ export function FireMapPage() {
     else localStorage.removeItem(SHARE_KEY)
   }, [])
 
+  useEffect(() => { myVehicleRef.current = myVehicle }, [myVehicle])
+
+  // Ustal pojazd zalogowanego użytkownika z aktualnej/najbliższej obsady
+  useEffect(() => {
+    if (!myLogin) return
+    const dutyDate = currentOrNextDutyDate()
+    Promise.all([
+      supabase.from('personnel').select('id, login'),
+      supabase.from('duty_assignments').select('assignment_json')
+        .eq('duty_date', dutyDate).order('created_at', { ascending: false }).limit(1),
+    ]).then(([{ data: pData }, { data: aData }]) => {
+      const person = (pData ?? []).find(r => r.login === myLogin)
+      const assignment = parseShiftAssignment(aData?.[0]?.assignment_json)
+      if (person && assignment) {
+        const vid = findPersonVehicleId(assignment, person.id)
+        setMyVehicle(vid ? CREW_VEHICLE_NAMES[vid] : null)
+      }
+    }).catch(() => { /* ignore */ })
+  }, [myLogin])
+
   const startShare = useCallback(() => {
     if (!myLogin) return
     const until = Date.now() + SHARE_MS
@@ -328,7 +353,7 @@ export function FireMapPage() {
       const pos = userPosRef.current
       if (pos) {
         try {
-          await upsertLiveLocation(myLogin, myName, pos.lat, pos.lng, new Date(until).toISOString())
+          await upsertLiveLocation(myLogin, myName, myVehicleRef.current, pos.lat, pos.lng, new Date(until).toISOString())
         } catch { /* ignore */ }
       }
     }
@@ -644,10 +669,12 @@ export function FireMapPage() {
         iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -8],
       })
       const name = `${loc.displayName || loc.userLogin}${self ? ' (Ty)' : ''}`
+      const label = loc.vehicle ? `${name} · 🚒 ${loc.vehicle}` : name
       const m = L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1500 })
-      m.bindTooltip(name, { permanent: true, direction: 'right', offset: [12, 0], className: 'feature-label' })
+      m.bindTooltip(label, { permanent: true, direction: 'right', offset: [12, 0], className: 'feature-label' })
       m.bindPopup(
         `<div style="font-family:sans-serif"><strong style="color:#f1f5f9">${name}</strong>` +
+        (loc.vehicle ? `<div style="font-size:11px;color:#cbd5e1;margin-top:3px">🚒 ${loc.vehicle}</div>` : '') +
         '<div style="font-size:10px;color:#94a3b8;margin-top:2px">udostępnia lokalizację</div></div>',
         { className: 'wsp-popup' },
       )

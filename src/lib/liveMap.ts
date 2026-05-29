@@ -16,6 +16,7 @@ export interface AlertPoint {
 export interface LiveLocation {
   userLogin: string
   displayName: string | null
+  vehicle: string | null
   lat: number
   lng: number
   expiresAt: string
@@ -33,6 +34,7 @@ interface AlertRow {
 interface LiveRow {
   user_login: string
   display_name: string | null
+  vehicle: string | null
   lat: number
   lng: number
   expires_at: string
@@ -87,12 +89,13 @@ export async function deleteAlert(id: string): Promise<void> {
 export async function fetchLiveLocations(): Promise<LiveLocation[]> {
   const { data, error } = await supabase
     .from('live_locations')
-    .select('user_login, display_name, lat, lng, expires_at')
+    .select('user_login, display_name, vehicle, lat, lng, expires_at')
     .gt('expires_at', nowIso())
   if (error) throw error
   return ((data ?? []) as LiveRow[]).map(r => ({
     userLogin: r.user_login,
     displayName: r.display_name,
+    vehicle: r.vehicle,
     lat: r.lat,
     lng: r.lng,
     expiresAt: r.expires_at,
@@ -102,6 +105,7 @@ export async function fetchLiveLocations(): Promise<LiveLocation[]> {
 export async function upsertLiveLocation(
   userLogin: string,
   displayName: string | null,
+  vehicle: string | null,
   lat: number,
   lng: number,
   expiresAt: string,
@@ -109,6 +113,7 @@ export async function upsertLiveLocation(
   const { error } = await supabase.from('live_locations').upsert({
     user_login: userLogin,
     display_name: displayName,
+    vehicle,
     lat,
     lng,
     expires_at: expiresAt,

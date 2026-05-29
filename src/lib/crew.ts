@@ -288,6 +288,14 @@ export function resolveName(persons: Person[], id: string | null): string {
   return persons.find(p => p.id === id)?.name ?? '—'
 }
 
+// Pojazd, do którego przypisana jest dana osoba w tej obsadzie (lub null).
+export function findPersonVehicleId(a: ShiftAssignment, personId: string): CrewVehicleId | null {
+  const v = a.vehicles.find(v =>
+    v.commanderId === personId || v.driverId === personId || v.rescuerIds.includes(personId),
+  )
+  return v ? v.vehicleId : null
+}
+
 // ── Drag-and-drop helpers ─────────────────────────────────────────────────────
 // Slot key format:
 //   "v:{vehicleId}:commander"

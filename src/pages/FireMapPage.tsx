@@ -1169,21 +1169,21 @@ export function FireMapPage() {
   }, [showGrid])
 
   useEffect(() => {
-    if (!following) return
+    if (!following) { setGpsToast(false); return }
     setGpsToast(true)
     const t = setTimeout(() => setGpsToast(false), 3000)
     return () => clearTimeout(t)
   }, [following])
 
   useEffect(() => {
-    if (!isSharing) return
+    if (!isSharing) { setShareToast(false); return }
     setShareToast(true)
     const t = setTimeout(() => setShareToast(false), 3000)
     return () => clearTimeout(t)
   }, [isSharing])
 
   useEffect(() => {
-    if (baseMap !== 'sat') return
+    if (baseMap !== 'sat') { setBaseToast(false); return }
     setBaseToast(true)
     const t = setTimeout(() => setBaseToast(false), 3000)
     return () => clearTimeout(t)

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
-  Navigation2, Search, X, AlertCircle, Loader2, Truck, LocateFixed, Milestone,
+  Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -48,9 +48,7 @@ declare global {
   }
 }
 
-type AppMode = 'roads' | 'navigate'
-type SearchState = 'idle' | 'loading' | 'found' | 'notfound' | 'error'
-type NavState = 'idle' | 'routing' | 'routed' | 'error'
+type SearchState = 'idle' | 'loading' | 'notfound' | 'error'
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
@@ -161,10 +159,10 @@ function featurePopupHtml(f: MapFeature, lat: number, lng: number): string {
     `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${KIND_META[f.kind].emoji} ${f.label}</div>`,
     desc, warn,
     '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,116,139,0.2)">',
-    `<button onclick="window.__wspNavigateTo(${lat},${lng},decodeURIComponent('${safeName}'),'station')" ` +
+    `<button onclick="window.__wspNavigateTo(${lat},${lng},decodeURIComponent('${safeName}'),'gps')" ` +
       'style="width:100%;padding:6px 10px;border-radius:12px;border:none;font-size:11px;font-family:sans-serif;' +
       'font-weight:500;cursor:pointer;text-align:left;background:rgba(59,130,246,0.2);color:#93c5fd">' +
-      'Nawiguj ze strażnicy</button>',
+      'Nawiguj z mojej pozycji</button>',
     '</div></div>',
   ].join('')
 }
@@ -197,7 +195,6 @@ export function FireMapPage() {
   const addKindRef = useRef<FeatureKind | null>(null)
   const drawingRoadRef = useRef<[number, number][]>([])
 
-  const [mode, setMode] = useState<AppMode>('roads')
   const [showGrid, setShowGrid] = useState(true)
 
   // Obiekty mapy ppoż.
@@ -213,22 +210,13 @@ export function FireMapPage() {
   const [featuresBusy, setFeaturesBusy] = useState(false)
   const [featuresError, setFeaturesError] = useState('')
   const [gridLoading, setGridLoading] = useState(false)
-  const [gridToast, setGridToast] = useState(false)
   const [gpsToast, setGpsToast] = useState(false)
   const [userPos, setUserPos] = useState<L.LatLng | null>(null)
 
   const [query, setQuery] = useState('')
   const [searchState, setSearchState] = useState<SearchState>('idle')
-  const [roadsError, setRoadsError] = useState('')
-
-  const [destQuery, setDestQuery] = useState('')
-  const [suggestions, setSuggestions] = useState<NominatimPlace[]>([])
-  const [suggestLoading, setSuggestLoading] = useState(false)
-  const [navState, setNavState] = useState<NavState>('idle')
-  const [navError, setNavError] = useState('')
-  const [startMode, setStartMode] = useState<'gps' | 'station'>('gps')
+  const [searchError, setSearchError] = useState('')
   const startModeRef = useRef<'gps' | 'station'>('gps')
-  const currentDestRef = useRef<{ latlng: L.LatLng; name: string } | null>(null)
   const [following, setFollowing] = useState(false)
   const followingRef = useRef(false)
 
@@ -244,13 +232,6 @@ export function FireMapPage() {
       .then(setFeatures)
       .catch(err => setFeaturesError(err instanceof Error ? err.message : 'Błąd wczytywania obiektów'))
   }, [])
-  useEffect(() => {
-    startModeRef.current = startMode
-    // Re-route automatically when start point changes and destination is already set
-    if (currentDestRef.current && navState === 'routed') {
-      routeTo(currentDestRef.current.latlng, currentDestRef.current.name)
-    }
-  }, [startMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Map init ──────────────────────────────────────────────────────────────
 
@@ -589,81 +570,18 @@ export function FireMapPage() {
     })
   }
 
-  // ── Roads: search ─────────────────────────────────────────────────────────
-
-  const search = useCallback(async (nr: string) => {
-    const clean = nr.trim()
-    if (!clean || !mapRef.current) return
-    const map = mapRef.current
-
-    clearRoads()
-    setSearchState('loading')
-    setRoadsError('')
-
-    const ospwlBbox = `${OSPWL.south},${OSPWL.west},${OSPWL.north},${OSPWL.east}`
-    const ql = [
-      '[out:json][timeout:25];',
-      `way["name"~"${buildRoadRegex(clean)}",i](${ospwlBbox});`,
-      'out geom;',
-    ].join('')
-
-    try {
-      const ways = await overpassFetch(ql)
-      if (ways.length === 0) { setSearchState('notfound'); return }
-
-      const fitBounds = L.latLngBounds([])
-      ways.forEach(way => {
-        const pts = way.geometry.map(p => L.latLng(p.lat, p.lon))
-        if (pts.length < 2) return
-        const name = way.tags?.name ?? ''
-        const line = L.polyline(pts, { color: '#f97316', weight: 5, opacity: 0.95 }).addTo(map)
-        if (name) line.bindPopup(`<strong style="font-size:13px">${name}</strong>`, { maxWidth: 220 })
-        roadLayersRef.current.push(line)
-        pts.forEach(p => fitBounds.extend(p))
-      })
-
-      map.fitBounds(fitBounds, { padding: [40, 40], maxZoom: 16 })
-      setSearchState('found')
-      setTimeout(() => setSearchState('idle'), 3000)
-    } catch (err) {
-      setRoadsError(err instanceof Error ? err.message : 'Błąd połączenia')
-      setSearchState('error')
-    }
-  }, [])
-
-  // ── Navigate: geocode + route ─────────────────────────────────────────────
-
-  const searchPlace = useCallback(async () => {
-    const q = destQuery.trim()
-    if (!q) return
-    setSuggestLoading(true)
-    setSuggestions([])
-    try {
-      setSuggestions(await geocode(q))
-    } catch {
-      /* ignore */
-    } finally {
-      setSuggestLoading(false)
-    }
-  }, [destQuery])
+  // ── Nawigacja do celu (punkt / miejsce) ────────────────────────────────────
 
   const routeTo = useCallback(async (dest: L.LatLng, name: string) => {
     const map = mapRef.current
     if (!map) return
-
-    const from = startModeRef.current === 'station' ? STATION : userPosRef.current
-    if (!from) {
-      setNavError('Brak sygnału GPS — poczekaj na lokalizację')
-      setNavState('error')
-      return
-    }
+    const from = startModeRef.current === 'station' ? STATION : (userPosRef.current ?? STATION)
 
     clearRoute()
-    setSuggestions([])
-    setDestQuery(name.split(',')[0])
-    currentDestRef.current = { latlng: dest, name }
-    setNavState('routing')
-    setNavError('')
+    clearRoads()
+    setQuery(name.split(',')[0])
+    setSearchState('loading')
+    setSearchError('')
 
     const icon = L.divIcon({
       html: `<div style="width:13px;height:13px;background:#ef4444;border:2.5px solid #fff;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.55)"></div>`,
@@ -674,22 +592,121 @@ export function FireMapPage() {
       .addTo(map)
 
     try {
-      const pts = await fetchRoute(from!, dest)
+      const pts = await fetchRoute(from, dest)
       routeLayerRef.current = L.polyline(pts, { color: '#3b82f6', weight: 4, opacity: 0.85 }).addTo(map)
       map.fitBounds(routeLayerRef.current.getBounds(), { padding: [50, 70], maxZoom: 16 })
-      setNavState('routed')
+      setSearchState('idle')
     } catch (err) {
-      setNavError(err instanceof Error ? err.message : 'Błąd wyznaczania trasy')
-      setNavState('error')
+      // brak trasy — pokaż chociaż sam cel
+      map.setView(dest, 15)
+      setSearchError(err instanceof Error ? err.message : 'Nie udało się wyznaczyć trasy')
+      setSearchState('error')
     }
   }, [])
+
+  // Nawigacja do drogi: podświetl linię + trasa z mojej pozycji do najbliższego jej punktu
+  const navigateToRoad = useCallback(async (lines: L.LatLng[][], name: string) => {
+    const map = mapRef.current
+    if (!map) return
+    const from = startModeRef.current === 'station' ? STATION : (userPosRef.current ?? STATION)
+
+    clearRoads()
+    clearRoute()
+    setQuery(name)
+    setSearchState('loading')
+    setSearchError('')
+
+    const bounds = L.latLngBounds([])
+    let nearest: L.LatLng | null = null
+    let best = Infinity
+    lines.forEach(pts => {
+      if (pts.length < 2) return
+      const line = L.polyline(pts, { color: '#f97316', weight: 6, opacity: 0.95 }).addTo(map)
+      line.bindPopup(`<strong style="font-size:13px">${name}</strong>`, { maxWidth: 220 })
+      roadLayersRef.current.push(line)
+      pts.forEach(p => {
+        bounds.extend(p)
+        const d = from.distanceTo(p)
+        if (d < best) { best = d; nearest = p }
+      })
+    })
+
+    if (!nearest) { setSearchState('notfound'); return }
+    const target = nearest
+
+    try {
+      const route = await fetchRoute(from, target)
+      routeLayerRef.current = L.polyline(route, { color: '#3b82f6', weight: 4, opacity: 0.85 }).addTo(map)
+      route.forEach(p => bounds.extend(p))
+      map.fitBounds(bounds, { padding: [50, 70], maxZoom: 16 })
+      setSearchState('idle')
+    } catch {
+      // trasa nie wyszła — pokaż chociaż podświetloną drogę
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 })
+      setSearchState('idle')
+    }
+  }, [])
+
+  // ── Jedna wyszukiwarka: Twoje dane → mapa (drogi) → miejsce (geokoder) ──────
+
+  const runSearch = useCallback(async () => {
+    const q = query.trim()
+    if (!q || !mapRef.current) return
+    startModeRef.current = 'gps'
+    setSearchState('loading')
+    setSearchError('')
+    const ql = q.toLowerCase()
+
+    // 1) Twoje wprowadzone obiekty — priorytet
+    const matches = features.filter(f => f.label.toLowerCase().includes(ql))
+    const pick = matches.find(f => f.label.toLowerCase() === ql) ?? matches[0]
+    if (pick) {
+      if (pick.geometry.type === 'point') {
+        routeTo(L.latLng(pick.geometry.lat, pick.geometry.lng), pick.label)
+      } else {
+        navigateToRoad([pick.geometry.points.map(([a, b]) => L.latLng(a, b))], pick.label)
+      }
+      return
+    }
+
+    // 2) Drogi / dojazdy dostępne na mapie (OSM)
+    try {
+      const ospwlBbox = `${OSPWL.south},${OSPWL.west},${OSPWL.north},${OSPWL.east}`
+      const roadQl = [
+        '[out:json][timeout:25];',
+        `way["name"~"${buildRoadRegex(q)}",i](${ospwlBbox});`,
+        'out geom;',
+      ].join('')
+      const ways = await overpassFetch(roadQl)
+      if (ways.length > 0) {
+        const lines = ways
+          .map(w => w.geometry.map(p => L.latLng(p.lat, p.lon)))
+          .filter(pts => pts.length >= 2)
+        navigateToRoad(lines, ways.find(w => w.tags?.name)?.tags?.name ?? q)
+        return
+      }
+    } catch {
+      /* przejdź do geokodera */
+    }
+
+    // 3) Miejsce z mapy (geokoder)
+    try {
+      const places = await geocode(q)
+      if (places.length > 0) {
+        routeTo(L.latLng(parseFloat(places[0].lat), parseFloat(places[0].lon)), places[0].display_name)
+        return
+      }
+      setSearchState('notfound')
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Błąd połączenia')
+      setSearchState('error')
+    }
+  }, [query, features, routeTo, navigateToRoad])
 
   // Bridge: Leaflet popup buttons → React (must be after routeTo declaration)
   useEffect(() => {
     window.__wspNavigateTo = (lat, lng, name, sm) => {
       startModeRef.current = sm
-      setStartMode(sm)
-      setMode('navigate')
       routeTo(L.latLng(lat, lng), name)
       mapRef.current?.closePopup()
     }
@@ -723,38 +740,21 @@ export function FireMapPage() {
   }, [showGrid])
 
   useEffect(() => {
-    if (!showGrid) return
-    setGridToast(true)
-    const t = setTimeout(() => setGridToast(false), 3000)
-    return () => clearTimeout(t)
-  }, [showGrid])
-
-  useEffect(() => {
     if (!following) return
     setGpsToast(true)
     const t = setTimeout(() => setGpsToast(false), 3000)
     return () => clearTimeout(t)
   }, [following])
 
-  function pickSuggestion(place: NominatimPlace) {
-    routeTo(L.latLng(parseFloat(place.lat), parseFloat(place.lon)), place.display_name)
-  }
-
-  function clearNav() {
-    clearRoute()
-    setDestQuery('')
-    setSuggestions([])
-    setNavState('idle')
-    setNavError('')
-  }
-
-  function clearRoadsSearch() {
+  function clearSearch() {
     setQuery('')
     setSearchState('idle')
+    setSearchError('')
     clearRoads()
+    clearRoute()
   }
 
-  const isSearchBusy = searchState === 'loading' || suggestLoading || navState === 'routing'
+  const isSearchBusy = searchState === 'loading'
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -765,9 +765,9 @@ export function FireMapPage() {
       {/* Controls */}
       <div className="absolute top-3 left-3 right-3 md:right-auto md:w-80 z-[1000] flex flex-col gap-2">
 
-        {/* Search pill */}
+        {/* Jedna wyszukiwarka — Enter prowadzi z mojej pozycji */}
         <form
-          onSubmit={e => { e.preventDefault(); mode === 'roads' ? search(query) : searchPlace() }}
+          onSubmit={e => { e.preventDefault(); runSearch() }}
           className="flex items-center gap-2 px-4 py-3 bg-white/95 backdrop-blur-md rounded-full shadow-2xl"
         >
           <button type="submit" className="shrink-0 text-slate-400 hover:text-brand-600 transition-colors">
@@ -777,18 +777,15 @@ export function FireMapPage() {
           </button>
           <input
             type="text"
-            value={mode === 'roads' ? query : destQuery}
-            onChange={e => {
-              if (mode === 'roads') setQuery(e.target.value)
-              else { setDestQuery(e.target.value); setSuggestions([]) }
-            }}
-            placeholder={mode === 'roads' ? 'Numer lub nazwa dojazdu' : 'Cel (jezioro, budynek…)'}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Szukaj: woda, droga, jednostka, miejsce…"
             className="flex-1 min-w-0 bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none"
           />
-          {(mode === 'roads' ? query : (destQuery || navState !== 'idle')) && (
+          {query && (
             <button
               type="button"
-              onClick={mode === 'roads' ? clearRoadsSearch : clearNav}
+              onClick={clearSearch}
               className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
             >
               <X className="w-4 h-4" />
@@ -796,66 +793,17 @@ export function FireMapPage() {
           )}
         </form>
 
-        {/* Mode + start chips — single row */}
-        <div className="flex gap-1.5 px-1">
-          {([
-            { label: 'Dojazdy poż.', icon: Search, active: mode === 'roads', onClick: () => setMode('roads') },
-            { label: 'Z pozycji', icon: Navigation2, active: mode === 'navigate' && startMode === 'gps', onClick: () => { setMode('navigate'); setStartMode('gps') } },
-            { label: 'Ze strażnicy', icon: Truck, active: mode === 'navigate' && startMode === 'station', onClick: () => { setMode('navigate'); setStartMode('station') } },
-          ]).map(({ label, icon: Icon, active, onClick }) => (
-            <button
-              key={label}
-              onClick={onClick}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1 py-1.5 rounded-full text-[11px] font-medium transition-all shadow-md',
-                active
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-surface-900/90 text-slate-400 border border-slate-700/40 backdrop-blur-sm hover:text-slate-200',
-              )}
-            >
-              <Icon className="w-3 h-3 shrink-0" />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Alerts — only negative states */}
-        {mode === 'roads' && searchState === 'notfound' && (
+        {/* Alerts — tylko stany negatywne */}
+        {searchState === 'notfound' && (
           <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-amber-800/40 rounded-full px-4 py-2 text-[11px] text-amber-400 shadow-lg">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             Nie znaleziono „{query}"
           </div>
         )}
-        {mode === 'roads' && searchState === 'error' && (
+        {searchState === 'error' && (
           <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            {roadsError}
-          </div>
-        )}
-        {mode === 'navigate' && navState === 'error' && (
-          <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            {navError}
-          </div>
-        )}
-
-        {/* Navigate suggestions */}
-        {mode === 'navigate' && suggestions.length > 0 && (
-          <div className="bg-surface-950/97 backdrop-blur-md border border-slate-700/30 rounded-2xl overflow-hidden shadow-2xl">
-            {suggestions.map((p, i) => (
-              <button
-                key={i}
-                onClick={() => pickSuggestion(p)}
-                className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-slate-800/40 last:border-0"
-              >
-                <div className="text-[12px] font-medium text-slate-100 truncate">
-                  {p.display_name.split(',')[0]}
-                </div>
-                <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                  {p.display_name.split(',').slice(1, 3).join(',').trim()}
-                </div>
-              </button>
-            ))}
+            {searchError}
           </div>
         )}
 
@@ -980,19 +928,6 @@ export function FireMapPage() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Grid label toast */}
-      <div className={cn(
-        'absolute bottom-[5.5rem] right-14 z-[1000]',
-        'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
-        'bg-surface-900/95 border border-slate-700/60 backdrop-blur-sm',
-        'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
-        'transition-all duration-300',
-        gridToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
-      )}>
-        <Milestone className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-        Granice oddziału
       </div>
 
       {/* GPS label toast */}

@@ -66,3 +66,28 @@ create policy "public read duty_assignments"
 
 create policy "public write duty_assignments"
   on duty_assignments for all using (true);
+
+-- Tabela: obiekty mapy ppoż. (punkty wody, drogi poż., jednostki, ważne punkty)
+-- geometry: punkt {"type":"point","lat":..,"lng":..} lub linia {"type":"line","points":[[lat,lng],..]}
+create table if not exists map_features (
+  id          uuid primary key default gen_random_uuid(),
+  kind        text not null,                 -- 'water' | 'unit' | 'poi' | 'road'
+  label       text not null,
+  description text,
+  geometry    jsonb not null,
+  confirmed   boolean not null default false, -- false = pozycja przybliżona (do dociągnięcia)
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+create trigger map_features_updated_at
+  before update on map_features
+  for each row execute function update_updated_at();
+
+alter table map_features enable row level security;
+
+create policy "public read map_features"
+  on map_features for select using (true);
+
+create policy "public write map_features"
+  on map_features for all using (true);

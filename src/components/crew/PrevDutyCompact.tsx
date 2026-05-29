@@ -1,13 +1,14 @@
 import type { Person, ShiftAssignment } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, withGuests } from '../../lib/crew'
 
 export function PrevDutyCompact({ assignment, personnel }: {
   assignment: ShiftAssignment | null
   personnel: Person[]
 }) {
+  const persons = withGuests(personnel, assignment)
   function n(id: string | null) {
     if (!id) return null
-    return personnel.find(p => p.id === id)?.name ?? null
+    return persons.find(p => p.id === id)?.name ?? null
   }
 
   if (!assignment) {

@@ -6,7 +6,7 @@ import {
 } from '../../lib/duty'
 import { cn } from '../../lib/utils'
 import type { Person, RoleType, AbsenceType, ShiftAssignment } from '../../lib/crew'
-import { parseShiftAssignment } from '../../lib/crew'
+import { parseShiftAssignment, guestsAsPersons } from '../../lib/crew'
 import {
   ABSENCE_LABELS, ABSENCE_ORDER, CREW_VEHICLE_NAMES, VEHICLE_SEATS,
   generateCrew, removePersonFromAssignment, isPersonInAssignment,
@@ -138,14 +138,16 @@ export function MobileCrewPage() {
       const loaded = parseShiftAssignment(row?.assignment_json)
       if (loaded) assignmentIdRef.current = row!.id
       if (pData && pData.length > 0) {
-        setPersonnel(pData.map(r => ({
+        const roster: Person[] = pData.map(r => ({
           id: r.id,
           name: r.name,
           roles: r.roles as RoleType[],
           preferredVehicleId: r.preferred_vehicle_id ?? undefined,
           absence: (loaded?.absenceMap?.[r.id] ?? null) as AbsenceType | null,
           login: r.login ?? null,
-        })))
+        }))
+        // Include ad-hoc guests stored in the assignment so their names resolve
+        setPersonnel([...roster, ...guestsAsPersons(loaded)])
       }
       if (loaded) setAssignment(loaded)
       setLoading(false)
@@ -190,7 +192,12 @@ export function MobileCrewPage() {
   }
 
   function handleGenerate() {
-    applyAssignment(generateCrew(personnel))
+    const base = generateCrew(personnel)
+    // Re-attach any ad-hoc guests to the reserve so they survive regeneration.
+    const guests = assignment?.guests ?? []
+    applyAssignment(guests.length
+      ? { ...base, guests, unassignedIds: [...base.unassignedIds, ...guests.map(g => g.id)] }
+      : base)
   }
 
   function updateAbsence(personId: string, absence: AbsenceType | null) {

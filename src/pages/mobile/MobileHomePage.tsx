@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons } from '../../lib/crew'
 import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
@@ -280,7 +280,7 @@ export function MobileHomePage() {
       const aRow = aData?.[0]
       const loadedAssignment = parseShiftAssignment(aRow?.assignment_json)
       if (pData) {
-        setPersonnel(pData.map(row => ({
+        const roster: Person[] = pData.map(row => ({
           id: row.id,
           name: row.name,
           roles: row.roles as RoleType[],
@@ -288,7 +288,9 @@ export function MobileHomePage() {
           // Use date-specific absence from absenceMap; ignore global personnel.absence
           absence: (loadedAssignment?.absenceMap?.[row.id] ?? null) as AbsenceType | null,
           login: row.login ?? null,
-        })))
+        }))
+        // Include ad-hoc guests stored in the assignment so their names resolve
+        setPersonnel([...roster, ...guestsAsPersons(loadedAssignment)])
       }
       if (loadedAssignment) setAssignment(loadedAssignment)
 

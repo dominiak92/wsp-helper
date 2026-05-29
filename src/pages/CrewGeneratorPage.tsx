@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { RefreshCw, Zap, Users, Plus, ArrowLeft, ArrowRight, Save, Check, History } from 'lucide-react'
+import { RefreshCw, Zap, Users, Plus, ArrowLeft, ArrowRight, Save, Check, History, X, UserPlus } from 'lucide-react'
 import { previousDutyDate, nextDutyDate, formatDateShort, MONTHS_GEN } from '../lib/duty'
 import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ABSENCE_LABELS, ABSENCE_ORDER, ROLE_SORT_ORDER,
   DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, isPersonInAssignment, removePersonFromAssignment,
-  parseShiftAssignment,
+  parseShiftAssignment, withGuests,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
 import { PersonnelRow, AddPersonForm } from '../components/crew/PersonnelPanel'
@@ -48,6 +48,8 @@ export function CrewGeneratorPage() {
 
   const [showPersonnel, setShowPersonnel] = useState(false)
   const [addingPerson, setAddingPerson] = useState(false)
+  const [guestName, setGuestName] = useState('')
+  const [addingGuest, setAddingGuest] = useState(false)
   const [dragSource, setDragSource] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
@@ -225,7 +227,35 @@ export function CrewGeneratorPage() {
   }
 
   function handleGenerate() {
-    applyAssignment(generateCrew(personnel))
+    const base = generateCrew(personnel)
+    // Auto-generation works off the roster only — re-attach any ad-hoc guests
+    // to the reserve so they are not lost when regenerating.
+    const guests = assignment?.guests ?? []
+    applyAssignment(guests.length
+      ? { ...base, guests, unassignedIds: [...base.unassignedIds, ...guests.map(g => g.id)] }
+      : base)
+  }
+
+  function addGuest() {
+    const name = guestName.trim()
+    if (!name || !assignment) return
+    const id = `guest_${crypto.randomUUID()}`
+    applyAssignment({
+      ...assignment,
+      guests: [...(assignment.guests ?? []), { id, name }],
+      unassignedIds: [...assignment.unassignedIds, id],
+    })
+    setGuestName('')
+    setAddingGuest(false)
+  }
+
+  function removeGuest(id: string) {
+    if (!assignment) return
+    const cleared = removePersonFromAssignment(assignment, id)
+    applyAssignment({
+      ...cleared,
+      guests: (cleared.guests ?? []).filter(g => g.id !== id),
+    })
   }
 
   function deletePerson(id: string) {
@@ -320,6 +350,10 @@ export function CrewGeneratorPage() {
 
   const absentCount = personnel.filter(p => p.absence).length
   const availableCount = personnel.length - absentCount
+
+  // Roster + ad-hoc guests — used for all name resolution on the board.
+  const persons = withGuests(personnel, assignment)
+  const guestIds = new Set((assignment?.guests ?? []).map(g => g.id))
 
 
   return (
@@ -501,7 +535,7 @@ export function CrewGeneratorPage() {
                   <SpecialRoleCard
                     title="Dowódca zmiany"
                     personId={assignment.shiftCommanderId}
-                    persons={personnel}
+                    persons={persons}
                     colorClass="text-brand-400"
                     borderClass="border-brand-900"
                     slotKey="special:shift-commander"
@@ -514,7 +548,7 @@ export function CrewGeneratorPage() {
                           key={id}
                           title="Dyżurny"
                           personId={id}
-                          persons={personnel}
+                          persons={persons}
                           colorClass="text-amber-400"
                           borderClass="border-amber-900"
                           slotKey={`special:duty-officer:${idx}`}
@@ -526,7 +560,7 @@ export function CrewGeneratorPage() {
                         <SpecialRoleCard
                           title="Dyżurny"
                           personId={null}
-                          persons={personnel}
+                          persons={persons}
                           colorClass="text-amber-400"
                           borderClass="border-amber-900"
                           slotKey="special:duty-officer:0"
@@ -580,7 +614,7 @@ export function CrewGeneratorPage() {
                       commanderId={v.commanderId}
                       driverId={v.driverId}
                       rescuerIds={v.rescuerIds}
-                      persons={personnel}
+                      persons={persons}
                       dnd={dnd}
                     />
                   ))}
@@ -591,9 +625,40 @@ export function CrewGeneratorPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Rezerwa drop zone — always visible */}
                   <div>
-                      <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold mb-3">
-                        Rezerwa ({assignment.unassignedIds.length})
-                      </p>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold">
+                          Rezerwa ({assignment.unassignedIds.length})
+                        </p>
+                        <button
+                          onClick={() => setAddingGuest(v => !v)}
+                          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white transition-colors"
+                          title="Dodaj osobę spoza składu (tylko na ten dzień)"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" /> Gość
+                        </button>
+                      </div>
+                      {addingGuest && (
+                        <div className="flex items-center gap-2 mb-3">
+                          <input
+                            autoFocus
+                            value={guestName}
+                            onChange={e => setGuestName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') addGuest()
+                              if (e.key === 'Escape') { setAddingGuest(false); setGuestName('') }
+                            }}
+                            placeholder="Imię i nazwisko gościa…"
+                            className="flex-1 text-sm px-3 py-1.5 rounded-lg bg-surface-900 border border-slate-700 text-white placeholder:text-slate-600 focus:border-brand-600 focus:outline-none"
+                          />
+                          <button
+                            onClick={addGuest}
+                            disabled={!guestName.trim()}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-brand-700 hover:bg-brand-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Dodaj
+                          </button>
+                        </div>
+                      )}
                       <div
                         className={cn(
                           'flex flex-wrap gap-2 min-h-[3rem] p-2 rounded-lg border border-dashed transition-colors',
@@ -621,7 +686,9 @@ export function CrewGeneratorPage() {
                           }
                         }}
                       >
-                        {assignment.unassignedIds.map(id => (
+                        {assignment.unassignedIds.map(id => {
+                          const isGuest = guestIds.has(id)
+                          return (
                           <span
                             key={id}
                             draggable
@@ -629,17 +696,30 @@ export function CrewGeneratorPage() {
                             onDragEnd={handleDragEnd}
                             onClick={e => { e.stopPropagation(); handleTap(`unassigned:${id}`, true) }}
                             className={cn(
-                              'text-sm px-3 py-1.5 rounded-lg bg-surface-800 border text-slate-400',
+                              'text-sm px-3 py-1.5 rounded-lg bg-surface-800 border text-slate-400 inline-flex items-center gap-1.5',
                               'cursor-grab active:cursor-grabbing select-none transition-opacity',
                               dragSource === `unassigned:${id}` && 'opacity-30',
                               selectedSlot === `unassigned:${id}`
                                 ? 'border-brand-600 ring-1 ring-brand-400 text-brand-200'
-                                : 'border-slate-700',
+                                : isGuest ? 'border-amber-700/60' : 'border-slate-700',
                             )}
                           >
-                            {resolveName(personnel, id)}
+                            {resolveName(persons, id)}
+                            {isGuest && (
+                              <>
+                                <span className="text-[9px] uppercase tracking-wide text-amber-500 font-semibold">gość</span>
+                                <button
+                                  onClick={e => { e.stopPropagation(); removeGuest(id) }}
+                                  title="Usuń gościa"
+                                  className="text-slate-600 hover:text-red-400 transition-colors"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
                           </span>
-                        ))}
+                          )
+                        })}
                         {assignment.unassignedIds.length === 0 && (
                           <span className="text-xs text-slate-700 italic self-center px-1">
                             Upuść / przenieś tutaj aby usunąć z obsady
@@ -680,7 +760,7 @@ export function CrewGeneratorPage() {
         return (
           <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 bg-brand-950/95 backdrop-blur border-t border-brand-800/60 px-4 py-3 shadow-2xl">
             <p className="text-sm text-brand-100 min-w-0 truncate">
-              <span className="font-semibold">{resolveName(personnel, pid)}</span>
+              <span className="font-semibold">{resolveName(persons, pid)}</span>
               <span className="text-brand-400 ml-1.5">— wybierz docelowy slot</span>
             </p>
             <button

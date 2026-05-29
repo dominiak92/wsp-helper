@@ -48,15 +48,21 @@ export interface Person {
   preferredVehicleId?: string
   absence: AbsenceType | null
   login?: string | null
+  isGuest?: boolean // ad-hoc person from another shift, stored only in the assignment
 }
 
-export const CREW_VEHICLE_IDS = ['gba', 'gcba532', 'gcba1060'] as const
+export const CREW_VEHICLE_IDS = ['gba', 'gcba532', 'gcba1060', 'gcba850'] as const
 export type CrewVehicleId = (typeof CREW_VEHICLE_IDS)[number]
+
+// Vehicles the auto-generator staffs. The airport truck (GCBA 8/50, brama 4,
+// kryptonim 35) is staffed manually only — "jeżeli potrzeba".
+export const AUTO_CREW_VEHICLE_IDS: CrewVehicleId[] = ['gba', 'gcba532', 'gcba1060']
 
 export const VEHICLE_SEATS: Record<CrewVehicleId, number> = {
   gba: 4,
   gcba532: 3,
   gcba1060: 3,
+  gcba850: 3,
 }
 
 // Extra rescuer slots shown below the divider — not counted in official capacity
@@ -64,12 +70,14 @@ export const VEHICLE_EXTRA_RESCUERS: Record<CrewVehicleId, number> = {
   gba: 2,
   gcba532: 0,
   gcba1060: 0,
+  gcba850: 0,
 }
 
 export const CREW_VEHICLE_NAMES: Record<CrewVehicleId, string> = {
   gba: 'GBA 2,5/16',
   gcba532: 'GCBA 5/32',
   gcba1060: 'GCBA 10/60',
+  gcba850: 'GCBA 8/50',
 }
 
 export const DEFAULT_PERSONNEL: Person[] = [
@@ -96,13 +104,34 @@ export interface VehicleAssignment {
   rescuerIds: string[]
 }
 
+// Ad-hoc person added by hand for a single duty date (e.g. someone from another
+// shift). Lives inside the assignment JSON only — never written to the personnel
+// table — so it is visible to everyone for that day but not part of the roster.
+export interface Guest {
+  id: string
+  name: string
+}
+
 export interface ShiftAssignment {
   shiftCommanderId: string | null
   dutyOfficerIds: string[]
   vehicles: VehicleAssignment[]
   unassignedIds: string[]
   absenceMap?: Record<string, AbsenceType> // personId → absence type for this specific duty date
+  guests?: Guest[]
   dinner?: boolean | null
+}
+
+// Build Person entries for an assignment's guests so name lookups / DnD work
+// uniformly. Guests have no roles and never count as absent.
+export function guestsAsPersons(a: ShiftAssignment | null | undefined): Person[] {
+  return (a?.guests ?? []).map(g => ({ id: g.id, name: g.name, roles: [], absence: null, isGuest: true }))
+}
+
+// Merge an assignment's guests into a roster list for display.
+export function withGuests(personnel: Person[], a: ShiftAssignment | null | undefined): Person[] {
+  const guests = guestsAsPersons(a)
+  return guests.length ? [...personnel, ...guests] : personnel
 }
 
 export function parseShiftAssignment(json: unknown): ShiftAssignment | null {
@@ -111,7 +140,16 @@ export function parseShiftAssignment(json: unknown): ShiftAssignment | null {
   if (!Array.isArray(obj.dutyOfficerIds)) return null
   if (!Array.isArray(obj.vehicles)) return null
   if (!Array.isArray(obj.unassignedIds)) return null
-  const a = obj as unknown as ShiftAssignment
+  let a = obj as unknown as ShiftAssignment
+  // Normalise vehicles: ensure every crew vehicle has a slot, in canonical order.
+  // This makes vehicles added later (e.g. the airport GCBA 8/50) appear on
+  // assignments that were saved before the vehicle existed.
+  const known = CREW_VEHICLE_IDS.map(id =>
+    a.vehicles.find(v => v.vehicleId === id) ??
+    { vehicleId: id, commanderId: null, driverId: null, rescuerIds: [] }
+  )
+  const extras = a.vehicles.filter(v => !CREW_VEHICLE_IDS.includes(v.vehicleId))
+  a = { ...a, vehicles: [...known, ...extras] }
   // Normalise: if shiftCommanderId is missing, derive from first vehicle commander
   if (!a.shiftCommanderId) {
     const fallback = a.vehicles.find(v => v.commanderId)?.commanderId ?? null
@@ -130,7 +168,8 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function generateCrew(personnel: Person[]): ShiftAssignment {
-  const available = personnel.filter(p => !p.absence)
+  // Auto-generation works off the roster only; ad-hoc guests are never assigned.
+  const available = personnel.filter(p => !p.absence && !p.isGuest)
   const assigned = new Set<string>()
 
   function pool(role: RoleType): Person[] {
@@ -149,9 +188,9 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
     shiftPool.find(p => !p.roles.includes('VEHICLE_COMMANDER')) ?? shiftPool[0] ?? null
   if (shiftCommander) assigned.add(shiftCommander.id)
 
-  // 3. Drivers — prefer person's preferredVehicleId
+  // 3. Drivers — prefer person's preferredVehicleId (auto-staffed vehicles only)
   const driverMap: Partial<Record<CrewVehicleId, string>> = {}
-  for (const vid of CREW_VEHICLE_IDS) {
+  for (const vid of AUTO_CREW_VEHICLE_IDS) {
     const driverPool = pool('DRIVER_RESCUER')
     const preferred = driverPool.find(p => p.preferredVehicleId === vid)
     const driver = preferred ?? driverPool[0] ?? null
@@ -175,17 +214,21 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
   const fillPool = shuffle(available.filter(p => !assigned.has(p.id) && !isPureDuty(p)))
 
   const vehicles: VehicleAssignment[] = CREW_VEHICLE_IDS.map(vid => {
-    const cap = VEHICLE_SEATS[vid]
     const commanderId = cmdMap[vid] ?? null
     const driverId = driverMap[vid] ?? null
-    let seats = 2 // always reserve commander + driver seats
     const rescuerIds: string[] = []
-    while (seats < cap) {
-      const r = fillPool.find(p => !assigned.has(p.id))
-      if (!r) break
-      assigned.add(r.id)
-      rescuerIds.push(r.id)
-      seats++
+    // Only auto-fill seats for the primary vehicles; the airport truck is
+    // left empty and staffed manually when needed.
+    if (AUTO_CREW_VEHICLE_IDS.includes(vid)) {
+      const cap = VEHICLE_SEATS[vid]
+      let seats = 2 // always reserve commander + driver seats
+      while (seats < cap) {
+        const r = fillPool.find(p => !assigned.has(p.id))
+        if (!r) break
+        assigned.add(r.id)
+        rescuerIds.push(r.id)
+        seats++
+      }
     }
     return { vehicleId: vid, commanderId, driverId, rescuerIds }
   })

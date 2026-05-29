@@ -4,7 +4,7 @@ import {
   currentOrNextDutyDate, todayYmdKey, formatDateShort, formatDateLong,
 } from '../lib/duty'
 import type { Person, ShiftAssignment, VehicleAssignment, RoleType, AbsenceType } from '../lib/crew'
-import { parseShiftAssignment } from '../lib/crew'
+import { parseShiftAssignment, guestsAsPersons } from '../lib/crew'
 
 // ── Static bay definitions ────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ const BAYS: Bay[] = [
   { number: 1, brand: 'IVECO',      model: 'GBA 2,5/16',  callsign: '21', vehicleId: 'gba',      type: 'gba'  },
   { number: 2, brand: 'SCANIA',     model: 'GCBA 5/32',   callsign: '25', vehicleId: 'gcba532',  type: 'gcba' },
   { number: 3, brand: 'SCANIA',     model: 'GCBA 10/60',  callsign: '26', vehicleId: 'gcba1060', type: 'gcba' },
-  { number: 4, brand: 'SCANIA',     model: 'GCBA 8/50',   callsign: '35', vehicleId: null,       type: 'gcba', note: 'Lotniskowy' },
+  { number: 4, brand: 'SCANIA',     model: 'GCBA 8/50',   callsign: '35', vehicleId: 'gcba850',  type: 'gcba', note: 'Lotniskowy' },
   { number: 5, brand: 'Mitsubishi', model: 'GLBM 0.3',    callsign: '20', vehicleId: null,       type: 'glbm' },
 ]
 
@@ -155,17 +155,19 @@ export function GaragePage() {
         .order('created_at', { ascending: false })
         .limit(1),
     ]).then(([{ data: pData }, { data: aData }]) => {
+      const parsed = parseShiftAssignment(aData?.[0]?.assignment_json)
       if (pData) {
-        setPersonnel(pData.map(row => ({
+        const roster: Person[] = pData.map(row => ({
           id: row.id,
           name: row.name,
           roles: row.roles as RoleType[],
           preferredVehicleId: row.preferred_vehicle_id ?? undefined,
           absence: row.absence as AbsenceType | null,
           login: row.login ?? null,
-        })))
+        }))
+        // Include ad-hoc guests stored in the assignment so their names resolve
+        setPersonnel([...roster, ...guestsAsPersons(parsed)])
       }
-      const parsed = parseShiftAssignment(aData?.[0]?.assignment_json)
       if (parsed) setAssignment(parsed)
       setLoading(false)
     })

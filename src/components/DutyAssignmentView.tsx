@@ -1,5 +1,5 @@
 import type { Person, ShiftAssignment } from '../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, resolveName } from '../lib/crew'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, resolveName, withGuests } from '../lib/crew'
 import { cn } from '../lib/utils'
 
 interface Props {
@@ -31,13 +31,16 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
     .filter(p => p.absence)
     .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))
 
+  // Roster + ad-hoc guests, for name resolution
+  const persons = withGuests(personnel, assignment)
+
   return (
     <div className="px-3 sm:px-4 pb-6 pt-3 space-y-3">
       {/* Special roles */}
       <Card label="Role specjalne" labelColor="text-slate-400">
-        <Row label="Dowódca zmiany" value={resolveName(personnel,assignment.shiftCommanderId)} valueColor="text-brand-300" />
+        <Row label="Dowódca zmiany" value={resolveName(persons,assignment.shiftCommanderId)} valueColor="text-brand-300" />
         {assignment.dutyOfficerIds.map(id => (
-          <Row key={id} label="Dyżurny" value={resolveName(personnel,id)} valueColor="text-amber-300" />
+          <Row key={id} label="Dyżurny" value={resolveName(persons,id)} valueColor="text-amber-300" />
         ))}
       </Card>
 
@@ -53,7 +56,7 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
           return (
             <Card key={v.vehicleId} label={vehicleName} labelColor="text-emerald-400">
               {rows.map((r, i) => (
-                <Row key={i} label={r.label} value={resolveName(personnel,r.id)} />
+                <Row key={i} label={r.label} value={resolveName(persons,r.id)} />
               ))}
             </Card>
           )
@@ -66,7 +69,7 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
           <div className="flex flex-wrap gap-2 px-3 py-3">
             {assignment.unassignedIds.map(id => (
               <span key={id} className="text-sm text-slate-300 bg-surface-900 rounded-lg px-3 py-1.5 border border-slate-700">
-                {resolveName(personnel,id)}
+                {resolveName(persons,id)}
               </span>
             ))}
           </div>

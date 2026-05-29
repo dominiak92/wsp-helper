@@ -198,7 +198,7 @@ export function FireMapPage() {
   const drawingRoadRef = useRef<[number, number][]>([])
 
   const [mode, setMode] = useState<AppMode>('roads')
-  const [showGrid, setShowGrid] = useState(false)
+  const [showGrid, setShowGrid] = useState(true)
 
   // Obiekty mapy ppoż.
   const [features, setFeatures] = useState<MapFeature[]>([])
@@ -1053,6 +1053,35 @@ export function FireMapPage() {
               </button>
             )
           })}
+
+          {/* Nakładki */}
+          <div className="mt-1 pt-1.5 border-t border-slate-700/40">
+            <button
+              onClick={() => setShowGrid(v => !v)}
+              className={cn(
+                'w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-[12px] transition-colors',
+                showGrid ? 'bg-surface-900/80 text-slate-100' : 'text-slate-500 hover:bg-surface-900/50',
+              )}
+            >
+              {gridLoading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400 shrink-0" />
+                : <Milestone className={cn('w-3.5 h-3.5 shrink-0', showGrid ? 'text-brand-400' : 'text-slate-500')} />}
+              <span className="flex-1 text-left">Granice oddziału</span>
+              <span
+                className={cn(
+                  'w-8 h-4 rounded-full relative transition-colors shrink-0',
+                  showGrid ? 'bg-brand-600' : 'bg-slate-700',
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all',
+                    showGrid ? 'left-[18px]' : 'left-0.5',
+                  )}
+                />
+              </span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -1083,20 +1112,6 @@ export function FireMapPage() {
           )}
         >
           <Layers className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => setShowGrid(v => !v)}
-          title={showGrid ? 'Ukryj podział powierzchniowy' : 'Pokaż podział powierzchniowy'}
-          className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
-            showGrid
-              ? 'bg-brand-600 text-white border-brand-500'
-              : 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200',
-          )}
-        >
-          {gridLoading
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <Milestone className="w-4 h-4" />}
         </button>
         <button
           onClick={() => {

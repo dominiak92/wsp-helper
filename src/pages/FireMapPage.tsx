@@ -30,7 +30,7 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
 
 const COUNTY = { south: 52.15, north: 52.62, west: 14.85, east: 15.50 }
-const OSPWL  = { south: 52.27558, north: 52.48582, west: 14.98, east: 15.35 }
+const OSPWL  = { south: 52.27558, north: 52.48582, west: 14.98, east: 15.52 }
 const STATION = L.latLng(52.43626, 15.18625)
 const NOMINATIM_VIEWBOX = `${COUNTY.west},${COUNTY.north},${COUNTY.east},${COUNTY.south}`
 
@@ -350,7 +350,7 @@ export function FireMapPage() {
     })
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map)
-    map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, 15.52]], { padding: [20, 20] })
+    map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
 
     featureLayerRef.current = L.layerGroup().addTo(map)
     draftLayerRef.current = L.layerGroup().addTo(map)
@@ -953,7 +953,7 @@ export function FireMapPage() {
 
     setGridLoading(true)
     const overlay = L.imageOverlay(
-      '/.netlify/functions/bdl-compartments?v=4',
+      '/.netlify/functions/bdl-compartments?v=5',
       [[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]],
       { opacity: 0.8, attribution: '© BDL Lasy Państwowe' },
     )

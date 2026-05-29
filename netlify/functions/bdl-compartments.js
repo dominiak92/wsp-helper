@@ -8,15 +8,20 @@ const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 }
 
-// OSPWL overlay: [[52.31, 14.98], [52.52, 15.35]]
+// OSPWL overlay: [[52.31, 14.98], [52.52, 15.52]]
 // ArcGIS stretches the rendered image by ~3.2% relative to the requested BBOX.
 // These values are calibrated from 4 ground-truth points so the returned image
 // aligns with the Leaflet overlay. Regression: content_y = 1.032*requested_y - 217323
-const BBOX = { west: 1667564, south: 6850129, east: 1708753, north: 6888440 }
+// Oś X (długość) mapuje się wprost: east = merc(15.52) = 1727679 (rozszerzono z
+// 15.35, by objąć Jezioro Paklicko Małe k. Wysokiej, 52.37472, 15.45708). Oś Y
+// (kalibracja) bez zmian.
+const BBOX = { west: 1667564, south: 6850129, east: 1727679, north: 6888440 }
 
-// W: 41189m, H: 38311m → ratio 1.0751 → IMG_H = round(4096/1.0751) = 3810
+// W: 60115m, H: 38311m → ratio 1.5691 → IMG_H = round(4096/1.5691) = 2610
+// (limit usługi to 4096 px; rozdzielczość ~14,7 m/px, skala ~1:55k — oddziały
+//  widoczne, bo warstwa znika dopiero powyżej 1:170k)
 const IMG_W = 4096
-const IMG_H = 3810
+const IMG_H = 2610
 
 // Moduł-level cache (działa dla warm-start Lambda)
 let _layerId = null

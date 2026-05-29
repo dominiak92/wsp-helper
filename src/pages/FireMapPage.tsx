@@ -1208,7 +1208,7 @@ export function FireMapPage() {
         {/* Jedna wyszukiwarka — Enter prowadzi z mojej pozycji */}
         <form
           onSubmit={e => { e.preventDefault(); runSearch() }}
-          className="flex items-center gap-2 px-4 py-3 bg-white/95 backdrop-blur-md rounded-full shadow-2xl"
+          className="flex items-center gap-2 px-4 py-3 bg-white rounded-full shadow-2xl"
         >
           <button type="submit" className="shrink-0 text-slate-400 hover:text-brand-600 transition-colors">
             {isSearchBusy
@@ -1235,13 +1235,13 @@ export function FireMapPage() {
 
         {/* Alerts — tylko stany negatywne */}
         {searchState === 'notfound' && (
-          <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-amber-800/40 rounded-full px-4 py-2 text-[11px] text-amber-400 shadow-lg">
+          <div className="flex items-center gap-2 bg-surface-950 border border-amber-800/40 rounded-full px-4 py-2 text-[11px] text-amber-400 shadow-lg">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             Nie znaleziono „{query}"
           </div>
         )}
         {searchState === 'error' && (
-          <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
+          <div className="flex items-center gap-2 bg-surface-950 border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             {searchError}
           </div>
@@ -1249,7 +1249,7 @@ export function FireMapPage() {
 
         {/* Wybór oddziału — gdy numer pasuje do kilku */}
         {compartmentChoices && (
-          <div className="bg-surface-950/97 backdrop-blur-md border border-indigo-700/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-1.5">
+          <div className="bg-surface-950 border border-indigo-700/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-1.5">
             <div className="flex items-center justify-between px-1">
               <span className="text-[11px] font-semibold text-slate-200">
                 Kilka oddziałów „{compartmentChoices[0].label.replace('Oddział ', '')}" — wybierz
@@ -1280,7 +1280,7 @@ export function FireMapPage() {
 
         {/* Podpowiedź: stawianie alarmu */}
         {placingAlert && (
-          <div className="flex items-center justify-between gap-2 bg-red-950/80 backdrop-blur-sm border border-red-700/50 rounded-full px-4 py-2 text-[11px] text-red-200 shadow-lg">
+          <div className="flex items-center justify-between gap-2 bg-red-950 border border-red-700/50 rounded-full px-4 py-2 text-[11px] text-red-200 shadow-lg">
             <span className="flex items-center gap-2">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               Kliknij miejsce na mapie — punkt zobaczą wszyscy
@@ -1293,7 +1293,7 @@ export function FireMapPage() {
 
         {/* Formularz alarmu */}
         {alertDraft && (
-          <div className="bg-surface-950/97 backdrop-blur-md border border-red-700/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
+          <div className="bg-surface-950 border border-red-700/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-red-300">
               <AlertTriangle className="w-4 h-4" /> Nowy punkt
             </div>
@@ -1330,7 +1330,7 @@ export function FireMapPage() {
 
         {/* Błąd obiektów mapy */}
         {featuresError && (
-          <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
+          <div className="flex items-center gap-2 bg-surface-950 border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             {featuresError}
           </div>
@@ -1338,7 +1338,7 @@ export function FireMapPage() {
 
         {/* Tryb edycji: pasek dodawania obiektów */}
         {isAdmin && editMode && !editing && (
-          <div className="bg-surface-950/97 backdrop-blur-md border border-brand-700/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-2">
+          <div className="bg-surface-950 border border-brand-700/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-2">
             <div className="text-[11px] text-slate-400 px-1">
               {addKind === 'road'
                 ? 'Klikaj na mapie, by dodać punkty drogi'
@@ -1397,7 +1397,7 @@ export function FireMapPage() {
 
         {/* Tryb edycji: formularz obiektu */}
         {isAdmin && editing && (
-          <div className="bg-surface-950/97 backdrop-blur-md border border-brand-700/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
+          <div className="bg-surface-950 border border-brand-700/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-100">
               <span>{KIND_META[editing.kind].emoji}</span>
               {editing.id ? 'Edytuj' : 'Nowy'}: {KIND_META[editing.kind].label}
@@ -1455,7 +1455,7 @@ export function FireMapPage() {
       <div className={cn(
         'absolute bottom-5 right-14 z-[1000]',
         'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
-        'bg-surface-900/95 border border-slate-700/60 backdrop-blur-sm',
+        'bg-surface-900 border border-slate-700/60',
         'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
         'transition-all duration-300',
         gpsToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
@@ -1470,7 +1470,7 @@ export function FireMapPage() {
         className={cn(
           'absolute right-14 z-[1000]',
           'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
-          'bg-surface-900/95 border border-slate-700/60 backdrop-blur-sm',
+          'bg-surface-900 border border-slate-700/60',
           'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
           'transition-all duration-300',
           shareToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
@@ -1486,7 +1486,7 @@ export function FireMapPage() {
         className={cn(
           'absolute right-14 z-[1000]',
           'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
-          'bg-surface-900/95 border border-slate-700/60 backdrop-blur-sm',
+          'bg-surface-900 border border-slate-700/60',
           'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
           'transition-all duration-300',
           baseToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
@@ -1498,7 +1498,7 @@ export function FireMapPage() {
 
       {/* Filtr obiektów mapy */}
       {filterOpen && (
-        <div className="absolute bottom-5 right-16 z-[1001] w-52 bg-surface-950/97 backdrop-blur-md border border-slate-700/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-1">
+        <div className="absolute bottom-5 right-16 z-[1001] w-52 bg-surface-950 border border-slate-700/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-1">
           <div className="flex items-center justify-between px-1 pb-1">
             <span className="text-[11px] font-semibold text-slate-300">Pokaż na mapie</span>
             <button
@@ -1582,7 +1582,7 @@ export function FireMapPage() {
             'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
             baseMap === 'sat'
               ? 'bg-brand-600 text-white border-brand-500'
-              : 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200',
+              : 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200',
           )}
         >
           {baseMap === 'sat' ? <MapIcon className="w-4 h-4" /> : <Globe2 className="w-4 h-4" />}
@@ -1594,7 +1594,7 @@ export function FireMapPage() {
             'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
             placingAlert
               ? 'bg-red-600 text-white border-red-500'
-              : 'bg-surface-900/90 text-red-400 border-slate-700/60 backdrop-blur-sm hover:text-red-300',
+              : 'bg-surface-900 text-red-400 border-slate-700/60 hover:text-red-300',
           )}
         >
           <AlertTriangle className="w-4 h-4" />
@@ -1608,8 +1608,8 @@ export function FireMapPage() {
             isSharing
               ? 'bg-emerald-600 text-white border-emerald-500'
               : myLogin
-                ? 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200'
-                : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
+                ? 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200'
+                : 'bg-surface-900 text-slate-600 border-slate-700/60 cursor-not-allowed',
           )}
         >
           <SatelliteDish className="w-4 h-4" />
@@ -1627,7 +1627,7 @@ export function FireMapPage() {
               'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
               editMode
                 ? 'bg-amber-600 text-white border-amber-500'
-                : 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200',
+                : 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200',
             )}
           >
             <Pencil className="w-4 h-4" />
@@ -1640,7 +1640,7 @@ export function FireMapPage() {
             'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
             filterOpen
               ? 'bg-brand-600 text-white border-brand-500'
-              : 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200',
+              : 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200',
           )}
         >
           <Layers className="w-4 h-4" />
@@ -1658,8 +1658,8 @@ export function FireMapPage() {
             following
               ? 'bg-brand-600 text-white border-brand-500'
               : userPos
-                ? 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200'
-                : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
+                ? 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200'
+                : 'bg-surface-900 text-slate-600 border-slate-700/60 cursor-not-allowed',
           )}
         >
           <LocateFixed className="w-4 h-4" />

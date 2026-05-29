@@ -126,6 +126,28 @@ async function reverseGeocode(latlng: L.LatLng): Promise<{ name: string; subtitl
   return { name, subtitle }
 }
 
+// Najbliższa miejscowość (punkt orientacyjny) dla danego punktu
+async function nearestLocality(latlng: L.LatLng): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat.toFixed(6)}&lon=${latlng.lng.toFixed(6)}&format=json&accept-language=pl&zoom=12`,
+      { headers: { 'User-Agent': 'WSP-Helper/1.0' } },
+    )
+    if (!res.ok) return ''
+    const d = await res.json()
+    return d.address?.village || d.address?.hamlet || d.address?.town
+      || d.address?.city || d.address?.municipality || d.name || ''
+  } catch {
+    return ''
+  }
+}
+
+function ringsCentroid(rings: L.LatLng[][]): L.LatLng {
+  let lat = 0, lng = 0, n = 0
+  rings.forEach(r => r.forEach(p => { lat += p.lat; lng += p.lng; n++ }))
+  return n ? L.latLng(lat / n, lng / n) : L.latLng(0, 0)
+}
+
 async function fetchRoute(from: L.LatLng, to: L.LatLng): Promise<L.LatLng[]> {
   const url =
     `${OSRM_URL}/${from.lng.toFixed(6)},${from.lat.toFixed(6)};` +
@@ -209,6 +231,15 @@ interface EditDraft {
   geometry: FeatureGeometry
 }
 
+interface CompartmentCandidate {
+  label: string
+  range: string
+  rings: L.LatLng[][]
+  centroid: L.LatLng
+  hint: string   // najbliższa miejscowość (punkt orientacyjny)
+  distKm: number // odległość od strażnicy
+}
+
 export function FireMapPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
@@ -253,6 +284,7 @@ export function FireMapPage() {
   const [query, setQuery] = useState('')
   const [searchState, setSearchState] = useState<SearchState>('idle')
   const [searchError, setSearchError] = useState('')
+  const [compartmentChoices, setCompartmentChoices] = useState<CompartmentCandidate[] | null>(null)
   const startModeRef = useRef<'gps' | 'station'>('gps')
   const [following, setFollowing] = useState(false)
   const followingRef = useRef(false)
@@ -898,11 +930,56 @@ export function FireMapPage() {
     }
   }, [])
 
-  // Nawigacja do oddziału leśnego: podświetl granicę (delikatnie) + trasa do niej
-  const navigateToCompartment = useCallback(async (nr: string): Promise<boolean> => {
+  // Podświetl granicę wybranego oddziału (delikatnie) + trasa z mojej pozycji
+  const showCompartment = useCallback(async (c: { label: string; range: string; rings: L.LatLng[][] }) => {
     const map = mapRef.current
-    if (!map) return false
+    if (!map) return
+    const from = startModeRef.current === 'station' ? STATION : (userPosRef.current ?? STATION)
 
+    clearRoads()
+    clearRoute()
+    setCompartmentChoices(null)
+    setQuery(c.label)
+    setSearchState('loading')
+    setSearchError('')
+
+    const bounds = L.latLngBounds([])
+    let nearest: L.LatLng | null = null
+    let nd = Infinity
+    c.rings.forEach(r => {
+      const poly = L.polygon(r, {
+        color: '#818cf8', weight: 2.5, opacity: 0.95, fillColor: '#818cf8', fillOpacity: 0.12,
+      }).addTo(map)
+      poly.bindPopup(
+        `<strong style="font-size:13px">${c.label}</strong>` +
+        (c.range ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">leśnictwo ${c.range}</div>` : ''),
+        { className: 'wsp-popup', maxWidth: 200 },
+      )
+      roadLayersRef.current.push(poly)
+      r.forEach(p => {
+        bounds.extend(p)
+        const d = from.distanceTo(p)
+        if (d < nd) { nd = d; nearest = p }
+      })
+    })
+
+    if (!nearest) { setSearchState('idle'); return }
+    const target = nearest
+
+    try {
+      const route = await fetchRoute(from, target)
+      routeLayerRef.current = L.polyline(route, { color: '#3b82f6', weight: 4, opacity: 0.85 }).addTo(map)
+      route.forEach(p => bounds.extend(p))
+      map.fitBounds(bounds, { padding: [50, 70], maxZoom: 16 })
+    } catch {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 })
+    }
+    setSearchState('idle')
+  }, [])
+
+  // Wyszukiwanie oddziału po numerze. Gdy jeden — od razu pokaż; gdy kilka —
+  // pokaż wybór z punktem orientacyjnym (najbliższa miejscowość).
+  const navigateToCompartment = useCallback(async (nr: string): Promise<boolean> => {
     let json: { features?: { label: string; range: string; rings: number[][][] }[] }
     try {
       const res = await fetch(`/.netlify/functions/bdl-compartment?nr=${encodeURIComponent(nr)}`)
@@ -921,56 +998,26 @@ export function FireMapPage() {
       .filter(c => c.rings.some(r => r.length >= 3))
     if (candidates.length === 0) return false
 
-    const from = startModeRef.current === 'station' ? STATION : (userPosRef.current ?? STATION)
+    if (candidates.length === 1) {
+      await showCompartment(candidates[0])
+      return true
+    }
 
-    // wybierz oddział najbliższy punktowi startowemu (po najbliższym wierzchołku)
-    let best = candidates[0]
-    let bestD = Infinity
-    candidates.forEach(c => c.rings.forEach(r => r.forEach(p => {
-      const d = from.distanceTo(p)
-      if (d < bestD) { bestD = d; best = c }
-    })))
+    // Kilka oddziałów o tym numerze — wzbogać o miejscowość + dystans i pokaż wybór
+    setSearchState('loading')
+    const enriched: CompartmentCandidate[] = await Promise.all(candidates.map(async c => {
+      const centroid = ringsCentroid(c.rings)
+      const hint = await nearestLocality(centroid)
+      return { ...c, centroid, hint, distKm: STATION.distanceTo(centroid) / 1000 }
+    }))
+    enriched.sort((a, b) => a.distKm - b.distKm)
 
     clearRoads()
     clearRoute()
-    setQuery(best.label)
-    setSearchState('loading')
-    setSearchError('')
-
-    const bounds = L.latLngBounds([])
-    let nearest: L.LatLng | null = null
-    let nd = Infinity
-    best.rings.forEach(r => {
-      const poly = L.polygon(r, {
-        color: '#818cf8', weight: 2.5, opacity: 0.95, fillColor: '#818cf8', fillOpacity: 0.12,
-      }).addTo(map)
-      poly.bindPopup(
-        `<strong style="font-size:13px">${best.label}</strong>` +
-        (best.range ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">leśnictwo ${best.range}</div>` : ''),
-        { className: 'wsp-popup', maxWidth: 200 },
-      )
-      roadLayersRef.current.push(poly)
-      r.forEach(p => {
-        bounds.extend(p)
-        const d = from.distanceTo(p)
-        if (d < nd) { nd = d; nearest = p }
-      })
-    })
-
-    if (!nearest) { setSearchState('idle'); return true }
-    const target = nearest
-
-    try {
-      const route = await fetchRoute(from, target)
-      routeLayerRef.current = L.polyline(route, { color: '#3b82f6', weight: 4, opacity: 0.85 }).addTo(map)
-      route.forEach(p => bounds.extend(p))
-      map.fitBounds(bounds, { padding: [50, 70], maxZoom: 16 })
-    } catch {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 })
-    }
+    setCompartmentChoices(enriched)
     setSearchState('idle')
     return true
-  }, [])
+  }, [showCompartment])
 
   // ── Jedna wyszukiwarka: Twoje dane → oddział → mapa (drogi) → miejsce ───────
 
@@ -980,6 +1027,7 @@ export function FireMapPage() {
     startModeRef.current = 'gps'
     setSearchState('loading')
     setSearchError('')
+    setCompartmentChoices(null)
     const ql = q.toLowerCase()
 
     // 1) Twoje wprowadzone obiekty — priorytet
@@ -1083,6 +1131,7 @@ export function FireMapPage() {
     setQuery('')
     setSearchState('idle')
     setSearchError('')
+    setCompartmentChoices(null)
     clearRoads()
     clearRoute()
   }
@@ -1137,6 +1186,37 @@ export function FireMapPage() {
           <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             {searchError}
+          </div>
+        )}
+
+        {/* Wybór oddziału — gdy numer pasuje do kilku */}
+        {compartmentChoices && (
+          <div className="bg-surface-950/97 backdrop-blur-md border border-indigo-700/40 rounded-2xl p-2.5 shadow-2xl flex flex-col gap-1.5">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] font-semibold text-slate-200">
+                Kilka oddziałów „{compartmentChoices[0].label.replace('Oddział ', '')}" — wybierz
+              </span>
+              <button onClick={() => setCompartmentChoices(null)} className="text-slate-500 hover:text-slate-300">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {compartmentChoices.map((c, i) => (
+              <button
+                key={i}
+                onClick={() => showCompartment(c)}
+                className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-surface-900/80 hover:bg-surface-800 border border-slate-700/40 text-left transition-colors"
+              >
+                <span className="text-[14px]">🌲</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[12px] text-slate-100 truncate">
+                    k. {c.hint || 'nieznana okolica'}
+                  </span>
+                  <span className="block text-[10px] text-slate-500">
+                    leśnictwo {c.range || '—'} · ok. {c.distKm.toFixed(1)} km od strażnicy
+                  </span>
+                </span>
+              </button>
+            ))}
           </div>
         )}
 

@@ -44,7 +44,7 @@ export const KIND_META: Record<
   FeatureKind,
   { label: string; emoji: string; color: string; isLine: boolean }
 > = {
-  water: { label: 'Punkt czerpania wody', emoji: '🪣', color: '#38bdf8', isLine: false },
+  water: { label: 'Punkt czerpania wody', emoji: '💧', color: '#38bdf8', isLine: false },
   unit:  { label: 'Jednostka',            emoji: '🚒', color: '#ef4444', isLine: false },
   poi:   { label: 'Ważny punkt',          emoji: '📍', color: '#f59e0b', isLine: false },
   road:  { label: 'Droga pożarowa',       emoji: '🛤️', color: '#f97316', isLine: true },

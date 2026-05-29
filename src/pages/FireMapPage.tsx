@@ -3,7 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
-  Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, Share2,
+  Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
@@ -186,12 +186,12 @@ function alertPopupHtml(a: AlertPoint): string {
     `background:${bg};color:${color}">${label}</button>`
   return [
     '<div style="font-family:sans-serif;min-width:190px">',
-    `<div style="font-size:13px;font-weight:600;color:#fca5a5;line-height:1.35">⚠ ${a.description}</div>`,
+    `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${a.description}</div>`,
     `<div style="font-size:10px;color:#64748b;margin-top:3px">${meta}</div>`,
     '<div style="display:flex;flex-direction:column;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,116,139,0.2)">',
     btn(`window.__wspNavigateTo(${a.lat},${a.lng},decodeURIComponent('${safe}'),'gps')`,
       'Nawiguj z mojej pozycji', 'rgba(59,130,246,0.2)', '#93c5fd'),
-    btn(`window.__wspDeleteAlert('${a.id}')`, 'Usuń alarm', 'rgba(239,68,68,0.18)', '#fca5a5'),
+    btn(`window.__wspDeleteAlert('${a.id}')`, 'Usuń punkt', 'rgba(239,68,68,0.18)', '#fca5a5'),
     '</div></div>',
   ].join('')
 }
@@ -1036,7 +1036,7 @@ export function FireMapPage() {
           <div className="flex items-center justify-between gap-2 bg-red-950/80 backdrop-blur-sm border border-red-700/50 rounded-full px-4 py-2 text-[11px] text-red-200 shadow-lg">
             <span className="flex items-center gap-2">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              Kliknij miejsce alarmu na mapie
+              Kliknij miejsce na mapie — punkt zobaczą wszyscy
             </span>
             <button onClick={() => setPlacingAlert(false)} className="text-red-300 hover:text-white">
               <X className="w-3.5 h-3.5" />
@@ -1048,7 +1048,7 @@ export function FireMapPage() {
         {alertDraft && (
           <div className="bg-surface-950/97 backdrop-blur-md border border-red-700/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-red-300">
-              <AlertTriangle className="w-4 h-4" /> Nowy alarm
+              <AlertTriangle className="w-4 h-4" /> Nowy punkt
             </div>
             <input
               autoFocus
@@ -1056,11 +1056,11 @@ export function FireMapPage() {
               value={alertDraft.description}
               onChange={e => setAlertDraft(prev => prev ? { ...prev, description: e.target.value } : prev)}
               onKeyDown={e => { if (e.key === 'Enter') saveAlert() }}
-              placeholder="Opis (np. pożar lasu, wypadek, zator)"
+              placeholder="Opis (np. miejsce zbiórki, utrudnienie, uwaga)"
               className="w-full bg-surface-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-[13px] text-slate-100 placeholder:text-slate-500 outline-none focus:border-red-500"
             />
             <div className="text-[10px] text-slate-500 px-1">
-              Widoczny dla wszystkich · pulsuje · sam wygasa po 2&nbsp;h
+              Widoczny dla wszystkich · znika po 2&nbsp;h
             </div>
             <div className="flex gap-1.5">
               <button
@@ -1069,7 +1069,7 @@ export function FireMapPage() {
                 className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-medium bg-red-600 text-white disabled:opacity-40"
               >
                 {alertBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                Ogłoś alarm
+                Dodaj punkt
               </button>
               <button
                 onClick={() => setAlertDraft(null)}
@@ -1298,7 +1298,7 @@ export function FireMapPage() {
       <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">
         <button
           onClick={startPlaceAlert}
-          title={placingAlert ? 'Anuluj stawianie alarmu' : 'Ogłoś punkt alarmowy'}
+          title={placingAlert ? 'Anuluj dodawanie punktu' : 'Dodaj punkt na mapie'}
           className={cn(
             'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
             placingAlert
@@ -1321,7 +1321,7 @@ export function FireMapPage() {
                 : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
           )}
         >
-          <Share2 className="w-4 h-4" />
+          <SatelliteDish className="w-4 h-4" />
           {isSharing && shareRemainingMin !== null && (
             <span className="absolute -top-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center border border-surface-950">
               {shareRemainingMin}

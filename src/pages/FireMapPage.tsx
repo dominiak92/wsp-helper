@@ -160,7 +160,7 @@ function computeBearing(aLat: number, aLng: number, bLat: number, bLng: number):
 
 // Rozmiar znacznika pojazdu (px) skalowany wg zoomu mapy
 function vehicleSizeForZoom(z: number): number {
-  return Math.round(Math.max(26, Math.min(76, (z - 11) * 9 + 28)))
+  return Math.round(Math.max(34, Math.min(96, (z - 11) * 11 + 38)))
 }
 
 async function fetchRoute(from: L.LatLng, to: L.LatLng): Promise<L.LatLng[]> {

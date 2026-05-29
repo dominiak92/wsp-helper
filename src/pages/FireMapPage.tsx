@@ -247,6 +247,7 @@ export function FireMapPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const baseLayerRef = useRef<L.TileLayer | null>(null)
+  const labelsLayerRef = useRef<L.LayerGroup | null>(null)
   const gpsDotRef = useRef<L.CircleMarker | null>(null)
   const gpsCircleRef = useRef<L.Circle | null>(null)
   const roadLayersRef = useRef<L.Layer[]>([])
@@ -540,6 +541,7 @@ export function FireMapPage() {
       map.remove()
       mapRef.current = null
       baseLayerRef.current = null
+      labelsLayerRef.current = null
       featureLayerRef.current = null
       draftLayerRef.current = null
       liveLayerRef.current = null
@@ -549,15 +551,14 @@ export function FireMapPage() {
     }
   }, [])
 
-  // ── Podkład: mapa (OSM) / satelita (Esri) ──────────────────────────────────
+  // ── Podkład: mapa (OSM) / ortofotomapa GUGiK + etykiety (hybryda) ───────────
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    if (baseLayerRef.current) {
-      map.removeLayer(baseLayerRef.current)
-      baseLayerRef.current = null
-    }
-    const layer = baseMap === 'sat'
+    if (baseLayerRef.current) { map.removeLayer(baseLayerRef.current); baseLayerRef.current = null }
+    if (labelsLayerRef.current) { map.removeLayer(labelsLayerRef.current); labelsLayerRef.current = null }
+
+    const base = baseMap === 'sat'
       ? L.tileLayer(
           'https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution' +
           '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTOFOTOMAPA&STYLE=default' +
@@ -565,9 +566,25 @@ export function FireMapPage() {
           { maxZoom: 19, attribution: '© GUGiK — ortofotomapa' },
         )
       : L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
-    layer.addTo(map)
-    layer.bringToBack() // podkład zawsze pod nakładkami
-    baseLayerRef.current = layer
+    base.addTo(map)
+    base.setZIndex(100)
+    baseLayerRef.current = base
+
+    // Hybryda: na ortofoto dołóż przezroczyste drogi (Esri) + nazwy (CARTO/OSM)
+    if (baseMap === 'sat') {
+      const roads = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, attribution: 'Esri' },
+      )
+      const labels = L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+        { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap, © CARTO' },
+      )
+      const group = L.layerGroup([roads, labels]).addTo(map)
+      roads.setZIndex(200)
+      labels.setZIndex(210)
+      labelsLayerRef.current = group
+    }
   }, [baseMap])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1141,6 +1158,7 @@ export function FireMapPage() {
     layer.on('loading', () => setGridLoading(true))
     layer.on('load', () => setGridLoading(false))
     layer.addTo(map)
+    layer.setZIndex(300) // nad podkładem i etykietami hybrydy
     gridLayersRef.current.push(layer)
   }, [showGrid])
 

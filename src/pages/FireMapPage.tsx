@@ -1112,7 +1112,7 @@ export function FireMapPage() {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Szukaj: oddział 361, woda, droga, miejsce…"
+            placeholder="Granica oddziału, droga ppoż, miejsce…"
             className="flex-1 min-w-0 bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none"
           />
           {query && (

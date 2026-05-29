@@ -11,7 +11,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons } from '../../lib/crew'
-import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList } from 'lucide-react'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Plane } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 import type { WeatherReading, WeatherData } from '../../lib/weather'
@@ -941,10 +941,11 @@ function VehicleReadinessStrip({ assignment, personnel }: { assignment: ShiftAss
             className={cn('flex items-center gap-3 px-4 py-2.5', i > 0 && 'border-t border-slate-800/60')}
           >
             <span className={cn(
-              'text-xs font-semibold w-24 shrink-0 truncate',
+              'text-xs font-semibold w-24 shrink-0 flex items-center gap-1',
               full ? 'text-emerald-300' : partial ? 'text-amber-300' : 'text-slate-500',
             )}>
-              {CREW_VEHICLE_NAMES[id]}
+              <span className="truncate">{CREW_VEHICLE_NAMES[id]}</span>
+              {id === 'gcba850' && <Plane className="w-3 h-3 shrink-0 opacity-70" />}
             </span>
             <div className="flex items-center gap-2 flex-1">
               <Shield className={cn('w-3.5 h-3.5 shrink-0 transition-colors', commanderFilled ? 'text-purple-400' : 'text-slate-700')} />
@@ -1026,8 +1027,9 @@ function FullAssignmentCollapsible({ personnel, assignment, myPersonId }: {
               if (!rows.length) return null
               return (
                 <div key={v.vehicleId} className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 px-4 py-2 border-b border-slate-800">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 px-4 py-2 border-b border-slate-800 flex items-center gap-1.5">
                     {vName}
+                    {v.vehicleId === 'gcba850' && <Plane className="w-3 h-3 shrink-0 opacity-80" />}
                   </p>
                   <div className="divide-y divide-slate-800/60">
                     {rows.map((r, i) => (

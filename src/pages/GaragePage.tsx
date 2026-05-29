@@ -115,7 +115,7 @@ function BayCard({ bay, va, hasAssignment, name }: BayCardProps) {
         ) : va ? (
           <div className="space-y-1.5">
             {va.commanderId && (
-              <CrewRow role="Dowódca zastępu" personName={name(va.commanderId)} />
+              <CrewRow role="D-ca zastępu" personName={name(va.commanderId)} />
             )}
             {va.driverId && va.driverId !== va.commanderId && (
               <CrewRow role="Kier." personName={name(va.driverId)} />

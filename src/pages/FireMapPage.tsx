@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
+  Globe2, Map as MapIcon,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
@@ -245,6 +246,7 @@ export function FireMapPage() {
   const isAdmin = user?.role === 'admin'
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
+  const baseLayerRef = useRef<L.TileLayer | null>(null)
   const gpsDotRef = useRef<L.CircleMarker | null>(null)
   const gpsCircleRef = useRef<L.Circle | null>(null)
   const roadLayersRef = useRef<L.Layer[]>([])
@@ -264,6 +266,7 @@ export function FireMapPage() {
   const sharingUntilRef = useRef<number | null>(null)
 
   const [showGrid, setShowGrid] = useState(true)
+  const [baseMap, setBaseMap] = useState<'map' | 'sat'>('map')
 
   // Obiekty mapy ppoż.
   const [features, setFeatures] = useState<MapFeature[]>([])
@@ -406,7 +409,6 @@ export function FireMapPage() {
       attributionControl: false,
     })
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map)
     map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
 
     featureLayerRef.current = L.layerGroup().addTo(map)
@@ -537,6 +539,7 @@ export function FireMapPage() {
       map.stopLocate()
       map.remove()
       mapRef.current = null
+      baseLayerRef.current = null
       featureLayerRef.current = null
       draftLayerRef.current = null
       liveLayerRef.current = null
@@ -545,6 +548,27 @@ export function FireMapPage() {
       style.remove()
     }
   }, [])
+
+  // ── Podkład: mapa (OSM) / satelita (Esri) ──────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (baseLayerRef.current) {
+      map.removeLayer(baseLayerRef.current)
+      baseLayerRef.current = null
+    }
+    const layer = baseMap === 'sat'
+      ? L.tileLayer(
+          'https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution' +
+          '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTOFOTOMAPA&STYLE=default' +
+          '&FORMAT=image/jpeg&TILEMATRIXSET=EPSG:3857&TILEMATRIX=EPSG:3857:{z}&TILEROW={y}&TILECOL={x}',
+          { maxZoom: 19, attribution: '© GUGiK — ortofotomapa' },
+        )
+      : L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
+    layer.addTo(map)
+    layer.bringToBack() // podkład zawsze pod nakładkami
+    baseLayerRef.current = layer
+  }, [baseMap])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -1485,6 +1509,18 @@ export function FireMapPage() {
 
       {/* Grid + GPS + Follow buttons */}
       <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">
+        <button
+          onClick={() => setBaseMap(v => (v === 'sat' ? 'map' : 'sat'))}
+          title={baseMap === 'sat' ? 'Widok mapy' : 'Ortofotomapa (zdjęcia lotnicze)'}
+          className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            baseMap === 'sat'
+              ? 'bg-brand-600 text-white border-brand-500'
+              : 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200',
+          )}
+        >
+          {baseMap === 'sat' ? <MapIcon className="w-4 h-4" /> : <Globe2 className="w-4 h-4" />}
+        </button>
         <button
           onClick={startPlaceAlert}
           title={placingAlert ? 'Anuluj dodawanie punktu' : 'Dodaj punkt na mapie'}

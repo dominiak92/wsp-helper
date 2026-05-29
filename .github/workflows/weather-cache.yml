@@ -2,8 +2,12 @@ name: weather-cache
 
 on:
   schedule:
-    - cron: '0 8 * * *'    # 10:00 CEST (lato) / 9:00 CET (zima)
-    - cron: '0 12 * * *'   # 14:00 CEST (lato) / 13:00 CET (zima)
+    # Poza pełną godziną (GitHub deprioretyzuje crony o :00) + 2 próby na slot,
+    # żeby opóźnienia/pominięcia w kolejce Actions nie zostawiały pustego slotu.
+    - cron: '20 8 * * *'    # ~10:20 CEST (lato) / 9:20 CET (zima) – morning
+    - cron: '45 8 * * *'    # ~10:45 CEST (lato) / 9:45 CET (zima) – morning (retry)
+    - cron: '20 12 * * *'   # ~14:20 CEST (lato) / 13:20 CET (zima) – afternoon
+    - cron: '45 12 * * *'   # ~14:45 CEST (lato) / 13:45 CET (zima) – afternoon (retry)
   workflow_dispatch:
     inputs:
       slot:
@@ -23,9 +27,10 @@ jobs:
           node-version: '20'
       - name: Fetch and cache weather data
         run: |
+          SCHED="${{ github.event.schedule }}"
           if [ -n "${{ inputs.slot }}" ]; then
             export SLOT="${{ inputs.slot }}"
-          elif [ "${{ github.event.schedule }}" = "0 8 * * *" ]; then
+          elif echo "$SCHED" | grep -q ' 8 '; then   # godzina 8 UTC = poranny slot
             export SLOT="morning"
           else
             export SLOT="afternoon"

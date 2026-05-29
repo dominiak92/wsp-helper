@@ -149,6 +149,20 @@ function ringsCentroid(rings: L.LatLng[][]): L.LatLng {
   return n ? L.latLng(lat / n, lng / n) : L.latLng(0, 0)
 }
 
+// Azymut (0=północ, 90=wschód) między dwoma punktami
+function computeBearing(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const phi1 = toRad(aLat), phi2 = toRad(bLat), dLng = toRad(bLng - aLng)
+  const y = Math.sin(dLng) * Math.cos(phi2)
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLng)
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
+}
+
+// Rozmiar znacznika pojazdu (px) skalowany wg zoomu mapy
+function vehicleSizeForZoom(z: number): number {
+  return Math.round(Math.max(26, Math.min(76, (z - 11) * 9 + 28)))
+}
+
 async function fetchRoute(from: L.LatLng, to: L.LatLng): Promise<L.LatLng[]> {
   const url =
     `${OSRM_URL}/${from.lng.toFixed(6)},${from.lat.toFixed(6)};` +
@@ -267,9 +281,11 @@ export function FireMapPage() {
   const alertDraftLayerRef = useRef<L.LayerGroup | null>(null)
   const placingAlertRef = useRef(false)
   const sharingUntilRef = useRef<number | null>(null)
+  const prevLocsRef = useRef<Record<string, { lat: number; lng: number; bearing: number }>>({})
 
   const [showGrid, setShowGrid] = useState(true)
   const [baseMap, setBaseMap] = useState<'map' | 'sat'>('map')
+  const [zoom, setZoom] = useState(MAP_ZOOM)
 
   // Obiekty mapy ppoż.
   const [features, setFeatures] = useState<MapFeature[]>([])
@@ -429,6 +445,8 @@ export function FireMapPage() {
       }
     })
 
+    map.on('zoomend', () => setZoom(map.getZoom()))
+
     // Dark-themed popup styles
     const style = document.createElement('style')
     style.textContent = [
@@ -451,6 +469,12 @@ export function FireMapPage() {
       '@keyframes wsp-pulse-blue{0%{box-shadow:0 0 0 0 rgba(59,130,246,.5)}',
         '70%{box-shadow:0 0 0 12px rgba(59,130,246,0)}100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}}',
       '.wsp-live-dot{animation:wsp-pulse-blue 2s infinite}',
+      '@keyframes wsp-veh-glow{0%{box-shadow:0 0 0 0 rgba(56,189,248,.55)}',
+        '70%{box-shadow:0 0 0 16px rgba(56,189,248,0)}100%{box-shadow:0 0 0 0 rgba(56,189,248,0)}}',
+      '.wsp-veh-glow{animation:wsp-veh-glow 1.8s infinite}',
+      '@keyframes wsp-veh-glow-self{0%{box-shadow:0 0 0 0 rgba(16,185,129,.6)}',
+        '70%{box-shadow:0 0 0 16px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}',
+      '.wsp-veh-glow-self{animation:wsp-veh-glow-self 1.8s infinite}',
     ].join('')
     document.head.appendChild(style)
 
@@ -731,25 +755,40 @@ export function FireMapPage() {
     })
   }, [alerts])
 
-  // Render: lokalizacje na żywo
+  // Render: lokalizacje na żywo jako pojazd GBA (obrót wg kierunku, poświata, skala wg zoomu)
   useEffect(() => {
     const group = liveLayerRef.current
     if (!group) return
     group.clearLayers()
+    const size = vehicleSizeForZoom(zoom)
     liveLocations.forEach(loc => {
       const self = loc.userLogin === myLogin
-      const color = self ? '#10b981' : '#3b82f6'
+
+      // kierunek jazdy z dwóch ostatnich pozycji (obraz domyślnie zwrócony w lewo/zachód)
+      const prev = prevLocsRef.current[loc.userLogin]
+      let bearing = prev?.bearing ?? 270 // brak ruchu → domyślnie zachód = obraz bez obrotu
+      if (prev) {
+        const moved = L.latLng(prev.lat, prev.lng).distanceTo([loc.lat, loc.lng])
+        if (moved > 8) bearing = computeBearing(prev.lat, prev.lng, loc.lat, loc.lng)
+      }
+      prevLocsRef.current[loc.userLogin] = { lat: loc.lat, lng: loc.lng, bearing }
+      const rot = (bearing + 90) % 360 // +90 bo obraz patrzy w lewo (zachód)
+
+      const glowCls = self ? 'wsp-veh-glow-self' : 'wsp-veh-glow'
       const icon = L.divIcon({
         className: '',
         html:
-          `<div class="wsp-live-dot" style="width:16px;height:16px;background:${color};` +
-          'border:2.5px solid #fff;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.5)"></div>',
-        iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -8],
+          `<div style="position:relative;width:${size}px;height:${size}px">` +
+          `<div class="${glowCls}" style="position:absolute;inset:20%;border-radius:50%"></div>` +
+          `<img src="/gba.webp" alt="GBA" style="position:absolute;inset:0;width:100%;height:100%;` +
+          `object-fit:contain;transform:rotate(${rot}deg);filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))" />` +
+          '</div>',
+        iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2],
       })
       const name = `${loc.displayName || loc.userLogin}${self ? ' (Ty)' : ''}`
       const label = loc.vehicle ? `${name} · 🚒 ${loc.vehicle}` : name
       const m = L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1500 })
-      m.bindTooltip(label, { permanent: true, direction: 'right', offset: [12, 0], className: 'feature-label' })
+      m.bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -size / 2 + 4], className: 'feature-label' })
       m.bindPopup(
         `<div style="font-family:sans-serif"><strong style="color:#f1f5f9">${name}</strong>` +
         (loc.vehicle ? `<div style="font-size:11px;color:#cbd5e1;margin-top:3px">🚒 ${loc.vehicle}</div>` : '') +
@@ -758,7 +797,7 @@ export function FireMapPage() {
       )
       group.addLayer(m)
     })
-  }, [liveLocations, myLogin])
+  }, [liveLocations, myLogin, zoom])
 
   // Render: podgląd stawianego alarmu
   useEffect(() => {

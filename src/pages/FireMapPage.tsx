@@ -941,7 +941,7 @@ export function FireMapPage() {
     }
   }, [routeTo])
 
-  // ── Grid overlay — jeden obraz BDL imageOverlay dla całego OSPWL ──────────
+  // ── Grid overlay — kafle BDL przez własne proxy (próba zamiast 1 obrazu) ────
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -952,15 +952,17 @@ export function FireMapPage() {
     if (!showGrid) return
 
     setGridLoading(true)
-    const overlay = L.imageOverlay(
-      '/.netlify/functions/bdl-compartments?v=5',
-      [[OSPWL.south, OSPWL.west], [OSPWL.north, OSPWL.east]],
-      { opacity: 0.8, attribution: '© BDL Lasy Państwowe' },
-    )
-    overlay.on('load',  () => setGridLoading(false))
-    overlay.on('error', () => setGridLoading(false))
-    overlay.addTo(map)
-    gridLayersRef.current.push(overlay)
+    const layer = L.tileLayer('/.netlify/functions/bdl-tiles?z={z}&x={x}&y={y}', {
+      opacity: 0.85,
+      attribution: '© BDL Lasy Państwowe',
+      minZoom: 12, // warstwa Oddziałów znika powyżej ~1:170k (poniżej zoom 12)
+      maxZoom: 19,
+      bounds: L.latLngBounds([52.0, 14.7], [52.7, 15.8]),
+    })
+    layer.on('loading', () => setGridLoading(true))
+    layer.on('load', () => setGridLoading(false))
+    layer.addTo(map)
+    gridLayersRef.current.push(layer)
   }, [showGrid])
 
   useEffect(() => {

@@ -91,3 +91,40 @@ create policy "public read map_features"
 
 create policy "public write map_features"
   on map_features for all using (true);
+
+-- Tabela: pulsujące punkty alarmowe (widoczne dla wszystkich, auto-wygasają po 2h)
+create table if not exists map_alerts (
+  id          uuid primary key default gen_random_uuid(),
+  description text not null,
+  lat         double precision not null,
+  lng         double precision not null,
+  created_by  text,
+  created_at  timestamptz default now(),
+  expires_at  timestamptz not null default (now() + interval '2 hours')
+);
+
+alter table map_alerts enable row level security;
+
+create policy "public read map_alerts"
+  on map_alerts for select using (true);
+
+create policy "public write map_alerts"
+  on map_alerts for all using (true);
+
+-- Tabela: udostępniane na żywo lokalizacje (1 wiersz na użytkownika, wygasa po 30 min)
+create table if not exists live_locations (
+  user_login   text primary key,
+  display_name text,
+  lat          double precision not null,
+  lng          double precision not null,
+  expires_at   timestamptz not null,
+  updated_at   timestamptz default now()
+);
+
+alter table live_locations enable row level security;
+
+create policy "public read live_locations"
+  on live_locations for select using (true);
+
+create policy "public write live_locations"
+  on live_locations for all using (true);

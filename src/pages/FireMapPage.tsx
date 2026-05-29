@@ -3,7 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
-  Pencil, Check, Trash2, Plus, Layers, Undo2,
+  Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, Share2,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
@@ -12,6 +12,14 @@ import {
   KIND_META,
   type MapFeature, type FeatureKind, type FeatureGeometry, type PointGeometry,
 } from '../lib/mapFeatures'
+import {
+  fetchAlerts, createAlert, deleteAlert, fetchLiveLocations,
+  upsertLiveLocation, removeLiveLocation,
+  type AlertPoint, type LiveLocation,
+} from '../lib/liveMap'
+
+const SHARE_MS = 30 * 60 * 1000
+const SHARE_KEY = 'wsp-share-until'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -45,6 +53,7 @@ declare global {
   interface Window {
     __wspNavigateTo?: (lat: number, lng: number, name: string, sm: 'gps' | 'station') => void
     __wspClosePopup?: () => void
+    __wspDeleteAlert?: (id: string) => void
   }
 }
 
@@ -167,6 +176,26 @@ function featurePopupHtml(f: MapFeature, lat: number, lng: number): string {
   ].join('')
 }
 
+function alertPopupHtml(a: AlertPoint): string {
+  const safe = encodeURIComponent(a.description)
+  const exp = new Date(a.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+  const meta = `wygasa o ${exp}${a.createdBy ? ' · ' + a.createdBy : ''}`
+  const btn = (onclick: string, label: string, bg: string, color: string) =>
+    `<button onclick="${onclick}" style="width:100%;padding:6px 10px;border-radius:12px;border:none;` +
+    `font-size:11px;font-family:sans-serif;font-weight:500;cursor:pointer;text-align:left;` +
+    `background:${bg};color:${color}">${label}</button>`
+  return [
+    '<div style="font-family:sans-serif;min-width:190px">',
+    `<div style="font-size:13px;font-weight:600;color:#fca5a5;line-height:1.35">⚠ ${a.description}</div>`,
+    `<div style="font-size:10px;color:#64748b;margin-top:3px">${meta}</div>`,
+    '<div style="display:flex;flex-direction:column;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,116,139,0.2)">',
+    btn(`window.__wspNavigateTo(${a.lat},${a.lng},decodeURIComponent('${safe}'),'gps')`,
+      'Nawiguj z mojej pozycji', 'rgba(59,130,246,0.2)', '#93c5fd'),
+    btn(`window.__wspDeleteAlert('${a.id}')`, 'Usuń alarm', 'rgba(239,68,68,0.18)', '#fca5a5'),
+    '</div></div>',
+  ].join('')
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface EditDraft {
@@ -194,6 +223,11 @@ export function FireMapPage() {
   const editModeRef = useRef(false)
   const addKindRef = useRef<FeatureKind | null>(null)
   const drawingRoadRef = useRef<[number, number][]>([])
+  const alertLayerRef = useRef<L.LayerGroup | null>(null)
+  const liveLayerRef = useRef<L.LayerGroup | null>(null)
+  const alertDraftLayerRef = useRef<L.LayerGroup | null>(null)
+  const placingAlertRef = useRef(false)
+  const sharingUntilRef = useRef<number | null>(null)
 
   const [showGrid, setShowGrid] = useState(true)
 
@@ -220,11 +254,26 @@ export function FireMapPage() {
   const [following, setFollowing] = useState(false)
   const followingRef = useRef(false)
 
+  // Współdzielone: alarmy + lokalizacje na żywo
+  const [alerts, setAlerts] = useState<AlertPoint[]>([])
+  const [liveLocations, setLiveLocations] = useState<LiveLocation[]>([])
+  const [placingAlert, setPlacingAlert] = useState(false)
+  const [alertDraft, setAlertDraft] = useState<{ lat: number; lng: number; description: string } | null>(null)
+  const [alertBusy, setAlertBusy] = useState(false)
+  const [sharingUntil, setSharingUntil] = useState<number | null>(null)
+  const [shareRemainingMin, setShareRemainingMin] = useState<number | null>(null)
+
+  const myLogin = user?.login ?? null
+  const myName = user?.displayName ?? user?.login ?? null
+  const isSharing = sharingUntil !== null
+
   useEffect(() => { userPosRef.current = userPos }, [userPos])
   useEffect(() => { followingRef.current = following }, [following])
   useEffect(() => { editModeRef.current = editMode }, [editMode])
   useEffect(() => { addKindRef.current = addKind }, [addKind])
   useEffect(() => { drawingRoadRef.current = drawingRoad }, [drawingRoad])
+  useEffect(() => { placingAlertRef.current = placingAlert }, [placingAlert])
+  useEffect(() => { sharingUntilRef.current = sharingUntil }, [sharingUntil])
 
   // Wczytaj obiekty mapy z Supabase
   useEffect(() => {
@@ -232,6 +281,61 @@ export function FireMapPage() {
       .then(setFeatures)
       .catch(err => setFeaturesError(err instanceof Error ? err.message : 'Błąd wczytywania obiektów'))
   }, [])
+
+  // Polling: alarmy + lokalizacje na żywo (co 10 s)
+  useEffect(() => {
+    let active = true
+    const poll = async () => {
+      try {
+        const [a, l] = await Promise.all([fetchAlerts(), fetchLiveLocations()])
+        if (active) { setAlerts(a); setLiveLocations(l) }
+      } catch { /* sieć — spróbuj ponownie przy kolejnym ticku */ }
+    }
+    poll()
+    const id = setInterval(poll, 10000)
+    return () => { active = false; clearInterval(id) }
+  }, [])
+
+  // Wznów udostępnianie lokalizacji po przeładowaniu (jeśli jeszcze trwa)
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(SHARE_KEY) || 0)
+    if (saved > Date.now()) setSharingUntil(saved)
+    else localStorage.removeItem(SHARE_KEY)
+  }, [])
+
+  const startShare = useCallback(() => {
+    if (!myLogin) return
+    const until = Date.now() + SHARE_MS
+    localStorage.setItem(SHARE_KEY, String(until))
+    setSharingUntil(until)
+    setShareRemainingMin(30)
+  }, [myLogin])
+
+  const stopShare = useCallback(async () => {
+    localStorage.removeItem(SHARE_KEY)
+    setSharingUntil(null)
+    setShareRemainingMin(null)
+    if (myLogin) { try { await removeLiveLocation(myLogin) } catch { /* ignore */ } }
+  }, [myLogin])
+
+  // Gdy udostępnianie aktywne: wysyłaj pozycję co 10 s i odliczaj do końca
+  useEffect(() => {
+    if (sharingUntil === null || !myLogin) return
+    const tick = async () => {
+      const until = sharingUntilRef.current
+      if (until === null || Date.now() > until) { stopShare(); return }
+      setShareRemainingMin(Math.max(0, Math.ceil((until - Date.now()) / 60000)))
+      const pos = userPosRef.current
+      if (pos) {
+        try {
+          await upsertLiveLocation(myLogin, myName, pos.lat, pos.lng, new Date(until).toISOString())
+        } catch { /* ignore */ }
+      }
+    }
+    tick()
+    const id = setInterval(tick, 10000)
+    return () => clearInterval(id)
+  }, [sharingUntil, myLogin, myName, stopShare])
 
   // ── Map init ──────────────────────────────────────────────────────────────
 
@@ -250,6 +354,9 @@ export function FireMapPage() {
 
     featureLayerRef.current = L.layerGroup().addTo(map)
     draftLayerRef.current = L.layerGroup().addTo(map)
+    liveLayerRef.current = L.layerGroup().addTo(map)
+    alertLayerRef.current = L.layerGroup().addTo(map)
+    alertDraftLayerRef.current = L.layerGroup().addTo(map)
 
     map.on('dragstart', () => {
       if (followingRef.current) {
@@ -274,10 +381,24 @@ export function FireMapPage() {
         'color:#e2e8f0;font-size:10px;font-weight:600;padding:1px 6px;border-radius:6px;white-space:nowrap}',
       '.feature-label.leaflet-tooltip-right::before,.feature-label.leaflet-tooltip-left::before,',
       '.feature-label::before{display:none!important}',
+      '@keyframes wsp-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}',
+        '70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}',
+      '.wsp-alert-dot{animation:wsp-pulse 1.5s infinite}',
+      '@keyframes wsp-pulse-blue{0%{box-shadow:0 0 0 0 rgba(59,130,246,.5)}',
+        '70%{box-shadow:0 0 0 12px rgba(59,130,246,0)}100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}}',
+      '.wsp-live-dot{animation:wsp-pulse-blue 2s infinite}',
     ].join('')
     document.head.appendChild(style)
 
     map.on('click', async (e) => {
+      // Stawianie punktu alarmowego (dla każdego) — ma priorytet
+      if (placingAlertRef.current) {
+        setAlertDraft({ lat: e.latlng.lat, lng: e.latlng.lng, description: '' })
+        setPlacingAlert(false)
+        placingAlertRef.current = false
+        return
+      }
+
       // Tryb edycji: klik = dodanie obiektu / wierzchołka drogi
       if (editModeRef.current) {
         const k = addKindRef.current
@@ -361,6 +482,9 @@ export function FireMapPage() {
       mapRef.current = null
       featureLayerRef.current = null
       draftLayerRef.current = null
+      liveLayerRef.current = null
+      alertLayerRef.current = null
+      alertDraftLayerRef.current = null
       style.remove()
     }
   }, [])
@@ -482,6 +606,106 @@ export function FireMapPage() {
       }
     }
   }, [editing, drawingRoad])
+
+  // Render: pulsujące punkty alarmowe (widoczne dla wszystkich)
+  useEffect(() => {
+    const group = alertLayerRef.current
+    if (!group) return
+    group.clearLayers()
+    alerts.forEach(a => {
+      const icon = L.divIcon({
+        className: '',
+        html:
+          '<div class="wsp-alert-dot" style="width:30px;height:30px;display:flex;align-items:center;' +
+          'justify-content:center;background:#ef4444;border:2.5px solid #fff;border-radius:50%;' +
+          'font-size:18px;font-weight:800;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5)">!</div>',
+        iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -16],
+      })
+      const m = L.marker([a.lat, a.lng], { icon, zIndexOffset: 2000 })
+      m.bindTooltip(a.description, { permanent: true, direction: 'right', offset: [14, 0], className: 'feature-label' })
+      m.bindPopup(alertPopupHtml(a), { className: 'wsp-popup', maxWidth: 260 })
+      group.addLayer(m)
+    })
+  }, [alerts])
+
+  // Render: lokalizacje na żywo
+  useEffect(() => {
+    const group = liveLayerRef.current
+    if (!group) return
+    group.clearLayers()
+    liveLocations.forEach(loc => {
+      const self = loc.userLogin === myLogin
+      const color = self ? '#10b981' : '#3b82f6'
+      const icon = L.divIcon({
+        className: '',
+        html:
+          `<div class="wsp-live-dot" style="width:16px;height:16px;background:${color};` +
+          'border:2.5px solid #fff;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.5)"></div>',
+        iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -8],
+      })
+      const name = `${loc.displayName || loc.userLogin}${self ? ' (Ty)' : ''}`
+      const m = L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1500 })
+      m.bindTooltip(name, { permanent: true, direction: 'right', offset: [12, 0], className: 'feature-label' })
+      m.bindPopup(
+        `<div style="font-family:sans-serif"><strong style="color:#f1f5f9">${name}</strong>` +
+        '<div style="font-size:10px;color:#94a3b8;margin-top:2px">udostępnia lokalizację</div></div>',
+        { className: 'wsp-popup' },
+      )
+      group.addLayer(m)
+    })
+  }, [liveLocations, myLogin])
+
+  // Render: podgląd stawianego alarmu
+  useEffect(() => {
+    const group = alertDraftLayerRef.current
+    if (!group) return
+    group.clearLayers()
+    if (!alertDraft) return
+    const icon = L.divIcon({
+      className: '',
+      html:
+        '<div class="wsp-alert-dot" style="opacity:.85;width:30px;height:30px;display:flex;align-items:center;' +
+        'justify-content:center;background:#ef4444;border:2.5px solid #fff;border-radius:50%;' +
+        'font-size:18px;font-weight:800;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5)">!</div>',
+      iconSize: [30, 30], iconAnchor: [15, 15],
+    })
+    group.addLayer(L.marker([alertDraft.lat, alertDraft.lng], { icon }))
+  }, [alertDraft])
+
+  // Bridge: usuwanie alarmu z popupu
+  useEffect(() => {
+    window.__wspDeleteAlert = async (id) => {
+      mapRef.current?.closePopup()
+      try {
+        await deleteAlert(id)
+        setAlerts(prev => prev.filter(a => a.id !== id))
+      } catch { /* ignore */ }
+    }
+    return () => { delete window.__wspDeleteAlert }
+  }, [])
+
+  async function saveAlert() {
+    if (!alertDraft) return
+    const description = alertDraft.description.trim()
+    if (!description) return
+    setAlertBusy(true)
+    try {
+      const created = await createAlert(description, alertDraft.lat, alertDraft.lng, myLogin)
+      setAlerts(prev => [...prev, created])
+      setAlertDraft(null)
+    } catch (err) {
+      setFeaturesError(err instanceof Error ? err.message : 'Błąd zapisu alarmu')
+    } finally {
+      setAlertBusy(false)
+    }
+  }
+
+  function startPlaceAlert() {
+    setEditing(null)
+    setAddKind(null)
+    setAlertDraft(null)
+    setPlacingAlert(v => !v)
+  }
 
   function startAdd(kind: FeatureKind) {
     setEditing(null)
@@ -807,6 +1031,56 @@ export function FireMapPage() {
           </div>
         )}
 
+        {/* Podpowiedź: stawianie alarmu */}
+        {placingAlert && (
+          <div className="flex items-center justify-between gap-2 bg-red-950/80 backdrop-blur-sm border border-red-700/50 rounded-full px-4 py-2 text-[11px] text-red-200 shadow-lg">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              Kliknij miejsce alarmu na mapie
+            </span>
+            <button onClick={() => setPlacingAlert(false)} className="text-red-300 hover:text-white">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Formularz alarmu */}
+        {alertDraft && (
+          <div className="bg-surface-950/97 backdrop-blur-md border border-red-700/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-red-300">
+              <AlertTriangle className="w-4 h-4" /> Nowy alarm
+            </div>
+            <input
+              autoFocus
+              type="text"
+              value={alertDraft.description}
+              onChange={e => setAlertDraft(prev => prev ? { ...prev, description: e.target.value } : prev)}
+              onKeyDown={e => { if (e.key === 'Enter') saveAlert() }}
+              placeholder="Opis (np. pożar lasu, wypadek, zator)"
+              className="w-full bg-surface-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-[13px] text-slate-100 placeholder:text-slate-500 outline-none focus:border-red-500"
+            />
+            <div className="text-[10px] text-slate-500 px-1">
+              Widoczny dla wszystkich · pulsuje · sam wygasa po 2&nbsp;h
+            </div>
+            <div className="flex gap-1.5">
+              <button
+                onClick={saveAlert}
+                disabled={alertBusy || !alertDraft.description.trim()}
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-medium bg-red-600 text-white disabled:opacity-40"
+              >
+                {alertBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                Ogłoś alarm
+              </button>
+              <button
+                onClick={() => setAlertDraft(null)}
+                className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-medium bg-surface-900/80 text-slate-300 border border-slate-700/40"
+              >
+                <X className="w-3 h-3" /> Anuluj
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Błąd obiektów mapy */}
         {featuresError && (
           <div className="flex items-center gap-2 bg-surface-950/95 backdrop-blur-sm border border-red-800/40 rounded-full px-4 py-2 text-[11px] text-red-400 shadow-lg">
@@ -1022,6 +1296,38 @@ export function FireMapPage() {
 
       {/* Grid + GPS + Follow buttons */}
       <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">
+        <button
+          onClick={startPlaceAlert}
+          title={placingAlert ? 'Anuluj stawianie alarmu' : 'Ogłoś punkt alarmowy'}
+          className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            placingAlert
+              ? 'bg-red-600 text-white border-red-500'
+              : 'bg-surface-900/90 text-red-400 border-slate-700/60 backdrop-blur-sm hover:text-red-300',
+          )}
+        >
+          <AlertTriangle className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => (isSharing ? stopShare() : startShare())}
+          disabled={!myLogin}
+          title={isSharing ? `Udostępniasz lokalizację (${shareRemainingMin ?? 30} min) — kliknij, by zatrzymać` : 'Udostępnij lokalizację na 30 min'}
+          className={cn(
+            'relative w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            isSharing
+              ? 'bg-emerald-600 text-white border-emerald-500'
+              : myLogin
+                ? 'bg-surface-900/90 text-slate-400 border-slate-700/60 backdrop-blur-sm hover:text-slate-200'
+                : 'bg-surface-900/90 text-slate-600 border-slate-700/60 cursor-not-allowed backdrop-blur-sm',
+          )}
+        >
+          <Share2 className="w-4 h-4" />
+          {isSharing && shareRemainingMin !== null && (
+            <span className="absolute -top-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center border border-surface-950">
+              {shareRemainingMin}
+            </span>
+          )}
+        </button>
         {isAdmin && (
           <button
             onClick={toggleEditMode}

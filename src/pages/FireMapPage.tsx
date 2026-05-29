@@ -898,7 +898,81 @@ export function FireMapPage() {
     }
   }, [])
 
-  // ── Jedna wyszukiwarka: Twoje dane → mapa (drogi) → miejsce (geokoder) ──────
+  // Nawigacja do oddziału leśnego: podświetl granicę (delikatnie) + trasa do niej
+  const navigateToCompartment = useCallback(async (nr: string): Promise<boolean> => {
+    const map = mapRef.current
+    if (!map) return false
+
+    let json: { features?: { label: string; range: string; rings: number[][][] }[] }
+    try {
+      const res = await fetch(`/.netlify/functions/bdl-compartment?nr=${encodeURIComponent(nr)}`)
+      if (!res.ok) return false
+      json = await res.json()
+    } catch {
+      return false
+    }
+
+    const candidates = (json.features ?? [])
+      .map(f => ({
+        label: f.label,
+        range: f.range,
+        rings: f.rings.map(ring => ring.map(([lng, lat]) => L.latLng(lat, lng))),
+      }))
+      .filter(c => c.rings.some(r => r.length >= 3))
+    if (candidates.length === 0) return false
+
+    const from = startModeRef.current === 'station' ? STATION : (userPosRef.current ?? STATION)
+
+    // wybierz oddział najbliższy punktowi startowemu (po najbliższym wierzchołku)
+    let best = candidates[0]
+    let bestD = Infinity
+    candidates.forEach(c => c.rings.forEach(r => r.forEach(p => {
+      const d = from.distanceTo(p)
+      if (d < bestD) { bestD = d; best = c }
+    })))
+
+    clearRoads()
+    clearRoute()
+    setQuery(best.label)
+    setSearchState('loading')
+    setSearchError('')
+
+    const bounds = L.latLngBounds([])
+    let nearest: L.LatLng | null = null
+    let nd = Infinity
+    best.rings.forEach(r => {
+      const poly = L.polygon(r, {
+        color: '#818cf8', weight: 2.5, opacity: 0.95, fillColor: '#818cf8', fillOpacity: 0.12,
+      }).addTo(map)
+      poly.bindPopup(
+        `<strong style="font-size:13px">${best.label}</strong>` +
+        (best.range ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">leśnictwo ${best.range}</div>` : ''),
+        { className: 'wsp-popup', maxWidth: 200 },
+      )
+      roadLayersRef.current.push(poly)
+      r.forEach(p => {
+        bounds.extend(p)
+        const d = from.distanceTo(p)
+        if (d < nd) { nd = d; nearest = p }
+      })
+    })
+
+    if (!nearest) { setSearchState('idle'); return true }
+    const target = nearest
+
+    try {
+      const route = await fetchRoute(from, target)
+      routeLayerRef.current = L.polyline(route, { color: '#3b82f6', weight: 4, opacity: 0.85 }).addTo(map)
+      route.forEach(p => bounds.extend(p))
+      map.fitBounds(bounds, { padding: [50, 70], maxZoom: 16 })
+    } catch {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 })
+    }
+    setSearchState('idle')
+    return true
+  }, [])
+
+  // ── Jedna wyszukiwarka: Twoje dane → oddział → mapa (drogi) → miejsce ───────
 
   const runSearch = useCallback(async () => {
     const q = query.trim()
@@ -920,7 +994,13 @@ export function FireMapPage() {
       return
     }
 
-    // 2) Drogi / dojazdy dostępne na mapie (OSM)
+    // 2) Oddział leśny po numerze (granice z BDL)
+    if (/^\d{1,4}$/.test(q)) {
+      const ok = await navigateToCompartment(q)
+      if (ok) return
+    }
+
+    // 3) Drogi / dojazdy dostępne na mapie (OSM)
     try {
       const ospwlBbox = `${OSPWL.south},${OSPWL.west},${OSPWL.north},${OSPWL.east}`
       const roadQl = [
@@ -940,7 +1020,7 @@ export function FireMapPage() {
       /* przejdź do geokodera */
     }
 
-    // 3) Miejsce z mapy (geokoder)
+    // 4) Miejsce z mapy (geokoder)
     try {
       const places = await geocode(q)
       if (places.length > 0) {
@@ -952,7 +1032,7 @@ export function FireMapPage() {
       setSearchError(err instanceof Error ? err.message : 'Błąd połączenia')
       setSearchState('error')
     }
-  }, [query, features, routeTo, navigateToRoad])
+  }, [query, features, routeTo, navigateToRoad, navigateToCompartment])
 
   // Bridge: Leaflet popup buttons → React (must be after routeTo declaration)
   useEffect(() => {
@@ -1032,7 +1112,7 @@ export function FireMapPage() {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Szukaj: woda, droga, jednostka, miejsce…"
+            placeholder="Szukaj: oddział 361, woda, droga, miejsce…"
             className="flex-1 min-w-0 bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none"
           />
           {query && (

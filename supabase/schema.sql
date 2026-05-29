@@ -76,9 +76,13 @@ create table if not exists map_features (
   description text,
   geometry    jsonb not null,
   confirmed   boolean not null default false, -- false = pozycja przybliżona (do dociągnięcia)
+  icon        text,                           -- własna ikona (emoji) dla ważnych punktów
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );
+
+-- Gdy tabela już istnieje (migracja):
+alter table map_features add column if not exists icon text;
 
 create trigger map_features_updated_at
   before update on map_features

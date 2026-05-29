@@ -27,6 +27,7 @@ export interface MapFeature {
   description: string | null
   geometry: FeatureGeometry
   confirmed: boolean
+  icon: string | null // własna ikona (emoji) — gdy null, używana jest domyślna z KIND_META
 }
 
 interface MapFeatureRow {
@@ -36,7 +37,22 @@ interface MapFeatureRow {
   description: string | null
   geometry: FeatureGeometry
   confirmed: boolean
+  icon: string | null
 }
+
+// Ikony do wyboru dla ważnych punktów (POI)
+export const POI_ICONS: { emoji: string; label: string }[] = [
+  { emoji: '📍', label: 'Punkt' },
+  { emoji: '🏢', label: 'Budynek' },
+  { emoji: '⛺', label: 'Namiot' },
+  { emoji: '🪖', label: 'Żołnierze' },
+  { emoji: '🔫', label: 'Broń' },
+  { emoji: '🚁', label: 'Śmigłowiec' },
+  { emoji: '🚧', label: 'Przeszkoda' },
+  { emoji: '⚠️', label: 'Uwaga' },
+  { emoji: '⛽', label: 'Paliwo' },
+  { emoji: '🏥', label: 'Medyczny' },
+]
 
 // ── Metadane typów (kolor + emoji jak na mapie papierowej) ──────────────────
 
@@ -62,13 +78,14 @@ function rowToFeature(r: MapFeatureRow): MapFeature {
     description: r.description,
     geometry: r.geometry,
     confirmed: r.confirmed,
+    icon: r.icon ?? null,
   }
 }
 
 export async function fetchFeatures(): Promise<MapFeature[]> {
   const { data, error } = await supabase
     .from('map_features')
-    .select('id, kind, label, description, geometry, confirmed')
+    .select('id, kind, label, description, geometry, confirmed, icon')
   if (error) throw error
   return (data ?? []).map(rowToFeature as (r: unknown) => MapFeature)
 }
@@ -82,8 +99,9 @@ export async function createFeature(f: Omit<MapFeature, 'id'>): Promise<MapFeatu
       description: f.description,
       geometry: f.geometry,
       confirmed: f.confirmed,
+      icon: f.icon,
     })
-    .select('id, kind, label, description, geometry, confirmed')
+    .select('id, kind, label, description, geometry, confirmed, icon')
     .single()
   if (error) throw error
   return rowToFeature(data as MapFeatureRow)
@@ -114,8 +132,9 @@ export async function seedFeatures(): Promise<MapFeature[]> {
       description: f.description,
       geometry: f.geometry,
       confirmed: f.confirmed,
+      icon: f.icon,
     })))
-    .select('id, kind, label, description, geometry, confirmed')
+    .select('id, kind, label, description, geometry, confirmed, icon')
   if (error) throw error
   return (data ?? []).map(rowToFeature as (r: unknown) => MapFeature)
 }
@@ -135,6 +154,7 @@ const seed = (
   label,
   description,
   confirmed: false,
+  icon: null,
   geometry: { type: 'point', lat, lng },
 })
 

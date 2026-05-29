@@ -10,7 +10,7 @@ import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
 import {
   fetchFeatures, createFeature, updateFeature, deleteFeature, seedFeatures,
-  KIND_META,
+  KIND_META, POI_ICONS,
   type MapFeature, type FeatureKind, type FeatureGeometry, type PointGeometry,
 } from '../lib/mapFeatures'
 import {
@@ -164,8 +164,9 @@ async function fetchRoute(from: L.LatLng, to: L.LatLng): Promise<L.LatLng[]> {
 
 // ── Map-feature helpers ─────────────────────────────────────────────────────
 
-function makeFeatureIcon(kind: FeatureKind, confirmed: boolean): L.DivIcon {
+function makeFeatureIcon(kind: FeatureKind, confirmed: boolean, icon?: string | null): L.DivIcon {
   const meta = KIND_META[kind]
+  const emoji = icon || meta.emoji
   const ring = confirmed ? meta.color : '#f59e0b'
   const dash = confirmed ? '' : 'border-style:dashed;'
   const op = confirmed ? '1' : '0.72'
@@ -174,7 +175,7 @@ function makeFeatureIcon(kind: FeatureKind, confirmed: boolean): L.DivIcon {
     html:
       `<div style="opacity:${op};width:30px;height:30px;display:flex;align-items:center;` +
       `justify-content:center;background:rgba(8,15,30,0.88);border:2px solid ${ring};${dash}` +
-      `border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.5);font-size:15px;line-height:1">${meta.emoji}</div>`,
+      `border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.5);font-size:15px;line-height:1">${emoji}</div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
     popupAnchor: [0, -16],
@@ -230,6 +231,7 @@ interface EditDraft {
   label: string
   description: string
   geometry: FeatureGeometry
+  icon: string | null
 }
 
 interface CompartmentCandidate {
@@ -476,6 +478,7 @@ export function FireMapPage() {
           label: '',
           description: '',
           geometry: { type: 'point', lat: e.latlng.lat, lng: e.latlng.lng },
+          icon: null,
         })
         return
       }
@@ -619,7 +622,7 @@ export function FireMapPage() {
       if (f.geometry.type === 'point') {
         const { lat, lng } = f.geometry
         const marker = L.marker([lat, lng], {
-          icon: makeFeatureIcon(f.kind, f.confirmed),
+          icon: makeFeatureIcon(f.kind, f.confirmed, f.icon),
           draggable: editMode,
         })
         marker.bindTooltip(f.label, {
@@ -628,7 +631,7 @@ export function FireMapPage() {
         if (editMode) {
           marker.on('click', () => setEditing({
             id: f.id, kind: f.kind, label: f.label,
-            description: f.description ?? '', geometry: f.geometry,
+            description: f.description ?? '', geometry: f.geometry, icon: f.icon,
           }))
           marker.on('dragend', async () => {
             const ll = marker.getLatLng()
@@ -656,7 +659,7 @@ export function FireMapPage() {
         if (editMode) {
           line.on('click', () => setEditing({
             id: f.id, kind: f.kind, label: f.label,
-            description: f.description ?? '', geometry: f.geometry,
+            description: f.description ?? '', geometry: f.geometry, icon: f.icon,
           }))
         } else {
           line.bindPopup(`<strong style="font-size:13px">${KIND_META.road.emoji} ${f.label}</strong>`, { maxWidth: 220 })
@@ -678,7 +681,7 @@ export function FireMapPage() {
       if (editing.geometry.type === 'point') {
         const { lat, lng } = editing.geometry
         const m = L.marker([lat, lng], {
-          icon: makeFeatureIcon(editing.kind, false), draggable: true, zIndexOffset: 1000,
+          icon: makeFeatureIcon(editing.kind, false, editing.icon), draggable: true, zIndexOffset: 1000,
         })
         m.on('dragend', () => {
           const ll = m.getLatLng()
@@ -818,7 +821,7 @@ export function FireMapPage() {
 
   function finishRoad() {
     if (drawingRoad.length < 2) return
-    setEditing({ kind: 'road', label: '', description: '', geometry: { type: 'line', points: drawingRoad } })
+    setEditing({ kind: 'road', label: '', description: '', geometry: { type: 'line', points: drawingRoad }, icon: null })
     setDrawingRoad([])
     drawingRoadRef.current = []
   }
@@ -837,13 +840,14 @@ export function FireMapPage() {
     setFeaturesError('')
     try {
       const description = editing.description.trim() || null
+      const icon = editing.kind === 'poi' ? editing.icon : null
       if (editing.id) {
-        const patch = { label, description, geometry: editing.geometry, confirmed: true }
+        const patch = { label, description, geometry: editing.geometry, confirmed: true, icon }
         await updateFeature(editing.id, patch)
         setFeatures(prev => prev.map(x => (x.id === editing.id ? { ...x, ...patch } : x)))
       } else {
         const created = await createFeature({
-          kind: editing.kind, label, description, geometry: editing.geometry, confirmed: true,
+          kind: editing.kind, label, description, geometry: editing.geometry, confirmed: true, icon,
         })
         setFeatures(prev => [...prev, created])
       }
@@ -1417,6 +1421,32 @@ export function FireMapPage() {
               placeholder="Opis (np. pomost, wydajność, dojazd)"
               className="w-full bg-surface-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-brand-500"
             />
+            {editing.kind === 'poi' && (
+              <div>
+                <div className="text-[10px] text-slate-500 px-1 mb-1">Ikona</div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {POI_ICONS.map(opt => {
+                    const active = (editing.icon ?? '📍') === opt.emoji
+                    return (
+                      <button
+                        key={opt.emoji}
+                        type="button"
+                        title={opt.label}
+                        onClick={() => setEditing(prev => prev ? { ...prev, icon: opt.emoji } : prev)}
+                        className={cn(
+                          'h-9 rounded-xl text-[16px] flex items-center justify-center border transition-colors',
+                          active
+                            ? 'bg-brand-600 border-brand-500'
+                            : 'bg-surface-900/80 border-slate-700/40 hover:bg-surface-800',
+                        )}
+                      >
+                        {opt.emoji}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {editing.geometry.type === 'point' && (
               <div className="text-[10px] text-slate-500 px-1 font-variant-numeric tabular-nums">
                 {editing.geometry.lat.toFixed(5)}, {editing.geometry.lng.toFixed(5)} · przeciągnij znacznik, by poprawić

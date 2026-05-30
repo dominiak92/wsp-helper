@@ -1,5 +1,45 @@
 import webpush from 'web-push'
 
+// Dzień służby (current/next) liczony w strefie Europe/Warsaw — serwer chodzi w UTC,
+// a logika dyżuru (anchor 2026-05-01, co 4 dni) jest oparta o lokalną datę jak w src/lib/duty.ts
+function currentOrNextDutyDateWarsaw() {
+  const REF_UTC = Date.UTC(2026, 4, 1)
+  const todayWarsaw = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' }) // 'YYYY-MM-DD'
+  const [y, m, d] = todayWarsaw.split('-').map(Number)
+  for (let i = 0; i <= 3; i++) {
+    const t = Date.UTC(y, m - 1, d + i)
+    if (((t - REF_UTC) / 86400000) % 4 === 0) {
+      const nd = new Date(t)
+      return `${nd.getUTCFullYear()}-${String(nd.getUTCMonth() + 1).padStart(2, '0')}-${String(nd.getUTCDate()).padStart(2, '0')}`
+    }
+  }
+  return todayWarsaw
+}
+
+// Loginy dyżurnych wyznaczonych na dziś (slot obsady, nie stała rola) — do powiadomień push
+async function resolveDutyOfficerLogins(supabaseUrl, supabaseKey) {
+  const headers = { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
+  const dutyDate = currentOrNextDutyDateWarsaw()
+  const aRes = await fetch(
+    `${supabaseUrl}/rest/v1/duty_assignments?duty_date=eq.${dutyDate}&select=assignment_json&order=created_at.desc&limit=1`,
+    { headers },
+  )
+  if (!aRes.ok) return []
+  const aRows = await aRes.json()
+  let aj = aRows[0]?.assignment_json
+  if (typeof aj === 'string') { try { aj = JSON.parse(aj) } catch { return [] } }
+  const ids = Array.isArray(aj?.dutyOfficerIds) ? aj.dutyOfficerIds : []
+  if (!ids.length) return []
+  const idList = ids.map(id => encodeURIComponent(id)).join(',')
+  const pRes = await fetch(
+    `${supabaseUrl}/rest/v1/personnel?id=in.(${idList})&select=login`,
+    { headers },
+  )
+  if (!pRes.ok) return []
+  const pRows = await pRes.json()
+  return pRows.map(r => r.login).filter(Boolean)
+}
+
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' }
@@ -43,7 +83,20 @@ export const handler = async (event) => {
   // Zbuduj filtr Supabase
   let filterParam
   if (type === 'new_message') {
-    filterParam = 'user_role=in.(admin,officer)'
+    // Admin/oficer (rola subskrypcji) + dyżurny(-ni) wyznaczony na dziś (po loginie)
+    let dutyLogins = []
+    try {
+      dutyLogins = await resolveDutyOfficerLogins(SUPABASE_URL, SUPABASE_KEY)
+    } catch (err) {
+      console.error('[push-notify] Nie udało się ustalić dyżurnych:', err.message)
+    }
+    console.log(`[push-notify] dyżurni dnia: ${dutyLogins.join(', ') || '-'}`)
+    if (dutyLogins.length) {
+      const list = dutyLogins.map(l => encodeURIComponent(l)).join(',')
+      filterParam = `or=(user_role.in.(admin,officer),user_login.in.(${list}))`
+    } else {
+      filterParam = 'user_role=in.(admin,officer)'
+    }
   } else if (type === 'confirmed') {
     if (!targetLogin) {
       console.error('[push-notify] confirmed: brak targetLogin')

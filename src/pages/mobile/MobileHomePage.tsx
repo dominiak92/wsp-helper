@@ -288,6 +288,7 @@ export function MobileHomePage() {
           // Use date-specific absence from absenceMap; ignore global personnel.absence
           absence: (loadedAssignment?.absenceMap?.[row.id] ?? null) as AbsenceType | null,
           login: row.login ?? null,
+          partial8h: !!loadedAssignment?.partial8hIds?.includes(row.id),
         }))
         // Include ad-hoc guests stored in the assignment so their names resolve
         setPersonnel([...roster, ...guestsAsPersons(loadedAssignment)])

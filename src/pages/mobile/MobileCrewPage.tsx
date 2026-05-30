@@ -102,7 +102,7 @@ function SlotRow({
       >
         <option value="">— Brak —</option>
         {personnel.map(p => (
-          <option key={p.id} value={p.id}>{p.name}</option>
+          <option key={p.id} value={p.id}>{p.partial8h ? `${p.name} (8h)` : p.name}</option>
         ))}
       </select>
     </div>
@@ -145,6 +145,7 @@ export function MobileCrewPage() {
           preferredVehicleId: r.preferred_vehicle_id ?? undefined,
           absence: (loaded?.absenceMap?.[r.id] ?? null) as AbsenceType | null,
           login: r.login ?? null,
+          partial8h: !!loaded?.partial8hIds?.includes(r.id),
         }))
         // Include ad-hoc guests stored in the assignment so their names resolve
         setPersonnel([...roster, ...guestsAsPersons(loaded)])

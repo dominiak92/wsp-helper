@@ -204,10 +204,11 @@ export function MobileCalendarPage() {
   // Personnel with absences derived from the selected assignment's absenceMap,
   // so DutyAssignmentView shows only absences relevant to this specific duty date.
   const personnelForView = useMemo(() => {
-    if (!selectedAssignment) return personnel.map(p => ({ ...p, absence: null as AbsenceType | null }))
+    if (!selectedAssignment) return personnel.map(p => ({ ...p, absence: null as AbsenceType | null, partial8h: false }))
     return personnel.map(p => ({
       ...p,
       absence: (selectedAssignment.absenceMap?.[p.id] ?? null) as AbsenceType | null,
+      partial8h: !!selectedAssignment.partial8hIds?.includes(p.id),
     }))
   }, [personnel, selectedAssignment])
 

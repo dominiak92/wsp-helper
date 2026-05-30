@@ -164,6 +164,7 @@ export function GaragePage() {
           preferredVehicleId: row.preferred_vehicle_id ?? undefined,
           absence: row.absence as AbsenceType | null,
           login: row.login ?? null,
+          partial8h: !!parsed?.partial8hIds?.includes(row.id),
         }))
         // Include ad-hoc guests stored in the assignment so their names resolve
         setPersonnel([...roster, ...guestsAsPersons(parsed)])
@@ -175,7 +176,9 @@ export function GaragePage() {
 
   function name(id: string | null): string {
     if (!id) return '—'
-    return personnel.find(p => p.id === id)?.name ?? '—'
+    const p = personnel.find(x => x.id === id)
+    if (!p) return '—'
+    return p.partial8h ? `${p.name} (8h)` : p.name
   }
 
   if (loading) {

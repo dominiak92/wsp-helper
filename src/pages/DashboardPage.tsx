@@ -250,6 +250,7 @@ export function DashboardPage() {
             preferredVehicleId: row.preferred_vehicle_id ?? undefined,
             absence: (loadedAssignment?.absenceMap?.[row.id] ?? null) as AbsenceType | null,
             login: row.login ?? null,
+            partial8h: !!loadedAssignment?.partial8hIds?.includes(row.id),
           })),
         )
       }

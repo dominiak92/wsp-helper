@@ -49,6 +49,7 @@ export interface Person {
   absence: AbsenceType | null
   login?: string | null
   isGuest?: boolean // ad-hoc person from another shift, stored only in the assignment
+  partial8h?: boolean // obecny tylko 8h danego dnia (odtwarzane z assignment.partial8hIds)
 }
 
 export const CREW_VEHICLE_IDS = ['gba', 'gcba532', 'gcba1060', 'gcba850'] as const
@@ -118,6 +119,7 @@ export interface ShiftAssignment {
   vehicles: VehicleAssignment[]
   unassignedIds: string[]
   absenceMap?: Record<string, AbsenceType> // personId → absence type for this specific duty date
+  partial8hIds?: string[] // osoby obecne tylko 8h tego dnia
   guests?: Guest[]
   dinner?: boolean | null
 }
@@ -285,7 +287,9 @@ export function isPersonInAssignment(a: ShiftAssignment, personId: string): bool
 
 export function resolveName(persons: Person[], id: string | null): string {
   if (!id) return '—'
-  return persons.find(p => p.id === id)?.name ?? '—'
+  const p = persons.find(x => x.id === id)
+  if (!p) return '—'
+  return p.partial8h ? `${p.name} (8h)` : p.name
 }
 
 // Pojazd, do którego przypisana jest dana osoba w tej obsadzie (lub null).

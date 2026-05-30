@@ -91,7 +91,21 @@ export function PersonnelRow({ person, onUpdate, onDelete, notAssigned }: {
         >
           {editing ? <X className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
         </button>
-        <AbsenceSelect value={person.absence} onChange={v => onUpdate({ ...person, absence: v })} />
+        {!absent && (
+          <button
+            onClick={() => onUpdate({ ...person, partial8h: !person.partial8h })}
+            title="Obecny tylko 8h dzisiaj"
+            className={cn(
+              'text-[10px] py-0.5 px-1.5 rounded border font-medium leading-none shrink-0 transition-colors',
+              person.partial8h
+                ? 'text-amber-300 border-amber-700 bg-amber-950/40'
+                : 'text-slate-500 border-slate-700 hover:border-slate-500',
+            )}
+          >
+            8h
+          </button>
+        )}
+        <AbsenceSelect value={person.absence} onChange={v => onUpdate({ ...person, absence: v, partial8h: v ? false : person.partial8h })} />
       </div>
       <div className="flex gap-1 flex-wrap mt-1.5">
         {person.roles.map(r => <RoleChip key={r} role={r} />)}

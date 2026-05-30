@@ -115,6 +115,7 @@ export function CrewGeneratorPage() {
           preferredVehicleId: pRow.preferred_vehicle_id ?? undefined,
           // Use only the date-specific absenceMap — ignore global personnel.absence
           absence: (loadedAssignment?.absenceMap?.[pRow.id] ?? null) as AbsenceType | null,
+          partial8h: !!loadedAssignment?.partial8hIds?.includes(pRow.id),
         })))
       }
       if (loadedAssignment) setAssignment(loadedAssignment)
@@ -188,6 +189,16 @@ export function CrewGeneratorPage() {
           next = { ...next, unassignedIds: [...next.unassignedIds, updated.id] }
         }
       }
+
+      // Obecność tylko 8h (niezależna od przydziału — może być w wozie lub w rezerwie)
+      const had8h = (next.partial8hIds ?? []).includes(updated.id)
+      const want8h = !!updated.partial8h && updated.absence === null
+      if (want8h !== had8h) {
+        const ids = new Set(next.partial8hIds ?? [])
+        if (want8h) ids.add(updated.id); else ids.delete(updated.id)
+        next = { ...next, partial8hIds: ids.size ? [...ids] : undefined }
+      }
+
       if (next !== assignment) applyAssignment(next)
     }
 

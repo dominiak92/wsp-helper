@@ -6,7 +6,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
-  Globe2, Map as MapIcon,
+  Globe2, Map as MapIcon, Wind,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
@@ -34,6 +34,15 @@ const MAP_ZOOM = 12
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
+// Bieżący wiatr (Open-Meteo, bez klucza) — te same współrzędne co widget pogodowy (Sulęcin)
+const WIND_URL =
+  'https://api.open-meteo.com/v1/forecast?latitude=52.433&longitude=15.117' +
+  '&current=wind_speed_10m,wind_direction_10m&timezone=Europe%2FWarsaw'
+// 8-punktowa róża wiatrów (kierunek SKĄD wieje), skróty polskie
+const WIND_CARDINALS_PL = ['Pn', 'PnWsch', 'Wsch', 'PdWsch', 'Pd', 'PdZach', 'Zach', 'PnZach']
+function windCardinalPl(deg: number): string {
+  return WIND_CARDINALS_PL[Math.round(((deg % 360) + 360) % 360 / 45) % 8]
+}
 
 const COUNTY = { south: 52.15, north: 52.62, west: 14.85, east: 15.50 }
 const OSPWL  = { south: 52.27558, north: 52.48582, west: 14.98, east: 15.52 }
@@ -304,6 +313,7 @@ export function FireMapPage() {
   const [showGrid, setShowGrid] = useState(true)
   const [baseMap, setBaseMap] = useState<'map' | 'sat'>('map')
   const [zoom, setZoom] = useState(MAP_ZOOM)
+  const [wind, setWind] = useState<{ dir: number; speed: number } | null>(null)
 
   // Obiekty mapy ppoż.
   const [features, setFeatures] = useState<MapFeature[]>([])
@@ -359,6 +369,24 @@ export function FireMapPage() {
     fetchFeatures()
       .then(setFeatures)
       .catch(err => setFeaturesError(err instanceof Error ? err.message : 'Błąd wczytywania obiektów'))
+  }, [])
+
+  // Bieżący wiatr (Open-Meteo) — odświeżany co 20 min; przy błędzie badge się nie pokazuje
+  useEffect(() => {
+    let active = true
+    const load = () =>
+      fetch(WIND_URL)
+        .then(r => (r.ok ? r.json() : null))
+        .then(json => {
+          const c = json?.current
+          if (active && c && typeof c.wind_direction_10m === 'number') {
+            setWind({ dir: c.wind_direction_10m, speed: c.wind_speed_10m ?? 0 })
+          }
+        })
+        .catch(() => { /* cicha degradacja */ })
+    load()
+    const id = setInterval(load, 20 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
   }, [])
 
   // Polling: alarmy + lokalizacje na żywo (co 10 s)
@@ -451,6 +479,8 @@ export function FireMapPage() {
 
     map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
 
+    L.control.scale({ metric: true, imperial: false, maxWidth: 120, position: 'bottomleft' }).addTo(map)
+
     featureLayerRef.current = L.layerGroup().addTo(map)
     clusterRef.current = L.markerClusterGroup({
       maxClusterRadius: 50,
@@ -489,6 +519,10 @@ export function FireMapPage() {
         'color:#e2e8f0;font-size:10px;font-weight:600;padding:1px 6px;border-radius:6px;white-space:nowrap}',
       '.feature-label.leaflet-tooltip-right::before,.feature-label.leaflet-tooltip-left::before,',
       '.feature-label::before{display:none!important}',
+      '.leaflet-control-scale{margin-left:12px!important;margin-bottom:12px!important}',
+      '.leaflet-control-scale-line{background:rgba(15,17,23,0.82)!important;border:1px solid rgba(71,85,105,0.5)!important;',
+        'border-top:none!important;color:#e2e8f0!important;font-size:10px!important;font-weight:600!important;',
+        'padding:1px 6px!important;text-shadow:none!important;border-radius:0 0 4px 4px!important}',
       '@keyframes wsp-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}',
         '70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}',
       '.wsp-alert-dot{animation:wsp-pulse 1.5s infinite}',
@@ -1550,6 +1584,28 @@ export function FireMapPage() {
           </div>
         )}
       </div>
+
+      {/* Wskaźnik wiatru — lewy-dolny róg, nad skalą; strzałka = dokąd wieje (kierunek pożaru) */}
+      {wind && (
+        <div className="absolute bottom-10 left-3 z-[1000] flex items-center gap-2 px-2.5 py-1.5 rounded-xl shadow-lg bg-surface-900 border border-slate-700/60">
+          <span className="relative w-7 h-7 rounded-full bg-surface-950 border border-slate-700/60 flex items-center justify-center shrink-0">
+            <svg
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              style={{ transform: `rotate(${wind.dir + 180}deg)` }}
+              aria-hidden
+            >
+              <path d="M12 3 L18 19 L12 15 L6 19 Z" fill="#38bdf8" />
+            </svg>
+          </span>
+          <span className="text-[11px] leading-tight whitespace-nowrap">
+            <span className="flex items-center gap-1 text-slate-400">
+              <Wind className="w-3 h-3 shrink-0" /> Wiatr z {windCardinalPl(wind.dir)}
+            </span>
+            <span className="block font-semibold text-slate-100 tabular-nums">{Math.round(wind.speed)} km/h</span>
+          </span>
+        </div>
+      )}
 
       {/* GPS label toast */}
       <div className={cn(

@@ -96,6 +96,7 @@ Key capabilities:
 - **Shared live layers** — alert points (`map_alerts`) and live user locations (`live_locations`) via `liveMap.ts`, polled every ~10 s. Live sharing lasts 30 min, persisted client-side under `localStorage['wsp-share-until']`; a user's vehicle is resolved from the current duty assignment.
 - **Search & routing** — Overpass API (road geometry), Nominatim (geocoding, viewbox-limited to the county), OSRM (driving routes). Routes can start from GPS position or from the station (`52.43626, 15.18625`).
 - **BDL forest compartments** — search a leśny compartment by number and overlay BDL "Oddziały" tiles; see the three `bdl-*` Netlify functions below.
+- **Scale + wind** — a metric `L.control.scale` (bottom-left, dark-themed) and a wind indicator badge (bottom-left, above the scale) whose arrow points downwind (fire-spread direction = meteo direction + 180°). Wind is fetched from Open-Meteo `current=wind_speed_10m,wind_direction_10m` (no key, Sulęcin coords), refreshed every 20 min; the badge hides on fetch error.
 
 ### Pages summary
 

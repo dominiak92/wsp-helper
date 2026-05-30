@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
@@ -196,6 +198,21 @@ function makeFeatureIcon(kind: FeatureKind, confirmed: boolean, icon?: string | 
   })
 }
 
+// Ikona klastra (grupa nakładających się znaczników) — ciemne kółko z liczbą
+function makeClusterIcon(count: number): L.DivIcon {
+  const size = count < 10 ? 36 : count < 100 ? 42 : 48
+  return L.divIcon({
+    className: '',
+    html:
+      `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;` +
+      `justify-content:center;background:rgba(8,15,30,0.92);border:2px solid #38bdf8;` +
+      `border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.55);color:#e2e8f0;` +
+      `font-size:13px;font-weight:700;font-family:sans-serif;line-height:1">${count}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  })
+}
+
 function featurePopupHtml(f: MapFeature, lat: number, lng: number): string {
   const safeName = encodeURIComponent(f.label)
   const desc = f.description
@@ -272,6 +289,7 @@ export function FireMapPage() {
   const userPosRef = useRef<L.LatLng | null>(null)
   const gridLayersRef = useRef<L.Layer[]>([])
   const featureLayerRef = useRef<L.LayerGroup | null>(null)
+  const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
   const draftLayerRef = useRef<L.LayerGroup | null>(null)
   const editModeRef = useRef(false)
   const addKindRef = useRef<FeatureKind | null>(null)
@@ -433,6 +451,13 @@ export function FireMapPage() {
     map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
 
     featureLayerRef.current = L.layerGroup().addTo(map)
+    clusterRef.current = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      showCoverageOnHover: false,
+      spiderfyOnMaxZoom: true,
+      disableClusteringAtZoom: 16, // od ~zoom 16 wszystkie znaczniki widać pojedynczo (z etykietami)
+      iconCreateFunction: (c) => makeClusterIcon(c.getChildCount()),
+    }).addTo(map)
     draftLayerRef.current = L.layerGroup().addTo(map)
     liveLayerRef.current = L.layerGroup().addTo(map)
     alertLayerRef.current = L.layerGroup().addTo(map)
@@ -572,6 +597,7 @@ export function FireMapPage() {
       baseLayerRef.current = null
       labelsLayerRef.current = null
       featureLayerRef.current = null
+      clusterRef.current = null
       draftLayerRef.current = null
       liveLayerRef.current = null
       alertLayerRef.current = null
@@ -638,8 +664,12 @@ export function FireMapPage() {
 
   const renderFeatures = useCallback(() => {
     const group = featureLayerRef.current
-    if (!group) return
+    const cluster = clusterRef.current
+    if (!group || !cluster) return
     group.clearLayers()
+    cluster.clearLayers()
+    // W trybie edycji nie klastrujemy — admin musi widzieć i przeciągać każdy znacznik
+    const pointTarget = editMode ? group : cluster
 
     features.forEach(f => {
       if (!visibleKinds[f.kind]) return
@@ -670,7 +700,7 @@ export function FireMapPage() {
         } else {
           marker.bindPopup(featurePopupHtml(f, lat, lng), { className: 'wsp-popup', maxWidth: 240 })
         }
-        group.addLayer(marker)
+        pointTarget.addLayer(marker)
       } else {
         const pts = f.geometry.points.map(([la, ln]) => L.latLng(la, ln))
         if (pts.length < 2) return

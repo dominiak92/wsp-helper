@@ -92,7 +92,7 @@ There are two separate weather widgets that pull from completely different APIs:
 Key capabilities:
 
 - **Base layers** — OSM raster, or GUGiK ortofotomapa as a hybrid (ortofoto + transparent Esri roads + CARTO labels). Toggled in-page.
-- **Persistent features** — water points / units / POIs / fire roads from `map_features` (via `mapFeatures.ts`), editable in an admin edit mode (drag to reposition flips `confirmed` to true).
+- **Persistent features** — water points / units / POIs / fire roads from `map_features` (via `mapFeatures.ts`), editable in an admin edit mode (drag to reposition flips `confirmed` to true). Point markers are grouped with `leaflet.markercluster` for readability when zoomed out (`clusterRef`, custom dark `makeClusterIcon`, `disableClusteringAtZoom: 16`); their permanent labels only appear once declustered. Clustering is bypassed in edit mode (markers go straight to `featureLayerRef`) so each is individually draggable; road polylines always stay on `featureLayerRef` (unclustered).
 - **Shared live layers** — alert points (`map_alerts`) and live user locations (`live_locations`) via `liveMap.ts`, polled every ~10 s. Live sharing lasts 30 min, persisted client-side under `localStorage['wsp-share-until']`; a user's vehicle is resolved from the current duty assignment.
 - **Search & routing** — Overpass API (road geometry), Nominatim (geocoding, viewbox-limited to the county), OSRM (driving routes). Routes can start from GPS position or from the station (`52.43626, 15.18625`).
 - **BDL forest compartments** — search a leśny compartment by number and overlay BDL "Oddziały" tiles; see the three `bdl-*` Netlify functions below.

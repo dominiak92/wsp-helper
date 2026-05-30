@@ -97,6 +97,7 @@ Key capabilities:
 - **Search & routing** — Overpass API (road geometry), Nominatim (geocoding, viewbox-limited to the county), OSRM (driving routes). Routes can start from GPS position or from the station (`52.43626, 15.18625`).
 - **BDL forest compartments** — search a leśny compartment by number and overlay BDL "Oddziały" tiles; see the three `bdl-*` Netlify functions below.
 - **Scale + wind** — a metric `L.control.scale` (bottom-left, dark-themed) and a wind indicator badge (bottom-left, above the scale) whose arrow points downwind (fire-spread direction = meteo direction + 180°). Wind is fetched from Open-Meteo `current=wind_speed_10m,wind_direction_10m` (no key, Sulęcin coords), refreshed every 20 min; the badge hides on fetch error.
+- **Duty-officer reports** — the walkie-talkie button (`WalkieTalkieIcon`, top of the right control column) opens a panel with two generated reports: "Zgłoś dojazd na miejsce" / "Zgłoś zakończenie akcji". Each inserts a `duty_messages` row (`sender_login`/`sender_name` = current user, message = `REPORT_PREFIX[kind] — zastęp {vehicle}, godz. {HH:MM}`) and fires a `new_message` push, so it shows in the admin dashboard like any message and is confirmed there (`read_at` → `confirmed` push). The map polls the user's own messages and shows per-kind status (Oczekuje / Potwierdzona); report kind is detected by the stable text prefix (no DB schema change). The vehicle/zastęp is the same `myVehicle` resolved for live sharing.
 
 ### Pages summary
 

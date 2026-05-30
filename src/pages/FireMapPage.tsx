@@ -6,7 +6,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
-  Globe2, Map as MapIcon, Wind,
+  Globe2, Wind, CheckCircle, Clock, MapPin, Flag,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
@@ -21,6 +21,7 @@ import {
   type AlertPoint, type LiveLocation,
 } from '../lib/liveMap'
 import { supabase } from '../lib/supabase'
+import { sendPushTrigger } from '../lib/pushNotifications'
 import { CREW_VEHICLE_NAMES, findPersonVehicleId, parseShiftAssignment } from '../lib/crew'
 import { currentOrNextDutyDate } from '../lib/duty'
 
@@ -38,11 +39,12 @@ const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
 const WIND_URL =
   'https://api.open-meteo.com/v1/forecast?latitude=52.433&longitude=15.117' +
   '&current=wind_speed_10m,wind_direction_10m&timezone=Europe%2FWarsaw'
-// 8-punktowa róża wiatrów (kierunek SKĄD wieje), skróty polskie
-const WIND_CARDINALS_PL = ['Pn', 'PnWsch', 'Wsch', 'PdWsch', 'Pd', 'PdZach', 'Zach', 'PnZach']
-function windCardinalPl(deg: number): string {
-  return WIND_CARDINALS_PL[Math.round(((deg % 360) + 360) % 360 / 45) % 8]
-}
+// Generowane meldunki z mapy do dyżurnego — stały prefiks pozwala rozpoznać typ bez kolumny w DB
+const REPORT_PREFIX = {
+  arrival: '🚒 Dojazd na miejsce',
+  end: '🏁 Zakończenie akcji',
+} as const
+type ReportKind = keyof typeof REPORT_PREFIX
 
 const COUNTY = { south: 52.15, north: 52.62, west: 14.85, east: 15.50 }
 const OSPWL  = { south: 52.27558, north: 52.48582, west: 14.98, east: 15.52 }
@@ -207,6 +209,28 @@ function makeFeatureIcon(kind: FeatureKind, confirmed: boolean, icon?: string | 
   })
 }
 
+// Ikona krótkofalówki (radio do ręki) — własna, bo lucide nie ma walkie-talkie
+function WalkieTalkieIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M16 2.5V6" />
+      <rect x="6.5" y="6" width="11" height="15.5" rx="2" />
+      <rect x="9.5" y="9" width="5" height="3.2" rx="0.6" />
+      <path d="M10 15.5h4M10 18h4" />
+      <path d="M4 9.5v3.5" />
+    </svg>
+  )
+}
+
 // Ikona klastra (grupa nakładających się znaczników) — ciemne kółko z liczbą
 function makeClusterIcon(count: number): L.DivIcon {
   const size = count < 10 ? 36 : count < 100 ? 42 : 48
@@ -352,6 +376,12 @@ export function FireMapPage() {
   const [myVehicle, setMyVehicle] = useState<string | null>(null)
   const myVehicleRef = useRef<string | null>(null)
 
+  // Meldunki dojazd/zakończenie wysyłane z mapy do dyżurnego
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportBusy, setReportBusy] = useState<ReportKind | null>(null)
+  const [reportError, setReportError] = useState<string | null>(null)
+  const [myReports, setMyReports] = useState<{ id: string; message: string; created_at: string; read_at: string | null }[]>([])
+
   const myLogin = user?.login ?? null
   const myName = user?.displayName ?? user?.login ?? null
   const isSharing = sharingUntil !== null
@@ -388,6 +418,61 @@ export function FireMapPage() {
     const id = setInterval(load, 20 * 60 * 1000)
     return () => { active = false; clearInterval(id) }
   }, [])
+
+  // Moje meldunki dojazd/zakończenie — status potwierdzenia z duty_messages
+  const fetchMyReports = useCallback(async () => {
+    if (!myLogin) return
+    const { data } = await supabase
+      .from('duty_messages')
+      .select('id,message,created_at,read_at')
+      .eq('sender_login', myLogin)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (data) {
+      setMyReports(
+        (data as { id: string; message: string; created_at: string; read_at: string | null }[])
+          .filter(m => m.message.startsWith(REPORT_PREFIX.arrival) || m.message.startsWith(REPORT_PREFIX.end)),
+      )
+    }
+  }, [myLogin])
+
+  useEffect(() => { fetchMyReports() }, [fetchMyReports])
+
+  // Dopóki jakiś meldunek czeka na potwierdzenie — odpytuj co 20 s
+  useEffect(() => {
+    if (!myReports.some(m => !m.read_at)) return
+    const id = setInterval(fetchMyReports, 20_000)
+    return () => clearInterval(id)
+  }, [myReports, fetchMyReports])
+
+  // Najnowszy meldunek danego typu (do pokazania statusu)
+  const latestReport = useCallback(
+    (kind: ReportKind) => myReports.find(m => m.message.startsWith(REPORT_PREFIX[kind])) ?? null,
+    [myReports],
+  )
+
+  async function sendReport(kind: ReportKind) {
+    if (!myLogin || reportBusy) return
+    setReportBusy(kind)
+    setReportError(null)
+    const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+    const zastep = myVehicle ?? 'bez przydziału'
+    const message = `${REPORT_PREFIX[kind]} — zastęp ${zastep}, godz. ${time}`
+    try {
+      const { error } = await supabase.from('duty_messages').insert({
+        sender_login: myLogin,
+        sender_name: myName,
+        message,
+      })
+      if (error) { setReportError('Błąd wysyłania: ' + error.message); return }
+      await fetchMyReports()
+      sendPushTrigger({ type: 'new_message', senderLogin: myLogin, senderName: myName ?? undefined, message })
+    } catch (err) {
+      setReportError('Błąd wysyłania: ' + (err instanceof Error ? err.message : 'nieznany błąd'))
+    } finally {
+      setReportBusy(null)
+    }
+  }
 
   // Polling: alarmy + lokalizacje na żywo (co 10 s)
   useEffect(() => {
@@ -1386,6 +1471,66 @@ export function FireMapPage() {
           </div>
         )}
 
+        {/* Meldunek do dyżurnego: dojazd / zakończenie akcji */}
+        {reportOpen && (
+          <div className="bg-surface-950 border border-brand-700/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-100">
+                <WalkieTalkieIcon className="w-4 h-4 text-brand-400" /> Meldunek do dyżurnego
+              </div>
+              <button onClick={() => setReportOpen(false)} className="text-slate-500 hover:text-slate-300">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {myVehicle ? (
+              <div className="text-[10px] text-slate-500 px-0.5">
+                Zastęp: <span className="text-slate-300 font-medium">{myVehicle}</span>
+              </div>
+            ) : (
+              <div className="text-[10px] text-amber-400/80 px-0.5">
+                Brak przydziału do zastępu w dzisiejszej obsadzie
+              </div>
+            )}
+            {(['arrival', 'end'] as ReportKind[]).map(kind => {
+              const rep = latestReport(kind)
+              const busy = reportBusy === kind
+              return (
+                <div key={kind} className="flex flex-col gap-1">
+                  <button
+                    onClick={() => sendReport(kind)}
+                    disabled={!!reportBusy || !myLogin}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium border transition-colors disabled:opacity-50',
+                      kind === 'arrival'
+                        ? 'bg-brand-600/90 hover:bg-brand-600 text-white border-brand-500'
+                        : 'bg-surface-900/80 hover:bg-surface-800 text-slate-100 border-slate-700/50',
+                    )}
+                  >
+                    {busy
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      : kind === 'arrival'
+                        ? <MapPin className="w-3.5 h-3.5 shrink-0" />
+                        : <Flag className="w-3.5 h-3.5 shrink-0" />}
+                    {kind === 'arrival' ? 'Zgłoś dojazd na miejsce' : 'Zgłoś zakończenie akcji'}
+                  </button>
+                  {rep && (
+                    <span className={cn(
+                      'flex items-center gap-1 text-[10px] px-1',
+                      rep.read_at ? 'text-emerald-400' : 'text-amber-400',
+                    )}>
+                      {rep.read_at ? <CheckCircle className="w-3 h-3 shrink-0" /> : <Clock className="w-3 h-3 shrink-0" />}
+                      {rep.read_at ? 'Potwierdzona przez dyżurnego' : 'Oczekuje na potwierdzenie'}
+                      {' · '}
+                      {new Date(rep.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+            {reportError && <div className="text-[10px] text-red-400 px-0.5">{reportError}</div>}
+          </div>
+        )}
+
         {/* Podpowiedź: stawianie alarmu */}
         {placingAlert && (
           <div className="flex items-center justify-between gap-2 bg-red-950 border border-red-700/50 rounded-full px-4 py-2 text-[11px] text-red-200 shadow-lg">
@@ -1587,22 +1732,18 @@ export function FireMapPage() {
 
       {/* Wskaźnik wiatru — lewy-dolny róg, nad skalą; strzałka = dokąd wieje (kierunek pożaru) */}
       {wind && (
-        <div className="absolute bottom-10 left-3 z-[1000] flex items-center gap-2 px-2.5 py-1.5 rounded-xl shadow-lg bg-surface-900 border border-slate-700/60">
-          <span className="relative w-7 h-7 rounded-full bg-surface-950 border border-slate-700/60 flex items-center justify-center shrink-0">
-            <svg
-              viewBox="0 0 24 24"
-              className="w-4 h-4"
-              style={{ transform: `rotate(${wind.dir + 180}deg)` }}
-              aria-hidden
-            >
-              <path d="M12 3 L18 19 L12 15 L6 19 Z" fill="#38bdf8" />
-            </svg>
-          </span>
-          <span className="text-[11px] leading-tight whitespace-nowrap">
-            <span className="flex items-center gap-1 text-slate-400">
-              <Wind className="w-3 h-3 shrink-0" /> Wiatr z {windCardinalPl(wind.dir)}
-            </span>
-            <span className="block font-semibold text-slate-100 tabular-nums">{Math.round(wind.speed)} km/h</span>
+        <div className="absolute bottom-10 left-3 z-[1000] flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl shadow-lg bg-surface-900 border border-slate-700/60 pointer-events-none">
+          <Wind className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <svg
+            viewBox="0 0 24 24"
+            className="w-3.5 h-3.5 shrink-0"
+            style={{ transform: `rotate(${wind.dir + 180}deg)` }}
+            aria-hidden
+          >
+            <path d="M12 3 L18 19 L12 15 L6 19 Z" fill="#38bdf8" />
+          </svg>
+          <span className="text-[11px] font-semibold text-slate-100 tabular-nums whitespace-nowrap">
+            {Math.round(wind.speed)} km/h
           </span>
         </div>
       )}
@@ -1649,7 +1790,7 @@ export function FireMapPage() {
         )}
       >
         <Globe2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-        Ortofotomapa
+        Satelita
       </div>
 
       {/* Filtr obiektów mapy */}
@@ -1725,6 +1866,30 @@ export function FireMapPage() {
                 />
               </span>
             </button>
+
+            <button
+              onClick={() => setBaseMap(v => (v === 'sat' ? 'map' : 'sat'))}
+              className={cn(
+                'w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-[12px] transition-colors',
+                baseMap === 'sat' ? 'bg-surface-900/80 text-slate-100' : 'text-slate-500 hover:bg-surface-900/50',
+              )}
+            >
+              <Globe2 className={cn('w-3.5 h-3.5 shrink-0', baseMap === 'sat' ? 'text-brand-400' : 'text-slate-500')} />
+              <span className="flex-1 text-left">Satelita</span>
+              <span
+                className={cn(
+                  'w-8 h-4 rounded-full relative transition-colors shrink-0',
+                  baseMap === 'sat' ? 'bg-brand-600' : 'bg-slate-700',
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all',
+                    baseMap === 'sat' ? 'left-[18px]' : 'left-0.5',
+                  )}
+                />
+              </span>
+            </button>
           </div>
         </div>
       )}
@@ -1732,16 +1897,22 @@ export function FireMapPage() {
       {/* Grid + GPS + Follow buttons */}
       <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">
         <button
-          onClick={() => setBaseMap(v => (v === 'sat' ? 'map' : 'sat'))}
-          title={baseMap === 'sat' ? 'Widok mapy' : 'Ortofotomapa (zdjęcia lotnicze)'}
+          onClick={() => setReportOpen(v => !v)}
+          disabled={!myLogin}
+          title="Meldunek do dyżurnego (dojazd / zakończenie akcji)"
           className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
-            baseMap === 'sat'
+            'relative w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            reportOpen
               ? 'bg-brand-600 text-white border-brand-500'
-              : 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200',
+              : myLogin
+                ? 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200'
+                : 'bg-surface-900 text-slate-600 border-slate-700/60 cursor-not-allowed',
           )}
         >
-          {baseMap === 'sat' ? <MapIcon className="w-4 h-4" /> : <Globe2 className="w-4 h-4" />}
+          <WalkieTalkieIcon className="w-4 h-4" />
+          {myReports.some(m => !m.read_at) && (
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border border-surface-950" />
+          )}
         </button>
         <button
           onClick={startPlaceAlert}

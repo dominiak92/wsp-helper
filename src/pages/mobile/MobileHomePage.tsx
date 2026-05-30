@@ -245,6 +245,7 @@ export function MobileHomePage() {
   const [msgSentOk, setMsgSentOk] = useState(false)
   const [msgError, setMsgError] = useState<string | null>(null)
   const [myMessages, setMyMessages] = useState<DutyMsg[]>([])
+  const [receivedMsgs, setReceivedMsgs] = useState<DutyMsg[]>([])
   const [pushSubscribed, setPushSubscribed] = useState(false)
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
@@ -253,6 +254,10 @@ export function MobileHomePage() {
   const [weatherLoading, setWeatherLoading] = useState(true)
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([])
   // WeatherData = { morning, afternoon } — shape matches weather.js response
+
+  // Czy zalogowany jest dyżurnym wyznaczonym na ten dzień (slot obsady, nie stała rola)
+  const myPersonId = user ? (personnel.find(p => p.login === user.login)?.id ?? null) : null
+  const isDutyOfficer = !!(myPersonId && assignment?.dutyOfficerIds.includes(myPersonId))
 
   useEffect(() => {
     const upcomingKeys = nextDutyKeys(16) // next 16 duty days
@@ -378,6 +383,36 @@ export function MobileHomePage() {
     return () => clearInterval(interval)
   }, [myMessages]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Dyżurny dnia: wiadomości od załogi (wszystkie poza własnymi)
+  async function fetchReceivedMessages() {
+    if (!user) return
+    const { data } = await supabase
+      .from('duty_messages')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(30)
+    if (data) setReceivedMsgs((data as DutyMsg[]).filter(m => m.sender_login !== user.login))
+  }
+
+  useEffect(() => {
+    if (isDutyOfficer) fetchReceivedMessages()
+  }, [isDutyOfficer]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Odpytuj co 30 s, dopóki są niepotwierdzone wiadomości
+  useEffect(() => {
+    if (!isDutyOfficer || !receivedMsgs.some(m => !m.read_at)) return
+    const interval = setInterval(fetchReceivedMessages, 30_000)
+    return () => clearInterval(interval)
+  }, [isDutyOfficer, receivedMsgs]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function confirmReceived(msg: DutyMsg) {
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('duty_messages').update({ read_at: now }).eq('id', msg.id)
+    if (error) return
+    setReceivedMsgs(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: now } : m))
+    sendPushTrigger({ type: 'confirmed', targetLogin: msg.sender_login })
+  }
+
   if (loading) {
     return (
       <div className="px-3 sm:px-5 py-4 space-y-5 pb-8 animate-pulse">
@@ -469,6 +504,62 @@ export function MobileHomePage() {
         <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl px-4 py-3 flex gap-3">
           <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-100 leading-relaxed whitespace-pre-wrap break-words">{announcement}</p>
+        </div>
+      )}
+
+      {/* Dyżurny dnia: wiadomości od załogi (do potwierdzenia) */}
+      {isDutyOfficer && receivedMsgs.length > 0 && (
+        <div>
+          <SectionLabel>
+            Wiadomości od załogi
+            {receivedMsgs.some(m => !m.read_at) && (
+              <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold align-middle">
+                {receivedMsgs.filter(m => !m.read_at).length}
+              </span>
+            )}
+          </SectionLabel>
+          <div className="space-y-2">
+            {receivedMsgs.map(msg => (
+              <div
+                key={msg.id}
+                className={cn(
+                  'bg-surface-800 rounded-xl border p-3 space-y-2',
+                  msg.read_at ? 'border-slate-700/40' : 'border-brand-800/60',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    {!msg.read_at && <span className="w-2 h-2 rounded-full bg-brand-400 shrink-0" />}
+                    <span className="text-sm font-semibold text-white truncate">
+                      {msg.sender_name ?? msg.sender_login}
+                    </span>
+                  </span>
+                  <span className="text-[10px] text-slate-600 shrink-0">
+                    {new Date(msg.created_at).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}
+                    {' '}
+                    {new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+                  {msg.message}
+                </p>
+                <div className="flex justify-end">
+                  {msg.read_at ? (
+                    <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+                      <CheckCircle className="w-3 h-3" /> Potwierdzona
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => confirmReceived(msg)}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors"
+                    >
+                      <CheckCircle className="w-3 h-3" /> Potwierdź
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

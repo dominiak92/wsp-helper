@@ -37,7 +37,7 @@ Defined in `src/lib/database.types.ts`. Additional table used but not typed ther
 | `personnel` | Firefighter roster (id, name, roles[], preferred_vehicle_id, absence, login) |
 | `duty_assignments` | Serialised `ShiftAssignment` JSON keyed by `duty_date` (YYYY-MM-DD) |
 | `announcements` | Single row (id=1) with a shared text note shown on dashboard and mobile |
-| `duty_messages` | Messages sent from mobile users to admin; admin confirms with `read_at` |
+| `duty_messages` | Messages sent from mobile users to the duty officer; confirmed with `read_at`. Both the admin (dashboard) **and the day's duty officer** (the user in the current assignment's `dutyOfficerIds`, on mobile home) can read all messages and confirm them — confirming fires a `confirmed` push to the sender. Relies on permissive RLS (any authenticated user can read/update). |
 | `push_subscriptions` | Web Push subscriptions (user_login, user_role, subscription JSON) |
 | `weather_cache` | Single row (id=1) written by a GitHub Actions cron, read by the Netlify function |
 | `calendar_events` | Upcoming events shown on mobile home (id, event_date, label) — not in database.types.ts |

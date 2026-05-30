@@ -246,6 +246,8 @@ export function MobileHomePage() {
   const [msgError, setMsgError] = useState<string | null>(null)
   const [myMessages, setMyMessages] = useState<DutyMsg[]>([])
   const [receivedMsgs, setReceivedMsgs] = useState<DutyMsg[]>([])
+  // Świeżo potwierdzone — pokazane jeszcze chwilę jako „Potwierdzona", potem znikają
+  const [fadingIds, setFadingIds] = useState<string[]>([])
   const [pushSubscribed, setPushSubscribed] = useState(false)
   // Map of dutyKey → has saved assignment (for upcoming absence scan)
   const [savedMap, setSavedMap] = useState<Map<string, ShiftAssignment>>(new Map())
@@ -411,7 +413,17 @@ export function MobileHomePage() {
     if (error) return
     setReceivedMsgs(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: now } : m))
     sendPushTrigger({ type: 'confirmed', targetLogin: msg.sender_login })
+    // pokaż „Potwierdzona" przez chwilę, potem usuń z listy
+    setFadingIds(prev => [...prev, msg.id])
+    setTimeout(() => setFadingIds(prev => prev.filter(id => id !== msg.id)), 3500)
   }
+
+  function dismissReceived(id: string) {
+    setFadingIds(prev => prev.filter(x => x !== id))
+  }
+
+  // Kolejka dyżurnego: tylko niepotwierdzone + świeżo potwierdzone (chwilowo)
+  const visibleReceived = receivedMsgs.filter(m => !m.read_at || fadingIds.includes(m.id))
 
   if (loading) {
     return (
@@ -508,7 +520,7 @@ export function MobileHomePage() {
       )}
 
       {/* Dyżurny dnia: wiadomości od załogi (do potwierdzenia) */}
-      {isDutyOfficer && receivedMsgs.length > 0 && (
+      {isDutyOfficer && visibleReceived.length > 0 && (
         <div>
           <SectionLabel>
             Wiadomości od załogi
@@ -519,12 +531,12 @@ export function MobileHomePage() {
             )}
           </SectionLabel>
           <div className="space-y-2">
-            {receivedMsgs.map(msg => (
+            {visibleReceived.map(msg => (
               <div
                 key={msg.id}
                 className={cn(
-                  'bg-surface-800 rounded-xl border p-3 space-y-2',
-                  msg.read_at ? 'border-slate-700/40' : 'border-brand-800/60',
+                  'bg-surface-800 rounded-xl border p-3 space-y-2 transition-opacity duration-500',
+                  msg.read_at ? 'border-emerald-900/50 opacity-70' : 'border-brand-800/60',
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -534,10 +546,21 @@ export function MobileHomePage() {
                       {msg.sender_name ?? msg.sender_login}
                     </span>
                   </span>
-                  <span className="text-[10px] text-slate-600 shrink-0">
-                    {new Date(msg.created_at).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}
-                    {' '}
-                    {new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] text-slate-600">
+                      {new Date(msg.created_at).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}
+                      {' '}
+                      {new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {msg.read_at && (
+                      <button
+                        onClick={() => dismissReceived(msg.id)}
+                        className="text-slate-600 hover:text-slate-300 transition-colors"
+                        title="Zamknij"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </span>
                 </div>
                 <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words">

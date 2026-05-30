@@ -444,6 +444,7 @@ export function FireMapPage() {
     const map = L.map(containerRef.current, {
       center: MAP_CENTER,
       zoom: MAP_ZOOM,
+      maxZoom: 19, // wymagane przez markercluster (warstwy bazowe i tak mają 19)
       zoomControl: false,
       attributionControl: false,
     })

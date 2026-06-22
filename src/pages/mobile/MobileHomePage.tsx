@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, VEHICLE_EXTRA_RESCUERS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons } from '../../lib/crew'
 import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Plane } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
@@ -1042,12 +1042,15 @@ function VehicleReadinessStrip({ assignment, personnel }: { assignment: ShiftAss
       {CREW_VEHICLE_IDS.map((id, i) => {
         const v = assignment.vehicles.find(v => v.vehicleId === id)
         const cap = VEHICLE_SEATS[id]
-        const rescuerCap = cap - 2
+        const rescuerCap = cap - 2 // standard rescuer slots counted toward capacity
+        const extraCap = VEHICLE_EXTRA_RESCUERS[id]
         const commanderFilled = !!v?.commanderId
         const driverFilled = !!v?.driverId
-        const rescuersFilled = v?.rescuerIds.length ?? 0
-        const filled = (commanderFilled ? 1 : 0) + (driverFilled ? 1 : 0) + rescuersFilled
-        const full = filled === cap
+        const allRescuers = v?.rescuerIds.length ?? 0
+        const stdRescuers = Math.min(allRescuers, rescuerCap)
+        const extraRescuers = Math.max(0, allRescuers - rescuerCap)
+        const filled = (commanderFilled ? 1 : 0) + (driverFilled ? 1 : 0) + stdRescuers
+        const full = filled >= cap
         const partial = filled > 0 && filled < cap
 
         return (
@@ -1066,14 +1069,22 @@ function VehicleReadinessStrip({ assignment, personnel }: { assignment: ShiftAss
               <Shield className={cn('w-3.5 h-3.5 shrink-0 transition-colors', commanderFilled ? 'text-purple-400' : 'text-slate-700')} />
               <Truck className={cn('w-3.5 h-3.5 shrink-0 transition-colors', driverFilled ? 'text-emerald-400' : 'text-slate-700')} />
               {Array.from({ length: rescuerCap }, (_, j) => (
-                <HeartPulse key={j} className={cn('w-3.5 h-3.5 shrink-0 transition-colors', j < rescuersFilled ? 'text-sky-400' : 'text-slate-700')} />
+                <HeartPulse key={j} className={cn('w-3.5 h-3.5 shrink-0 transition-colors', j < stdRescuers ? 'text-sky-400' : 'text-slate-700')} />
+              ))}
+              {extraCap > 0 && Array.from({ length: extraRescuers }, (_, j) => (
+                <HeartPulse key={`x${j}`} className="w-3.5 h-3.5 shrink-0 text-teal-300/80" />
               ))}
             </div>
-            <span className={cn(
-              'text-xs font-bold tabular-nums shrink-0',
-              full ? 'text-emerald-400' : partial ? 'text-amber-400' : 'text-slate-500',
-            )}>
-              {filled}/{cap}
+            <span className="flex items-baseline gap-1 shrink-0">
+              <span className={cn(
+                'text-xs font-bold tabular-nums',
+                full ? 'text-emerald-400' : partial ? 'text-amber-400' : 'text-slate-500',
+              )}>
+                {filled}/{cap}
+              </span>
+              {extraRescuers > 0 && (
+                <span className="text-xs font-bold tabular-nums text-teal-300/80">+{extraRescuers}</span>
+              )}
             </span>
           </div>
         )

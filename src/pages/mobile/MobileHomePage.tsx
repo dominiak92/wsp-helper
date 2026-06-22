@@ -218,6 +218,17 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Nagłówek strefy panelu — mocniejszy niż SectionLabel, z cienką kreską i opcjonalnym slotem po prawej
+function ZoneLabel({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 shrink-0">{children}</span>
+      <span className="flex-1 h-px bg-gradient-to-r from-slate-700/70 to-transparent" />
+      {right}
+    </div>
+  )
+}
+
 
 // ── main page ─────────────────────────────────────────────────────────────────
 
@@ -239,7 +250,7 @@ export function MobileHomePage() {
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
   const [loading, setLoading] = useState(true)
   const [announcement, setAnnouncement] = useState<string | null>(null)
-  const [showMsgForm, setShowMsgForm] = useState(false)
+  const [activeAction, setActiveAction] = useState<'message' | 'absence' | null>(null)
   const [msgText, setMsgText] = useState('')
   const [sendingMsg, setSendingMsg] = useState(false)
   const [msgSentOk, setMsgSentOk] = useState(false)
@@ -500,7 +511,7 @@ export function MobileHomePage() {
       } else {
         setMsgText('')
         setMsgSentOk(true)
-        setShowMsgForm(false)
+        setActiveAction(null)
         setTimeout(() => setMsgSentOk(false), 4000)
         await fetchMyMessages()
         sendPushTrigger({ type: 'new_message', senderLogin: user.login, senderName: user.displayName, message: text })
@@ -571,7 +582,7 @@ export function MobileHomePage() {
   const myAbsenceIsSelf = !!(myPersonId && assignment?.selfAbsences?.[myPersonId])
 
   return (
-    <div className="px-3 sm:px-5 py-4 space-y-5 pb-8">
+    <div className="px-3 sm:px-5 py-4 space-y-6 pb-8">
 
       {/* Announcement */}
       {announcement && (
@@ -648,9 +659,11 @@ export function MobileHomePage() {
         </div>
       )}
 
+      {/* ── MOJA SŁUŻBA ── */}
+      <section className="space-y-3">
+
       {/* Date header + upcoming events */}
       <div className={cn(
-        'border-b border-slate-800 pb-4',
         upcomingEvents.length > 0 && 'grid grid-cols-2 gap-3 items-start',
       )}>
         <div>
@@ -730,76 +743,125 @@ export function MobileHomePage() {
         </div>
       )}
 
-      {/* Informacja dla dyżurnego */}
-      <div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowMsgForm(v => !v)}
-            className="flex-1 flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
-          >
-            <div className="flex items-center gap-2.5">
-              <Send className="w-4 h-4 text-brand-400 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-white">Informacja dla dyżurnego</p>
-                <p className="text-[11px] text-slate-500">M.in. stan licznika, informacja na radiowęzeł, inne</p>
-              </div>
+      {/* Twoje nadchodzące nieobecności */}
+      {myPerson && (
+        <div>
+          <SectionLabel>Twoje nadchodzące nieobecności</SectionLabel>
+          {upcomingAbsences.length === 0 ? (
+            <div className="flex items-center gap-2.5 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
+              <CalendarX className="w-4 h-4 text-slate-600 shrink-0" />
+              <p className="text-xs text-slate-600">
+                Brak zaplanowanych nieobecności w zapisanych służbach
+              </p>
             </div>
-            <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', showMsgForm && 'rotate-180')} />
-          </button>
-          {user && <PushBell userLogin={user.login} userRole={user.role} onSubscribedChange={setPushSubscribed} />}
-        </div>
-
-        {msgSentOk && (
-          <div className="mt-2 flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
-            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-            <p className="text-sm text-emerald-300">Wiadomość wysłana do dyżurnego</p>
-          </div>
-        )}
-        {msgSentOk && !pushSubscribed && isPushSupported() && (
-          <div className="mt-1.5 flex items-center gap-3 bg-brand-950/50 border border-brand-800/60 rounded-xl px-4 py-3">
-            <p className="text-[12px] text-brand-300 flex-1 leading-snug">
-              Włącz 🔔 powiadomienia, żeby dostać info kiedy dyżurny potwierdzi
-            </p>
-            <PushBell userLogin={user!.login} userRole={user!.role} onSubscribedChange={setPushSubscribed} />
-          </div>
-        )}
-
-        <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', showMsgForm ? 'max-h-[200px] opacity-100' : 'max-h-0 opacity-0')}>
-          <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-2">
-            <textarea
-              className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
-              rows={3}
-              value={msgText}
-              onChange={e => setMsgText(e.target.value)}
-              placeholder="Np. stan licznika GBA 2,5/16: 45231 km, zmiana kierowcy/ratownika: Kowalski ↔ Nowak..."
-              autoFocus={showMsgForm}
-            />
-            {msgError && (
-              <p className="text-[11px] text-red-400">{msgError}</p>
-            )}
-            <div className="flex justify-end">
-              <button
-                onClick={sendDutyMessage}
-                disabled={sendingMsg || !msgText.trim()}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
-              >
-                <Send className="w-3 h-3" />
-                {sendingMsg ? 'Wysyłanie…' : 'Wyślij'}
-              </button>
+          ) : (
+            <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
+              {upcomingAbsences.map(({ date, label }) => (
+                <div key={date} className="flex items-center gap-3 px-4 py-3">
+                  <CalendarX className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">{formatDateShort(date)}</p>
+                    <p className="text-[11px] text-slate-500">{formatDateLong(date)}</p>
+                  </div>
+                  <span className="ml-auto text-[10px] font-medium text-amber-500 shrink-0 bg-amber-950/30 px-2 py-0.5 rounded-md border border-amber-900/40">
+                    {label}
+                  </span>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
+      )}
+      </section>
+
+      {/* ── AKCJE ── */}
+      <section className="space-y-3">
+      <ZoneLabel right={user ? <PushBell userLogin={user.login} userRole={user.role} onSubscribedChange={setPushSubscribed} /> : undefined}>
+        Akcje
+      </ZoneLabel>
+
+      {/* Dwa kafelki akcji */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setActiveAction(a => (a === 'message' ? null : 'message'))}
+          className={cn(
+            'rounded-xl border px-3 py-3 text-left transition-colors flex items-center gap-2.5',
+            activeAction === 'message' ? 'border-brand-500 bg-brand-950/30' : 'border-slate-700/40 bg-surface-800 hover:border-slate-600',
+          )}
+        >
+          <Send className="w-4 h-4 text-brand-400 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white leading-tight">Informacja</p>
+            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">dla dyżurnego</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveAction(a => (a === 'absence' ? null : 'absence'))}
+          className={cn(
+            'rounded-xl border px-3 py-3 text-left transition-colors flex items-center gap-2.5',
+            activeAction === 'absence' ? 'border-brand-500 bg-brand-950/30' : 'border-slate-700/40 bg-surface-800 hover:border-slate-600',
+          )}
+        >
+          <CalendarOff className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white leading-tight">Zgłoś nieobecność</p>
+            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">wybierz dzień i typ</p>
+          </div>
+        </button>
       </div>
 
-      {/* Zgłoś nieobecność */}
-      {myPersonId && (
-        <ReportAbsenceCard
+      {/* Panel: informacja dla dyżurnego */}
+      {activeAction === 'message' && (
+        <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-2">
+          <textarea
+            className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
+            rows={3}
+            value={msgText}
+            onChange={e => setMsgText(e.target.value)}
+            placeholder="Np. stan licznika GBA 2,5/16: 45231 km, zmiana kierowcy/ratownika: Kowalski ↔ Nowak..."
+            autoFocus
+          />
+          {msgError && (
+            <p className="text-[11px] text-red-400">{msgError}</p>
+          )}
+          <div className="flex justify-end">
+            <button
+              onClick={sendDutyMessage}
+              disabled={sendingMsg || !msgText.trim()}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50"
+            >
+              <Send className="w-3 h-3" />
+              {sendingMsg ? 'Wysyłanie…' : 'Wyślij'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Panel: zgłoś nieobecność */}
+      {activeAction === 'absence' && myPersonId && (
+        <ReportAbsencePanel
           dutyKeys={nextDutyKeys(8)}
           myPersonId={myPersonId}
           dayAssignment={dayAssignment}
           onSubmit={submitAbsence}
           onWithdraw={withdrawAbsence}
         />
+      )}
+
+      {/* Potwierdzenie wysłania + zachęta do powiadomień */}
+      {msgSentOk && (
+        <div className="flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
+          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          <p className="text-sm text-emerald-300">Wiadomość wysłana do dyżurnego</p>
+        </div>
+      )}
+      {msgSentOk && !pushSubscribed && isPushSupported() && (
+        <div className="flex items-center gap-3 bg-brand-950/50 border border-brand-800/60 rounded-xl px-4 py-3">
+          <p className="text-[12px] text-brand-300 flex-1 leading-snug">
+            Włącz 🔔 powiadomienia, żeby dostać info kiedy dyżurny potwierdzi
+          </p>
+          <PushBell userLogin={user!.login} userRole={user!.role} onSubscribedChange={setPushSubscribed} />
+        </div>
       )}
 
       {/* Moje wiadomości do dyżurnego */}
@@ -854,6 +916,11 @@ export function MobileHomePage() {
           </div>
         </div>
       )}
+      </section>
+
+      {/* ── OBSADA ── */}
+      <section className="space-y-3">
+      <ZoneLabel>Obsada</ZoneLabel>
 
       {/* Crew counter */}
       <div>
@@ -895,60 +962,19 @@ export function MobileHomePage() {
         <FullAssignmentCollapsible personnel={personnel} assignment={assignment} myPersonId={myPerson?.id ?? null} />
       )}
 
-      {/* Absent personnel */}
-      {absentPersonnel.length > 0 && (
-        <div>
-          <SectionLabel>Nieobecni ({absentPersonnel.length})</SectionLabel>
-          <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
-            {absentPersonnel.map(p => (
-              <div key={p.id} className="flex items-center justify-between px-4 py-2.5 gap-2">
-                <span className="text-sm text-slate-300 truncate">{p.name}</span>
-                <span className="text-[11px] font-medium text-red-400 shrink-0 bg-red-950/40 px-2 py-0.5 rounded-md border border-red-900/40">
-                  {ABSENCE_LABELS[p.absence!]}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Upcoming absences across all personnel */}
-      <UpcomingDutyAbsencesCollapsible
+      {/* Nieobecności załogi (dziś + przyszłe służby) */}
+      <CrewAbsencesCollapsible
         personnel={personnel}
         savedMap={savedMap}
+        currentAssignment={assignment}
         currentDutyDate={dutyDate}
         myPersonId={myPerson?.id ?? null}
       />
+      </section>
 
-      {/* Upcoming absences for logged-in user */}
-      {myPerson && (
-        <div>
-          <SectionLabel>Twoje nadchodzące nieobecności</SectionLabel>
-          {upcomingAbsences.length === 0 ? (
-            <div className="flex items-center gap-2.5 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
-              <CalendarX className="w-4 h-4 text-slate-600 shrink-0" />
-              <p className="text-xs text-slate-600">
-                Brak zaplanowanych nieobecności w zapisanych służbach
-              </p>
-            </div>
-          ) : (
-            <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
-              {upcomingAbsences.map(({ date, label }) => (
-                <div key={date} className="flex items-center gap-3 px-4 py-3">
-                  <CalendarX className="w-4 h-4 text-amber-500 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-white">{formatDateShort(date)}</p>
-                    <p className="text-[11px] text-slate-500">{formatDateLong(date)}</p>
-                  </div>
-                  <span className="ml-auto text-[10px] font-medium text-amber-500 shrink-0 bg-amber-950/30 px-2 py-0.5 rounded-md border border-amber-900/40">
-                    {label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* ── WARUNKI ── */}
+      <section className="space-y-3">
+      <ZoneLabel>Warunki</ZoneLabel>
 
       {/* Pogoda godzinowa */}
       <DailyWeatherCollapsible />
@@ -978,36 +1004,43 @@ export function MobileHomePage() {
           )}
         </div>
       )}
+      </section>
     </div>
   )
 }
 
 // ── Upcoming duty absences ────────────────────────────────────────────────────
 
-function UpcomingDutyAbsencesCollapsible({
+function CrewAbsencesCollapsible({
   personnel,
   savedMap,
+  currentAssignment,
   currentDutyDate,
   myPersonId,
 }: {
   personnel: Person[]
   savedMap: Map<string, ShiftAssignment>
+  currentAssignment: ShiftAssignment | null
   currentDutyDate: string
   myPersonId: string | null
 }) {
   const [open, setOpen] = useState(false)
 
-  const upcoming5 = nextDutyKeys(6).filter(k => k !== currentDutyDate).slice(0, 5)
+  const absentOf = (a: ShiftAssignment | null) =>
+    a
+      ? personnel
+          .filter(p => a.absenceMap?.[p.id])
+          .map(p => ({ id: p.id, name: p.name, absence: a.absenceMap![p.id] as AbsenceType }))
+          .sort((x, y) => ABSENCE_ORDER.indexOf(x.absence) - ABSENCE_ORDER.indexOf(y.absence))
+      : null
 
-  const rows = upcoming5.map(date => {
-    const a = savedMap.get(date) ?? null
-    if (!a) return { date, absent: null as null }
-    const absent = personnel
-      .filter(p => a.absenceMap?.[p.id])
-      .map(p => ({ id: p.id, name: p.name, absence: a.absenceMap![p.id] as AbsenceType }))
-      .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence) - ABSENCE_ORDER.indexOf(b.absence))
-    return { date, absent }
+  // Dzień bieżący (z aktywnej obsady) na początku, potem najbliższe zapisane służby
+  const dayKeys = [currentDutyDate, ...nextDutyKeys(6).filter(k => k !== currentDutyDate).slice(0, 5)]
+  const rows = dayKeys.map(date => {
+    const a = date === currentDutyDate ? currentAssignment : (savedMap.get(date) ?? null)
+    return { date, absent: absentOf(a) }
   })
+  const todayCount = rows[0]?.absent?.length ?? 0
 
   return (
     <div>
@@ -1017,7 +1050,12 @@ function UpcomingDutyAbsencesCollapsible({
       >
         <div className="flex items-center gap-2.5">
           <CalendarX className="w-4 h-4 text-red-400/70 shrink-0" />
-          <p className="text-sm font-medium text-white">Nieobecni na przyszłych służbach</p>
+          <p className="text-sm font-medium text-white">Nieobecności na służbach</p>
+          {todayCount > 0 && (
+            <span className="text-[10px] font-medium text-red-400 bg-red-950/40 px-2 py-0.5 rounded-md border border-red-900/40">
+              Dzisiaj {todayCount} {todayCount === 1 ? 'nieobecny' : 'nieobecnych'}
+            </span>
+          )}
         </div>
         <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </button>
@@ -1302,7 +1340,7 @@ function RowInline({ label, value, Icon, iconClass, isMe }: {
 
 // ── Zgłoś nieobecność ─────────────────────────────────────────────────────────
 
-function ReportAbsenceCard({
+function ReportAbsencePanel({
   dutyKeys,
   myPersonId,
   dayAssignment,
@@ -1315,7 +1353,6 @@ function ReportAbsenceCard({
   onSubmit: (date: string, type: AbsenceType, note: string) => Promise<void>
   onWithdraw: (date: string) => Promise<void>
 }) {
-  const [open, setOpen] = useState(false)
   const [date, setDate] = useState(dutyKeys[0] ?? '')
   const [type, setType] = useState<AbsenceType | null>(null)
   const [note, setNote] = useState('')
@@ -1352,30 +1389,16 @@ function ReportAbsenceCard({
   }
 
   return (
-    <div>
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
-      >
-        <div className="flex items-center gap-2.5">
-          <CalendarOff className="w-4 h-4 text-amber-400 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-white">Zgłoś nieobecność</p>
-            <p className="text-[11px] text-slate-500">Wybierz dzień służby oraz rodzaj nieobecności</p>
-          </div>
-        </div>
-        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
-      </button>
-
+    <div className="space-y-2">
       {okMsg && (
-        <div className="mt-2 flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
+        <div className="flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
           <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
           <p className="text-sm text-emerald-300">{okMsg}</p>
         </div>
       )}
 
-      <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', open ? 'max-h-[700px] opacity-100' : 'max-h-0 opacity-0')}>
-        <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-3">
+      <div>
+        <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-3">
           {/* Wybór dnia */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600 mb-1.5">Służba</p>

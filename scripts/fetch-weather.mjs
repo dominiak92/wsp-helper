@@ -55,7 +55,7 @@ function windDirLabel(deg) {
   return dirs[Math.round(Number(deg) / 45) % 8]
 }
 
-function fetchPage() {
+function fetchPage(timeoutMs = 25000) {
   return new Promise((resolve, reject) => {
     const req = https.get(
       'https://www.traxelektronik.pl/pogoda/las/zbiorcza.php',
@@ -77,8 +77,26 @@ function fetchPage() {
       },
     )
     req.on('error', reject)
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('timeout')) })
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout')) })
   })
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// traxelektronik.pl is occasionally slow/unreachable; retry a few times with
+// backoff before giving up so a single slow response doesn't fail the run.
+async function fetchPageWithRetry(attempts = 4) {
+  let lastErr
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fetchPage()
+    } catch (err) {
+      lastErr = err
+      console.warn(`fetchPage attempt ${i}/${attempts} failed: ${err.message}`)
+      if (i < attempts) await sleep(i * 5000)
+    }
+  }
+  throw lastErr
 }
 
 async function main() {
@@ -90,7 +108,7 @@ async function main() {
     process.exit(1)
   }
 
-  const buf = await fetchPage()
+  const buf = await fetchPageWithRetry()
   const html = decodeISO88592(buf)
 
   const rowMatch = html.match(

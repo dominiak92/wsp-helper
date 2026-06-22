@@ -564,7 +564,7 @@ export function MobileHomePage() {
       await supabase.from('duty_assignments').insert({ duty_date: date, assignment_json: next })
     }
     const trimmed = note.trim()
-    await notifyDuty(`🚫 Zgłoszenie nieobecności — ${formatDateShortWithDay(date)}: ${ABSENCE_LABELS[type]}${trimmed ? `\n${trimmed}` : ''}`)
+    await notifyDuty(`🚫 Zgłoszenie nieobecności — ${user.displayName}\n${formatDateShortWithDay(date)}: ${ABSENCE_LABELS[type]}${trimmed ? `\n${trimmed}` : ''}`)
     await Promise.all([reload(), fetchMyMessages()])
   }
 
@@ -575,7 +575,7 @@ export function MobileHomePage() {
     if (!id || !parsed) return
     const next = withdrawSelfAbsence(parsed, myPersonId)
     await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id)
-    await notifyDuty(`↩️ Wycofanie nieobecności — ${formatDateShortWithDay(date)} (powrót do składu)`)
+    await notifyDuty(`↩️ Wycofanie nieobecności — ${user.displayName}\n${formatDateShortWithDay(date)} (powrót do składu)`)
     await Promise.all([reload(), fetchMyMessages()])
   }
 

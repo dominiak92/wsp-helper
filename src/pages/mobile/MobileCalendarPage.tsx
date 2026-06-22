@@ -240,7 +240,7 @@ export function MobileCalendarPage() {
           <div className="grid grid-cols-7 mb-1">
             {DAY_ABBR.map((d, i) => (
               <span key={d} className={cn('text-center text-[10px] font-medium py-1',
-                i >= 5 ? 'text-slate-600' : 'text-slate-700')}>
+                i === 6 ? 'text-red-400/70' : i === 5 ? 'text-slate-400' : 'text-slate-500')}>
                 {d}
               </span>
             ))}
@@ -259,6 +259,9 @@ export function MobileCalendarPage() {
               const hasEvent = eventDates.has(key)
 
               if (!duty) {
+                const col = i % 7
+                const isSat = col === 5
+                const isSun = col === 6
                 return (
                   <div key={key} className={cn(
                     'relative flex items-center justify-center aspect-square text-[12px] leading-none rounded-lg',
@@ -268,7 +271,11 @@ export function MobileCalendarPage() {
                         ? 'bg-red-900/30 text-red-300'
                         : billing
                           ? 'bg-yellow-900/20 text-yellow-400'
-                          : 'text-slate-700',
+                          : isSun
+                            ? 'bg-slate-800/40 text-red-400/80'
+                            : isSat
+                              ? 'bg-slate-800/40 text-slate-300'
+                              : 'text-slate-400',
                   )}>
                     {day}
                     {billing && (

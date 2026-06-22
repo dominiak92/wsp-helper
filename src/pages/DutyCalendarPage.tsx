@@ -136,7 +136,7 @@ function MonthCalendar({ year, month, holidays, savedDates, eventDates, onDutyDa
             key={d}
             className={cn(
               'text-center text-[9px] font-medium pb-0.5',
-              i >= 5 ? 'text-slate-600' : 'text-slate-700',
+              i === 6 ? 'text-red-400/70' : i === 5 ? 'text-slate-400' : 'text-slate-500',
             )}
           >
             {d}
@@ -177,7 +177,8 @@ function MonthCalendar({ year, month, holidays, savedDates, eventDates, onDutyDa
                 duty
                   ? 'bg-brand-600 text-white font-bold cursor-pointer hover:bg-brand-500 transition-colors'
                   : 'cursor-default',
-                !duty && (isSun ? 'text-red-400/60' : isSat ? 'text-slate-500' : 'text-slate-500'),
+                !duty && (isSun ? 'text-red-400/80' : isSat ? 'text-slate-300' : 'text-slate-400'),
+                !duty && (isSat || isSun) && !billing && !hasEvent && 'bg-slate-800/40',
                 !duty && holiday?.type === 'public' && 'text-amber-300',
                 !duty && holiday?.type === 'notable' && 'text-sky-300',
                 !duty && billing && 'bg-yellow-900/25 text-yellow-300',

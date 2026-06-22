@@ -7,7 +7,7 @@ import 'leaflet-rotate'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
-  Globe2, Wind, CheckCircle, Clock, MapPin, Flag,
+  Globe2, Wind, CheckCircle, Clock, MapPin, Flag, Compass,
 } from 'lucide-react'
 
 // leaflet-rotate dorzuca obrót mapy do L.Map — uzupełniamy typy, których @types/leaflet nie zna
@@ -409,6 +409,7 @@ export function FireMapPage() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [suggestLoading, setSuggestLoading] = useState(false)
+  const lastTypedRef = useRef('')   // ostatnia wartość wpisana ręcznie — podpowiadamy tylko dla niej
   const [compartmentChoices, setCompartmentChoices] = useState<CompartmentCandidate[] | null>(null)
   const startModeRef = useRef<'gps' | 'station'>('gps')
   const [following, setFollowing] = useState(false)
@@ -417,10 +418,13 @@ export function FireMapPage() {
   // kierunku jazdy, a trasa jest przeliczana z bieżącej pozycji (gdy zjedziesz)
   const [navMode, setNavMode] = useState(false)
   const [arrivedToast, setArrivedToast] = useState(false)
+  const [bearingDeg, setBearingDeg] = useState(0)       // bieżący obrót mapy (do kompasu)
   const navModeRef = useRef(false)
   const headingRef = useRef<number | null>(null)        // wygładzony kierunek jazdy (°)
   const prevNavPosRef = useRef<L.LatLng | null>(null)
   const navDestRef = useRef<{ dest: L.LatLng; name: string } | null>(null)
+  const navManualRef = useRef(false)                    // user ręcznie obrócił mapę → pauza auto-obrotu
+  const applyingAutoBearingRef = useRef(false)          // trwa nasz programowy setBearing (odróżnia od gestu)
   const routePtsRef = useRef<L.LatLng[]>([])            // punkty bieżącej trasy (do wykrycia zjazdu)
   const reroutingRef = useRef(false)                    // trwa przeliczanie trasy
   const lastRerouteAtRef = useRef(0)                    // cooldown przeliczania (nie zarzucamy OSRM)
@@ -628,8 +632,17 @@ export function FireMapPage() {
       rotate: true,
       bearing: 0,
       rotateControl: false,
-      touchRotate: false,
+      touchRotate: true,   // gest dwoma palcami — ręczny obrót mapy (także w nawigacji)
       shiftKeyRotate: false,
+    })
+
+    // Każdy obrót (gest lub programowy) aktualizuje kompas; gdy to obrót ręczny
+    // w trakcie nawigacji — pauzujemy auto-obrót, żeby mapa nie wracała sama na kurs
+    map.on('rotate', () => {
+      setBearingDeg(map.getBearing())
+      if (!applyingAutoBearingRef.current && navModeRef.current) {
+        navManualRef.current = true
+      }
     })
 
     map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
@@ -796,7 +809,12 @@ export function FireMapPage() {
           prevNavPosRef.current = e.latlng
         }
         map.setView(e.latlng, map.getZoom(), { animate: false })
-        if (headingRef.current != null) map.setBearing(-headingRef.current) // kierunek jazdy „w górę"
+        // Auto-obrót tylko gdy user nie obrócił mapy ręcznie (wtedy zostawiamy jego kąt)
+        if (headingRef.current != null && !navManualRef.current) {
+          applyingAutoBearingRef.current = true
+          map.setBearing(-headingRef.current) // kierunek jazdy „w górę"
+          applyingAutoBearingRef.current = false
+        }
 
         // Dojazd do celu → zakończ nawigację
         const navDest = navDestRef.current
@@ -1227,6 +1245,7 @@ export function FireMapPage() {
     navModeRef.current = false
     setNavMode(false)
     navDestRef.current = null
+    navManualRef.current = false
     routePtsRef.current = []
     reroutingRef.current = false
     headingRef.current = null
@@ -1255,6 +1274,7 @@ export function FireMapPage() {
     setNavMode(true)
     setFollowing(false)
     followingRef.current = false
+    navManualRef.current = false
     headingRef.current = null
     prevNavPosRef.current = null
     reroutingRef.current = false
@@ -1510,7 +1530,9 @@ export function FireMapPage() {
   // (obiekty z mapy od razu, miejsca z geokodera po pauzie). Wybór = start nawigacji.
   useEffect(() => {
     const q = query.trim()
-    if (navModeRef.current || q.length < 2) {
+    // Podpowiadaj tylko dla tekstu wpisanego ręcznie — zmiana nazwy po wyborze
+    // (np. nazwa oddziału) nie ma odpalać kolejnych podpowiedzi.
+    if (navModeRef.current || q.length < 2 || query !== lastTypedRef.current) {
       setSuggestions([]); setSuggestOpen(false); setSuggestLoading(false)
       return
     }
@@ -1641,6 +1663,7 @@ export function FireMapPage() {
 
   function clearSearch() {
     setQuery('')
+    lastTypedRef.current = ''
     setSearchState('idle')
     setSearchError('')
     setCompartmentChoices(null)
@@ -1674,7 +1697,7 @@ export function FireMapPage() {
           <input
             type="text"
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { lastTypedRef.current = e.target.value; setQuery(e.target.value) }}
             placeholder="Granica oddziału, droga ppoż, miejsce…"
             className="flex-1 min-w-0 bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none"
           />
@@ -1695,7 +1718,7 @@ export function FireMapPage() {
             {suggestions.map(s => (
               <button
                 key={s.id}
-                onClick={() => { s.run(); setSuggestOpen(false) }}
+                onClick={() => { lastTypedRef.current = ''; setSuggestions([]); setSuggestOpen(false); s.run() }}
                 className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-surface-900/80 text-left transition-colors"
               >
                 <span className="text-[16px] shrink-0">{s.icon}</span>
@@ -2208,6 +2231,28 @@ export function FireMapPage() {
 
       {/* Grid + GPS + Follow buttons */}
       <div className="absolute bottom-5 right-3 z-[1000] flex flex-col items-end gap-2">
+        {/* Kompas — widoczny w nawigacji lub gdy mapa obrócona; przywraca kurs / północ */}
+        {(navMode || Math.min(((bearingDeg % 360) + 360) % 360, 360 - (((bearingDeg % 360) + 360) % 360)) > 2) && (
+          <button
+            onClick={() => {
+              const map = mapRef.current
+              if (!map) return
+              if (navModeRef.current) {
+                // wróć do śledzenia kierunku jazdy
+                navManualRef.current = false
+                applyingAutoBearingRef.current = true
+                map.setBearing(headingRef.current != null ? -headingRef.current : 0)
+                applyingAutoBearingRef.current = false
+              } else {
+                map.setBearing(0) // północ do góry
+              }
+            }}
+            title={navMode ? 'Wróć na kurs jazdy' : 'Ustaw północ do góry'}
+            className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg border bg-surface-900 text-slate-200 border-slate-700/60 hover:text-white transition-colors"
+          >
+            <Compass className="w-4 h-4" style={{ transform: `rotate(${-bearingDeg}deg)` }} />
+          </button>
+        )}
         <button
           onClick={() => setReportOpen(v => !v)}
           disabled={!myLogin}

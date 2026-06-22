@@ -49,6 +49,8 @@ const SHARE_KEY = 'wsp-share-until'
 const MAP_CENTER: [number, number] = [52.420, 15.210]
 const MAP_ZOOM = 12
 const NAV_ZOOM = 17 // przybliżenie w trybie nawigacji (jak nawigacja samochodowa)
+const ARRIVE_M = 35 // odległość od celu, przy której uznajemy dojazd (m)
+const REROUTE_OFF_ROUTE_M = 50 // zjazd z trasy powyżej tylu metrów → przelicz (m)
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
@@ -400,12 +402,21 @@ export function FireMapPage() {
   const startModeRef = useRef<'gps' | 'station'>('gps')
   const [following, setFollowing] = useState(false)
   const followingRef = useRef(false)
-  // Tryb nawigacji: mapa centruje się na pozycji i obraca wg kierunku jazdy
+  // Nawigacja: po wybraniu „Nawiguj" mapa centruje się na pozycji, obraca wg
+  // kierunku jazdy, a trasa jest przeliczana z bieżącej pozycji (gdy zjedziesz)
   const [navMode, setNavMode] = useState(false)
-  const [navToast, setNavToast] = useState(false)
+  const [navInfo, setNavInfo] = useState<{ name: string } | null>(null)
+  const [arrivedToast, setArrivedToast] = useState(false)
   const navModeRef = useRef(false)
-  const headingRef = useRef<number | null>(null)   // wygładzony kierunek jazdy (°)
+  const headingRef = useRef<number | null>(null)        // wygładzony kierunek jazdy (°)
   const prevNavPosRef = useRef<L.LatLng | null>(null)
+  const navDestRef = useRef<{ dest: L.LatLng; name: string } | null>(null)
+  const routePtsRef = useRef<L.LatLng[]>([])            // punkty bieżącej trasy (do wykrycia zjazdu)
+  const reroutingRef = useRef(false)                    // trwa przeliczanie trasy
+  const lastRerouteAtRef = useRef(0)                    // cooldown przeliczania (nie zarzucamy OSRM)
+  // Najnowsze wersje funkcji nawigacji — wołane z handlera GPS (unikamy stale-closure)
+  const endNavigationRef = useRef<(() => void) | null>(null)
+  const drawNavRouteRef = useRef<((from: L.LatLng, dest: L.LatLng) => Promise<void>) | null>(null)
 
   // Współdzielone: alarmy + lokalizacje na żywo
   const [alerts, setAlerts] = useState<AlertPoint[]>([])
@@ -629,17 +640,12 @@ export function FireMapPage() {
     alertDraftLayerRef.current = L.layerGroup().addTo(map)
 
     map.on('dragstart', () => {
+      // W nawigacji NIE wychodzimy przy przesunięciu/zoomie — mapa wraca do pozycji
+      // przy kolejnym odczycie GPS. Tryb kończy dopiero „Zakończ" albo dojazd do celu.
+      if (navModeRef.current) return
       if (followingRef.current) {
         followingRef.current = false
         setFollowing(false)
-      }
-      // ręczne przesunięcie wychodzi z nawigacji i prostuje mapę (jak „re-center" w Google Maps)
-      if (navModeRef.current) {
-        navModeRef.current = false
-        setNavMode(false)
-        headingRef.current = null
-        prevNavPosRef.current = null
-        map.setBearing(0)
       }
     })
 
@@ -783,6 +789,27 @@ export function FireMapPage() {
         }
         map.setView(e.latlng, map.getZoom(), { animate: false })
         if (headingRef.current != null) map.setBearing(-headingRef.current) // kierunek jazdy „w górę"
+
+        // Dojazd do celu → zakończ nawigację
+        const navDest = navDestRef.current
+        if (navDest) {
+          if (e.latlng.distanceTo(navDest.dest) < ARRIVE_M) {
+            endNavigationRef.current?.()
+            setArrivedToast(true)
+          } else if (!reroutingRef.current && routePtsRef.current.length > 0 && Date.now() - lastRerouteAtRef.current > 8000) {
+            // Zjazd z trasy? Przelicz trasę z bieżącej pozycji
+            let minD = Infinity
+            for (const p of routePtsRef.current) {
+              const d = e.latlng.distanceTo(p)
+              if (d < minD) minD = d
+            }
+            if (minD > REROUTE_OFF_ROUTE_M) {
+              reroutingRef.current = true
+              lastRerouteAtRef.current = Date.now()
+              drawNavRouteRef.current?.(e.latlng, navDest.dest).finally(() => { reroutingRef.current = false })
+            }
+          }
+        }
       } else if (followingRef.current) {
         map.setView(e.latlng, map.getZoom())
       }
@@ -1172,6 +1199,76 @@ export function FireMapPage() {
     })
   }
 
+  // ── Nawigacja na żywo (track-up, przeliczanie trasy) ────────────────────────
+
+  // Narysuj/odśwież trasę z `from` do `dest`; zapamiętaj punkty do wykrycia zjazdu
+  const drawNavRoute = useCallback(async (from: L.LatLng, dest: L.LatLng) => {
+    const map = mapRef.current
+    if (!map) return
+    try {
+      const pts = await fetchRoute(from, dest)
+      routeLayerRef.current?.remove()
+      routeLayerRef.current = L.polyline(pts, { color: '#3b82f6', weight: 5, opacity: 0.9 }).addTo(map)
+      routePtsRef.current = pts
+    } catch {
+      routePtsRef.current = []
+    }
+  }, [])
+
+  const endNavigation = useCallback(() => {
+    navModeRef.current = false
+    setNavMode(false)
+    setNavInfo(null)
+    navDestRef.current = null
+    routePtsRef.current = []
+    reroutingRef.current = false
+    headingRef.current = null
+    prevNavPosRef.current = null
+    mapRef.current?.setBearing(0)
+    clearRoute()
+    clearRoads()
+    setQuery('')
+    setSearchState('idle')
+  }, [])
+
+  // „Nawiguj z mojej pozycji" → wejście w tryb nawigacji: trasa + centrowanie + obrót
+  const startNavigation = useCallback(async (dest: L.LatLng, name: string) => {
+    const map = mapRef.current
+    if (!map) return
+    clearRoute()
+    clearRoads()
+    setCompartmentChoices(null)
+    const shortName = name.split(',')[0]
+    setQuery(shortName)
+    setSearchError('')
+
+    navDestRef.current = { dest, name: shortName }
+    setNavInfo({ name: shortName })
+    navModeRef.current = true
+    setNavMode(true)
+    setFollowing(false)
+    followingRef.current = false
+    headingRef.current = null
+    prevNavPosRef.current = null
+    reroutingRef.current = false
+    lastRerouteAtRef.current = Date.now()
+
+    const icon = L.divIcon({
+      html: `<div style="width:14px;height:14px;background:#ef4444;border:2.5px solid #fff;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.55)"></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7], className: '',
+    })
+    destMarkerRef.current = L.marker(dest, { icon }).addTo(map)
+
+    setSearchState('loading')
+    await drawNavRoute(userPosRef.current ?? STATION, dest)
+    setSearchState('idle')
+    if (userPosRef.current) map.setView(userPosRef.current, NAV_ZOOM, { animate: true })
+  }, [drawNavRoute])
+
+  // Udostępnij najnowsze wersje handlerowi GPS (zarejestrowanemu raz przy montażu)
+  useEffect(() => { endNavigationRef.current = endNavigation }, [endNavigation])
+  useEffect(() => { drawNavRouteRef.current = drawNavRoute }, [drawNavRoute])
+
   // ── Nawigacja do celu (punkt / miejsce) ────────────────────────────────────
 
   const routeTo = useCallback(async (dest: L.LatLng, name: string) => {
@@ -1404,16 +1501,22 @@ export function FireMapPage() {
   // Bridge: Leaflet popup buttons → React (must be after routeTo declaration)
   useEffect(() => {
     window.__wspNavigateTo = (lat, lng, name, sm) => {
-      startModeRef.current = sm
-      routeTo(L.latLng(lat, lng), name)
       mapRef.current?.closePopup()
+      if (sm === 'gps') {
+        // „Nawiguj z mojej pozycji" → od razu tryb nawigacji (track-up + przeliczanie)
+        startNavigation(L.latLng(lat, lng), name)
+      } else {
+        // „Nawiguj ze strażnicy" → statyczny podgląd trasy
+        startModeRef.current = 'station'
+        routeTo(L.latLng(lat, lng), name)
+      }
     }
     window.__wspClosePopup = () => { mapRef.current?.closePopup() }
     return () => {
       delete window.__wspNavigateTo
       delete window.__wspClosePopup
     }
-  }, [routeTo])
+  }, [routeTo, startNavigation])
 
   // ── Grid overlay — kafle BDL przez własne proxy (próba zamiast 1 obrazu) ────
   useEffect(() => {
@@ -1448,11 +1551,10 @@ export function FireMapPage() {
   }, [following])
 
   useEffect(() => {
-    if (!navMode) { setNavToast(false); return }
-    setNavToast(true)
-    const t = setTimeout(() => setNavToast(false), 3500)
+    if (!arrivedToast) return
+    const t = setTimeout(() => setArrivedToast(false), 4000)
     return () => clearTimeout(t)
-  }, [navMode])
+  }, [arrivedToast])
 
   useEffect(() => {
     if (!isSharing) { setShareToast(false); return }
@@ -1851,17 +1953,38 @@ export function FireMapPage() {
         Śledź moją pozycję
       </div>
 
-      {/* Nav mode toast */}
+      {/* Panel aktywnej nawigacji — cel + zakończenie (wyjście tylko stąd lub po dojeździe) */}
+      {navMode && (
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-3 bg-surface-950/95 border border-brand-700/50 rounded-full pl-4 pr-2 py-2 shadow-2xl max-w-[92vw]">
+          <Navigation2 className="w-4 h-4 text-brand-400 shrink-0" />
+          <div className="flex flex-col leading-tight min-w-0">
+            <span className="text-[12px] font-semibold text-slate-100 truncate max-w-[50vw]">
+              {navInfo?.name ?? 'Nawigacja'}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              Nawigacja aktywna · mapa obraca się wg jazdy
+            </span>
+          </div>
+          <button
+            onClick={() => endNavigation()}
+            className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium bg-red-600 text-white hover:bg-red-500 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" /> Zakończ
+          </button>
+        </div>
+      )}
+
+      {/* Toast: dojechano do celu */}
       <div className={cn(
-        'absolute bottom-16 right-14 z-[1000]',
-        'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
-        'bg-surface-900 border border-slate-700/60',
-        'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
+        'absolute bottom-5 left-1/2 -translate-x-1/2 z-[1001]',
+        'flex items-center gap-2 px-4 py-2.5 rounded-full shadow-2xl',
+        'bg-emerald-600 border border-emerald-400/60',
+        'text-[12px] font-medium text-white whitespace-nowrap pointer-events-none',
         'transition-all duration-300',
-        navToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
+        arrivedToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none',
       )}>
-        <Navigation2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-        Nawigacja — mapa obraca się wg jazdy
+        <CheckCircle className="w-4 h-4 shrink-0" />
+        Dojechano do celu
       </div>
 
       {/* Share label toast */}
@@ -2077,38 +2200,9 @@ export function FireMapPage() {
         </button>
         <button
           onClick={() => {
-            const next = !navMode
-            setNavMode(next)
-            headingRef.current = null
-            prevNavPosRef.current = null
-            if (next) {
-              setFollowing(false)
-              if (userPos) mapRef.current?.setView(userPos, NAV_ZOOM)
-            } else {
-              mapRef.current?.setBearing(0)
-            }
-          }}
-          disabled={!userPos}
-          title={navMode ? 'Wyłącz nawigację' : 'Nawigacja — mapa obraca się wg kierunku jazdy'}
-          className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
-            navMode
-              ? 'bg-brand-600 text-white border-brand-500'
-              : userPos
-                ? 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200'
-                : 'bg-surface-900 text-slate-600 border-slate-700/60 cursor-not-allowed',
-          )}
-        >
-          <Navigation2 className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
             const next = !following
             setFollowing(next)
-            if (next) {
-              if (navMode) { setNavMode(false); mapRef.current?.setBearing(0); headingRef.current = null }
-              if (userPos) mapRef.current?.setView(userPos, 15)
-            }
+            if (next && userPos) mapRef.current?.setView(userPos, 15)
           }}
           disabled={!userPos}
           title={following ? 'Wyłącz śledzenie pozycji' : 'Śledź moją pozycję'}

@@ -1,13 +1,12 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { isDutyDay, isBillingDay, ymdKey, todayYmdKey, formatDateShort, formatDateShortWithDay, formatDateLong } from '../../lib/duty'
+import { isDutyDay, isBillingDay, ymdKey, todayYmdKey, formatDateShortWithDay } from '../../lib/duty'
 import type { CalendarEvent } from '../../lib/duty'
-import { DutyAssignmentView } from '../../components/DutyAssignmentView'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, parseShiftAssignment } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, AUTO_CREW_VEHICLE_IDS, ABSENCE_LABELS, parseShiftAssignment, withGuests, resolveName } from '../../lib/crew'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -202,7 +201,7 @@ export function MobileCalendarPage() {
     : false
 
   // Personnel with absences derived from the selected assignment's absenceMap,
-  // so DutyAssignmentView shows only absences relevant to this specific duty date.
+  // so the popover resolves names with the right per-date partial-8h flags.
   const personnelForView = useMemo(() => {
     if (!selectedAssignment) return personnel.map(p => ({ ...p, absence: null as AbsenceType | null, partial8h: false }))
     return personnel.map(p => ({
@@ -212,11 +211,26 @@ export function MobileCalendarPage() {
     }))
   }, [personnel, selectedAssignment])
 
+  // Floating popover: anchored under the selected cell, never shifts the grid.
+  const selectedCellRef = useRef<HTMLButtonElement | null>(null)
+  const calendarRef = useRef<HTMLDivElement>(null)
+  const [popoverTop, setPopoverTop] = useState(0)
+  const selectedInMonth = useMemo(() => {
+    if (!selectedDate) return false
+    const [sy, smo] = selectedDate.split('-').map(Number)
+    return sy === year && smo === month + 1
+  }, [selectedDate, year, month])
+
+  useLayoutEffect(() => {
+    const el = selectedCellRef.current
+    if (selectedInMonth && el) setPopoverTop(el.offsetTop + el.offsetHeight + 4)
+  }, [selectedInMonth, selectedDate, year, month, monthLoading, assignmentMap, cells])
+
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start min-h-full">
+    <div className="min-h-full">
 
       {/* ── Calendar column ── */}
-      <div className="w-full sm:w-80 sm:shrink-0 sm:sticky sm:top-0">
+      <div ref={calendarRef} className="w-full max-w-md mx-auto scroll-mt-2">
 
         {/* Month navigation */}
         <div className="flex items-center justify-between px-4 py-4">
@@ -247,6 +261,7 @@ export function MobileCalendarPage() {
           </div>
 
           {/* Day cells */}
+          <div className="relative">
           <div className={cn('grid grid-cols-7 gap-y-1 transition-opacity duration-150', monthLoading && 'opacity-40 pointer-events-none')}>
             {cells.map((day, i) => {
               if (day === null) return <div key={`e${i}`} />
@@ -311,6 +326,7 @@ export function MobileCalendarPage() {
               return (
                 <button
                   key={key}
+                  ref={isSelected ? selectedCellRef : undefined}
                   onClick={() => setSelectedDate(isSelected ? null : key)}
                   className={cellClass}
                 >
@@ -339,6 +355,19 @@ export function MobileCalendarPage() {
                 </button>
               )
             })}
+          </div>
+
+          {/* Pływający popover ze skróconą obsadą — overlay, nie przesuwa siatki */}
+          {selectedInMonth && (
+            <div className="absolute left-0 right-0 z-30 px-1" style={{ top: popoverTop }}>
+              <DayCrewPopover
+                personnel={personnelForView}
+                assignment={selectedAssignment}
+                loading={isLoading}
+                onClose={() => setSelectedDate(null)}
+              />
+            </div>
+          )}
           </div>
         </div>
 
@@ -396,7 +425,12 @@ export function MobileCalendarPage() {
                     return (
                       <button
                         key={date}
-                        onClick={() => setSelectedDate(selectedDate === date ? null : date)}
+                        onClick={() => {
+                          const next = selectedDate === date ? null : date
+                          setSelectedDate(next)
+                          // Przewiń do kalendarza, żeby popover w siatce nie zasłaniał tej listy
+                          if (next) requestAnimationFrame(() => calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+                        }}
                         className={cn(
                           'w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
                           selectedDate === date ? 'bg-brand-900/40' : 'hover:bg-surface-800',
@@ -428,43 +462,95 @@ export function MobileCalendarPage() {
         })()}
       </div>
 
-      {/* ── Divider on sm+ ── */}
-      <div className="hidden sm:block w-px bg-slate-800 self-stretch" />
+    </div>
+  )
+}
 
-      {/* ── Assignment panel ── */}
-      <div className="flex-1 min-w-0">
-        {selectedDate ? (
-          <>
-            <div className="px-4 pt-4 pb-2 border-b border-slate-800 sm:border-b-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-0.5">Obsada</p>
-              <h3 className="text-lg font-bold text-white">{formatDateShort(selectedDate)}</h3>
-              <p className="text-xs text-slate-500">{formatDateLong(selectedDate)}</p>
-              {/* User's role summary for selected date */}
-              {myPerson && (() => {
-                const status = resolveUserStatus(assignmentMap.get(selectedDate), myPerson.id)
-                if (!status || status.kind === 'unsaved') return null
-                return (
-                  <div className="mt-2">
-                    <StatusPill status={status} large />
-                  </div>
-                )
-              })()}
-            </div>
-            <DutyAssignmentView
-              personnel={personnelForView}
-              assignment={selectedAssignment}
-              loading={isLoading}
-            />
-          </>
-        ) : (
-          <div className="flex items-center justify-center py-10 px-6 sm:pt-20">
-            <p className="text-xs text-slate-600 text-center">
-              Dotknij dnia służby aby zobaczyć obsadę
-            </p>
-          </div>
-        )}
+// ── DayCrewPopover ────────────────────────────────────────────────────────────
+// Pływający popover ze skróconą obsadą (role specjalne + 3 zastępy z nazwiskami),
+// zakotwiczony pod klikniętym dniem; lekko przezroczyste tło, nie blokuje reszty.
+
+function DayCrewPopover({
+  personnel,
+  assignment,
+  loading,
+  onClose,
+}: {
+  personnel: Person[]
+  assignment: ShiftAssignment | null
+  loading: boolean
+  onClose: () => void
+}) {
+  const ROLE_ABBR: Record<string, string> = { commander: 'D', driver: 'K', rescuer: 'R' }
+
+  const vehicles = assignment
+    ? assignment.vehicles
+        .filter(v => AUTO_CREW_VEHICLE_IDS.includes(v.vehicleId as typeof AUTO_CREW_VEHICLE_IDS[number]))
+        .map(v => {
+          const rows: { abbr: string; id: string }[] = []
+          if (v.commanderId) rows.push({ abbr: ROLE_ABBR.commander, id: v.commanderId })
+          if (v.driverId) rows.push({ abbr: ROLE_ABBR.driver, id: v.driverId })
+          v.rescuerIds.forEach(id => rows.push({ abbr: ROLE_ABBR.rescuer, id }))
+          return { vehicleId: v.vehicleId, rows }
+        })
+        .filter(v => v.rows.length > 0)
+    : []
+
+  const persons = assignment ? withGuests(personnel, assignment) : []
+  const hasSpecial = !!assignment && (!!assignment.shiftCommanderId || assignment.dutyOfficerIds.length > 0)
+  const hasAny = !!assignment && (hasSpecial || vehicles.length > 0)
+
+  return (
+    <div className="rounded-xl bg-surface-800/90 backdrop-blur-md border border-brand-600/50 shadow-xl shadow-black/50 overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/60">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-300">Obsada</p>
+        <button onClick={onClose} className="text-slate-400 active:text-slate-200 -mr-1 px-1.5 py-0.5 text-sm leading-none">✕</button>
       </div>
 
+      {loading ? (
+        <div className="flex items-center justify-center py-6">
+          <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : !hasAny ? (
+        <p className="text-xs text-slate-500 text-center py-5 px-4">Brak zapisanej obsady</p>
+      ) : (
+        <div className="p-2 space-y-1.5">
+          {hasSpecial && (
+            <div className="rounded-lg bg-surface-900/50 border border-slate-700/40 px-2.5 py-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">Role specjalne</p>
+              <div className="space-y-0.5">
+                {assignment!.shiftCommanderId && (
+                  <div className="flex items-baseline gap-2 text-[12px] leading-tight">
+                    <span className="w-7 shrink-0 text-[10px] font-bold text-brand-300">D-ca</span>
+                    <span className="text-slate-200 truncate">{resolveName(persons, assignment!.shiftCommanderId)}</span>
+                  </div>
+                )}
+                {assignment!.dutyOfficerIds.map(id => (
+                  <div key={id} className="flex items-baseline gap-2 text-[12px] leading-tight">
+                    <span className="w-7 shrink-0 text-[10px] font-bold text-amber-300">Dyż.</span>
+                    <span className="text-slate-200 truncate">{resolveName(persons, id)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {vehicles.map(v => (
+            <div key={v.vehicleId} className="rounded-lg bg-surface-900/60 border border-slate-700/40 px-2.5 py-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400 mb-1">
+                {CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId}
+              </p>
+              <div className="space-y-0.5">
+                {v.rows.map((r, i) => (
+                  <div key={i} className="flex items-baseline gap-2 text-[12px] leading-tight">
+                    <span className="w-7 shrink-0 text-[10px] font-bold text-slate-500">{r.abbr}</span>
+                    <span className="text-slate-200 truncate">{resolveName(persons, r.id)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -7,7 +7,7 @@ import 'leaflet-rotate'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
-  Globe2, Wind, CheckCircle, Clock, MapPin, Flag, Navigation2,
+  Globe2, Wind, CheckCircle, Clock, MapPin, Flag,
 } from 'lucide-react'
 
 // leaflet-rotate dorzuca obrót mapy do L.Map — uzupełniamy typy, których @types/leaflet nie zna
@@ -336,6 +336,14 @@ interface EditDraft {
   icon: string | null
 }
 
+interface Suggestion {
+  id: string
+  icon: string       // emoji wiodące
+  label: string
+  sublabel?: string
+  run: () => void    // akcja po wybraniu (zwykle start nawigacji)
+}
+
 interface CompartmentCandidate {
   label: string
   range: string
@@ -398,6 +406,9 @@ export function FireMapPage() {
   const [query, setQuery] = useState('')
   const [searchState, setSearchState] = useState<SearchState>('idle')
   const [searchError, setSearchError] = useState('')
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [suggestLoading, setSuggestLoading] = useState(false)
   const [compartmentChoices, setCompartmentChoices] = useState<CompartmentCandidate[] | null>(null)
   const startModeRef = useRef<'gps' | 'station'>('gps')
   const [following, setFollowing] = useState(false)
@@ -405,7 +416,6 @@ export function FireMapPage() {
   // Nawigacja: po wybraniu „Nawiguj" mapa centruje się na pozycji, obraca wg
   // kierunku jazdy, a trasa jest przeliczana z bieżącej pozycji (gdy zjedziesz)
   const [navMode, setNavMode] = useState(false)
-  const [navInfo, setNavInfo] = useState<{ name: string } | null>(null)
   const [arrivedToast, setArrivedToast] = useState(false)
   const navModeRef = useRef(false)
   const headingRef = useRef<number | null>(null)        // wygładzony kierunek jazdy (°)
@@ -772,20 +782,18 @@ export function FireMapPage() {
       setUserPos(e.latlng)
 
       if (nav) {
-        // kierunek jazdy: najpierw heading z GPS (gdy jedziemy), inaczej z dwóch ostatnich pozycji
-        const ev = e as L.LocationEvent & { heading?: number; speed?: number }
-        let hdg: number | null = null
-        if (typeof ev.heading === 'number' && !isNaN(ev.heading) && (ev.speed == null || ev.speed > 0.7)) {
-          hdg = ev.heading
-        } else if (prevNavPosRef.current) {
-          const moved = prevNavPosRef.current.distanceTo(e.latlng)
-          if (moved > 5) hdg = computeBearing(prevNavPosRef.current.lat, prevNavPosRef.current.lng, e.latlng.lat, e.latlng.lng)
-        }
-        prevNavPosRef.current = e.latlng
-        if (hdg != null) {
+        // Kierunek jazdy liczony z dwóch ostatnich pozycji (tak jak obrót wozu przy
+        // udostępnianiu lokalizacji) — heading z GPS bywa pusty/niewiarygodny.
+        // Punkt odniesienia przesuwamy dopiero po przejechaniu >6 m, żeby uniknąć drgań.
+        const prev = prevNavPosRef.current
+        if (!prev) {
+          prevNavPosRef.current = e.latlng
+        } else if (prev.distanceTo(e.latlng) > 6) {
+          const b = computeBearing(prev.lat, prev.lng, e.latlng.lat, e.latlng.lng)
           headingRef.current = headingRef.current == null
-            ? hdg
-            : (headingRef.current + shortestAngleDelta(headingRef.current, hdg) * 0.35 + 360) % 360
+            ? b
+            : (headingRef.current + shortestAngleDelta(headingRef.current, b) * 0.4 + 360) % 360
+          prevNavPosRef.current = e.latlng
         }
         map.setView(e.latlng, map.getZoom(), { animate: false })
         if (headingRef.current != null) map.setBearing(-headingRef.current) // kierunek jazdy „w górę"
@@ -1218,7 +1226,6 @@ export function FireMapPage() {
   const endNavigation = useCallback(() => {
     navModeRef.current = false
     setNavMode(false)
-    setNavInfo(null)
     navDestRef.current = null
     routePtsRef.current = []
     reroutingRef.current = false
@@ -1243,7 +1250,7 @@ export function FireMapPage() {
     setSearchError('')
 
     navDestRef.current = { dest, name: shortName }
-    setNavInfo({ name: shortName })
+    setSuggestOpen(false)
     navModeRef.current = true
     setNavMode(true)
     setFollowing(false)
@@ -1441,6 +1448,7 @@ export function FireMapPage() {
     const q = query.trim()
     if (!q || !mapRef.current) return
     startModeRef.current = 'gps'
+    setSuggestOpen(false)
     setSearchState('loading')
     setSearchError('')
     setCompartmentChoices(null)
@@ -1451,7 +1459,7 @@ export function FireMapPage() {
     const pick = matches.find(f => f.label.toLowerCase() === ql) ?? matches[0]
     if (pick) {
       if (pick.geometry.type === 'point') {
-        routeTo(L.latLng(pick.geometry.lat, pick.geometry.lng), pick.label)
+        startNavigation(L.latLng(pick.geometry.lat, pick.geometry.lng), pick.label)
       } else {
         navigateToRoad([pick.geometry.points.map(([a, b]) => L.latLng(a, b))], pick.label)
       }
@@ -1488,7 +1496,7 @@ export function FireMapPage() {
     try {
       const places = await geocode(q)
       if (places.length > 0) {
-        routeTo(L.latLng(parseFloat(places[0].lat), parseFloat(places[0].lon)), places[0].display_name)
+        startNavigation(L.latLng(parseFloat(places[0].lat), parseFloat(places[0].lon)), places[0].display_name)
         return
       }
       setSearchState('notfound')
@@ -1496,7 +1504,68 @@ export function FireMapPage() {
       setSearchError(err instanceof Error ? err.message : 'Błąd połączenia')
       setSearchState('error')
     }
-  }, [query, features, routeTo, navigateToRoad, navigateToCompartment])
+  }, [query, features, startNavigation, navigateToRoad, navigateToCompartment])
+
+  // Podpowiedzi wyszukiwarki — pojawiają się po ~0,5 s od ostatniego znaku
+  // (obiekty z mapy od razu, miejsca z geokodera po pauzie). Wybór = start nawigacji.
+  useEffect(() => {
+    const q = query.trim()
+    if (navModeRef.current || q.length < 2) {
+      setSuggestions([]); setSuggestOpen(false); setSuggestLoading(false)
+      return
+    }
+    setSuggestLoading(true)
+    let active = true
+    const timer = setTimeout(async () => {
+      const ql = q.toLowerCase()
+      const out: Suggestion[] = []
+
+      // 1) Twoje obiekty z mapy (natychmiast)
+      features.filter(f => f.label.toLowerCase().includes(ql)).slice(0, 5).forEach(f => {
+        out.push({
+          id: 'f:' + f.id,
+          icon: KIND_META[f.kind].emoji,
+          label: f.label,
+          sublabel: KIND_META[f.kind].label.replace('Punkt czerpania wody', 'Woda'),
+          run: () => {
+            if (f.geometry.type === 'point') startNavigation(L.latLng(f.geometry.lat, f.geometry.lng), f.label)
+            else navigateToRoad([f.geometry.points.map(([a, b]) => L.latLng(a, b))], f.label)
+          },
+        })
+      })
+
+      // 2) Oddział leśny po numerze
+      if (/^\d{1,4}$/.test(q)) {
+        out.push({
+          id: 'c:' + q, icon: '🌲', label: `Oddział ${q}`, sublabel: 'granica oddziału leśnego',
+          run: () => navigateToCompartment(q),
+        })
+      }
+
+      // 3) Miejsca z geokodera (po pauzie)
+      try {
+        const places = await geocode(q)
+        if (active) {
+          places.slice(0, 5).forEach((p, i) => {
+            const parts = p.display_name.split(',')
+            out.push({
+              id: 'p:' + i,
+              icon: '📍',
+              label: parts[0].trim(),
+              sublabel: parts.slice(1, 3).join(',').trim() || undefined,
+              run: () => startNavigation(L.latLng(parseFloat(p.lat), parseFloat(p.lon)), p.display_name),
+            })
+          })
+        }
+      } catch { /* offline — pokaż chociaż obiekty z mapy */ }
+
+      if (!active) return
+      setSuggestions(out)
+      setSuggestOpen(out.length > 0)
+      setSuggestLoading(false)
+    }, 500)
+    return () => { active = false; clearTimeout(timer) }
+  }, [query, features, startNavigation, navigateToRoad, navigateToCompartment])
 
   // Bridge: Leaflet popup buttons → React (must be after routeTo declaration)
   useEffect(() => {
@@ -1575,6 +1644,8 @@ export function FireMapPage() {
     setSearchState('idle')
     setSearchError('')
     setCompartmentChoices(null)
+    setSuggestions([])
+    setSuggestOpen(false)
     clearRoads()
     clearRoute()
   }
@@ -1617,6 +1688,32 @@ export function FireMapPage() {
             </button>
           )}
         </form>
+
+        {/* Podpowiedzi — pojawiają się po krótkiej pauzie; wybór = start nawigacji */}
+        {suggestOpen && !navMode && (suggestions.length > 0 || suggestLoading) && (
+          <div className="bg-surface-950 border border-slate-700/50 rounded-2xl p-1.5 shadow-2xl flex flex-col gap-0.5 overflow-hidden">
+            {suggestions.map(s => (
+              <button
+                key={s.id}
+                onClick={() => { s.run(); setSuggestOpen(false) }}
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-surface-900/80 text-left transition-colors"
+              >
+                <span className="text-[16px] shrink-0">{s.icon}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[12.5px] text-slate-100 truncate">{s.label}</span>
+                  {s.sublabel && (
+                    <span className="block text-[10px] text-slate-500 truncate">{s.sublabel}</span>
+                  )}
+                </span>
+              </button>
+            ))}
+            {suggestLoading && (
+              <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-500">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Szukam…
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Alerts — tylko stany negatywne */}
         {searchState === 'notfound' && (
@@ -1953,25 +2050,14 @@ export function FireMapPage() {
         Śledź moją pozycję
       </div>
 
-      {/* Panel aktywnej nawigacji — cel + zakończenie (wyjście tylko stąd lub po dojeździe) */}
+      {/* Nawigacja aktywna — jedyne wyjście (poza dojazdem do celu) */}
       {navMode && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-3 bg-surface-950/95 border border-brand-700/50 rounded-full pl-4 pr-2 py-2 shadow-2xl max-w-[92vw]">
-          <Navigation2 className="w-4 h-4 text-brand-400 shrink-0" />
-          <div className="flex flex-col leading-tight min-w-0">
-            <span className="text-[12px] font-semibold text-slate-100 truncate max-w-[50vw]">
-              {navInfo?.name ?? 'Nawigacja'}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              Nawigacja aktywna · mapa obraca się wg jazdy
-            </span>
-          </div>
-          <button
-            onClick={() => endNavigation()}
-            className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium bg-red-600 text-white hover:bg-red-500 transition-colors"
-          >
-            <X className="w-3.5 h-3.5" /> Zakończ
-          </button>
-        </div>
+        <button
+          onClick={() => endNavigation()}
+          className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-2 px-5 py-3 rounded-full text-[13px] font-semibold bg-red-600 text-white shadow-2xl hover:bg-red-500 transition-colors"
+        >
+          <X className="w-4 h-4 shrink-0" /> Zakończ nawigację
+        </button>
       )}
 
       {/* Toast: dojechano do celu */}

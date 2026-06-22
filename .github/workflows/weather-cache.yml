@@ -2,12 +2,16 @@ name: weather-cache
 
 on:
   schedule:
-    # Poza pełną godziną (GitHub deprioretyzuje crony o :00) + 2 próby na slot,
-    # żeby opóźnienia/pominięcia w kolejce Actions nie zostawiały pustego slotu.
+    # Poza pełną godziną (GitHub deprioretyzuje crony o :00) + 3 próby na slot
+    # rozstawione na ~1,5h, żeby opóźnienia/pominięcia w kolejce Actions
+    # (potrafią pominąć całe okno) nie zostawiały pustego slotu.
+    # Detekcja slotu: godzina UTC < 12 = morning, w p.p. afternoon.
     - cron: '20 8 * * *'    # ~10:20 CEST (lato) / 9:20 CET (zima) – morning
     - cron: '45 8 * * *'    # ~10:45 CEST (lato) / 9:45 CET (zima) – morning (retry)
+    - cron: '45 9 * * *'    # ~11:45 CEST (lato) / 10:45 CET (zima) – morning (retry 2)
     - cron: '20 12 * * *'   # ~14:20 CEST (lato) / 13:20 CET (zima) – afternoon
     - cron: '45 12 * * *'   # ~14:45 CEST (lato) / 13:45 CET (zima) – afternoon (retry)
+    - cron: '45 13 * * *'   # ~15:45 CEST (lato) / 14:45 CET (zima) – afternoon (retry 2)
   workflow_dispatch:
     inputs:
       slot:
@@ -30,10 +34,13 @@ jobs:
           SCHED="${{ github.event.schedule }}"
           if [ -n "${{ inputs.slot }}" ]; then
             export SLOT="${{ inputs.slot }}"
-          elif echo "$SCHED" | grep -q ' 8 '; then   # godzina 8 UTC = poranny slot
-            export SLOT="morning"
           else
-            export SLOT="afternoon"
+            HOUR=$(echo "$SCHED" | awk '{print $2}')   # godzina UTC z crona
+            if [ "$HOUR" -lt 12 ]; then
+              export SLOT="morning"
+            else
+              export SLOT="afternoon"
+            fi
           fi
           echo "Slot: $SLOT"
           node scripts/fetch-weather.mjs

@@ -84,6 +84,10 @@ export function CrewGeneratorPage() {
     if (!dutyDate) return
     setDataLoading(true)
     setAssignment(null)
+    // Reset the cached row id — otherwise navigating to a date without a saved
+    // assignment would keep the previous date's id and persistToSupabase would
+    // UPDATE the wrong row instead of inserting a new one.
+    assignmentIdRef.current = null
     const prevDate = previousDutyDate(dutyDate)
     Promise.all([
       supabase.from('personnel').select('*'),

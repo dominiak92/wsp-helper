@@ -3,11 +3,27 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet-rotate'
 import {
   Search, X, AlertCircle, Loader2, LocateFixed, Milestone,
   Pencil, Check, Trash2, Plus, Layers, Undo2, AlertTriangle, SatelliteDish,
-  Globe2, Wind, CheckCircle, Clock, MapPin, Flag,
+  Globe2, Wind, CheckCircle, Clock, MapPin, Flag, Navigation2,
 } from 'lucide-react'
+
+// leaflet-rotate dorzuca obrót mapy do L.Map — uzupełniamy typy, których @types/leaflet nie zna
+declare module 'leaflet' {
+  interface Map {
+    setBearing(theta: number): void
+    getBearing(): number
+  }
+  interface MapOptions {
+    rotate?: boolean
+    bearing?: number
+    rotateControl?: boolean
+    touchRotate?: boolean
+    shiftKeyRotate?: boolean
+  }
+}
 import { cn } from '../lib/utils'
 import { useAuth } from '../lib/auth'
 import {
@@ -32,6 +48,7 @@ const SHARE_KEY = 'wsp-share-until'
 
 const MAP_CENTER: [number, number] = [52.420, 15.210]
 const MAP_ZOOM = 12
+const NAV_ZOOM = 17 // przybliżenie w trybie nawigacji (jak nawigacja samochodowa)
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
@@ -171,9 +188,28 @@ function computeBearing(aLat: number, aLng: number, bLat: number, bLng: number):
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
 }
 
+// Najkrótsza różnica kątów (-180..180) — do płynnego wygładzania kierunku jazdy
+function shortestAngleDelta(from: number, to: number): number {
+  return ((to - from + 540) % 360) - 180
+}
+
 // Rozmiar znacznika pojazdu (px) skalowany wg zoomu mapy
 function vehicleSizeForZoom(z: number): number {
   return Math.round(Math.max(34, Math.min(96, (z - 11) * 11 + 38)))
+}
+
+// Strzałka pozycji w trybie nawigacji — zawsze „w górę" ekranu = kierunek jazdy
+// (mapa obraca się pod nią, a markery leaflet-rotate pozostają wyprostowane do ekranu)
+function navArrowIcon(): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html:
+      '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center">' +
+      '<svg viewBox="0 0 24 24" width="30" height="30" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))">' +
+      '<path d="M12 2 L20 21 L12 16 L4 21 Z" fill="#3b82f6" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '</svg></div>',
+    iconSize: [32, 32], iconAnchor: [16, 16],
+  })
 }
 
 async function fetchRoute(from: L.LatLng, to: L.LatLng): Promise<L.LatLng[]> {
@@ -314,7 +350,7 @@ export function FireMapPage() {
   const mapRef = useRef<L.Map | null>(null)
   const baseLayerRef = useRef<L.TileLayer | null>(null)
   const labelsLayerRef = useRef<L.LayerGroup | null>(null)
-  const gpsDotRef = useRef<L.CircleMarker | null>(null)
+  const gpsDotRef = useRef<L.CircleMarker | L.Marker | null>(null)
   const gpsCircleRef = useRef<L.Circle | null>(null)
   const roadLayersRef = useRef<L.Layer[]>([])
   const routeLayerRef = useRef<L.Polyline | null>(null)
@@ -364,6 +400,12 @@ export function FireMapPage() {
   const startModeRef = useRef<'gps' | 'station'>('gps')
   const [following, setFollowing] = useState(false)
   const followingRef = useRef(false)
+  // Tryb nawigacji: mapa centruje się na pozycji i obraca wg kierunku jazdy
+  const [navMode, setNavMode] = useState(false)
+  const [navToast, setNavToast] = useState(false)
+  const navModeRef = useRef(false)
+  const headingRef = useRef<number | null>(null)   // wygładzony kierunek jazdy (°)
+  const prevNavPosRef = useRef<L.LatLng | null>(null)
 
   // Współdzielone: alarmy + lokalizacje na żywo
   const [alerts, setAlerts] = useState<AlertPoint[]>([])
@@ -388,6 +430,7 @@ export function FireMapPage() {
 
   useEffect(() => { userPosRef.current = userPos }, [userPos])
   useEffect(() => { followingRef.current = following }, [following])
+  useEffect(() => { navModeRef.current = navMode }, [navMode])
   useEffect(() => { editModeRef.current = editMode }, [editMode])
   useEffect(() => { addKindRef.current = addKind }, [addKind])
   useEffect(() => { drawingRoadRef.current = drawingRoad }, [drawingRoad])
@@ -560,6 +603,12 @@ export function FireMapPage() {
       maxZoom: 19, // wymagane przez markercluster (warstwy bazowe i tak mają 19)
       zoomControl: false,
       attributionControl: false,
+      // obrót mapy (leaflet-rotate) — sterujemy nim tylko programowo w trybie nawigacji
+      rotate: true,
+      bearing: 0,
+      rotateControl: false,
+      touchRotate: false,
+      shiftKeyRotate: false,
     })
 
     map.fitBounds([[52.20, OSPWL.west], [OSPWL.north, OSPWL.east]], { padding: [20, 20] })
@@ -583,6 +632,14 @@ export function FireMapPage() {
       if (followingRef.current) {
         followingRef.current = false
         setFollowing(false)
+      }
+      // ręczne przesunięcie wychodzi z nawigacji i prostuje mapę (jak „re-center" w Google Maps)
+      if (navModeRef.current) {
+        navModeRef.current = false
+        setNavMode(false)
+        headingRef.current = null
+        prevNavPosRef.current = null
+        map.setBearing(0)
       }
     })
 
@@ -691,18 +748,44 @@ export function FireMapPage() {
     })
 
     function onLocationFound(e: L.LocationEvent) {
+      const nav = navModeRef.current
       gpsDotRef.current?.remove()
       gpsCircleRef.current?.remove()
-      gpsDotRef.current = L.circleMarker(e.latlng, {
-        radius: 8, fillColor: '#3b82f6', color: '#fff', weight: 2.5, opacity: 1, fillOpacity: 1,
-      }).addTo(map)
+      // w nawigacji: strzałka kierunku; poza nią: zwykła niebieska kropka
+      gpsDotRef.current = nav
+        ? L.marker(e.latlng, { icon: navArrowIcon(), zIndexOffset: 1200, interactive: false })
+        : L.circleMarker(e.latlng, {
+            radius: 8, fillColor: '#3b82f6', color: '#fff', weight: 2.5, opacity: 1, fillOpacity: 1,
+          })
+      gpsDotRef.current.addTo(map)
       if (e.accuracy > 0) {
         gpsCircleRef.current = L.circle(e.latlng, {
           radius: e.accuracy, fillColor: '#3b82f6', fillOpacity: 0.1, color: '#3b82f6', weight: 1,
         }).addTo(map)
       }
       setUserPos(e.latlng)
-      if (followingRef.current) map.setView(e.latlng, map.getZoom())
+
+      if (nav) {
+        // kierunek jazdy: najpierw heading z GPS (gdy jedziemy), inaczej z dwóch ostatnich pozycji
+        const ev = e as L.LocationEvent & { heading?: number; speed?: number }
+        let hdg: number | null = null
+        if (typeof ev.heading === 'number' && !isNaN(ev.heading) && (ev.speed == null || ev.speed > 0.7)) {
+          hdg = ev.heading
+        } else if (prevNavPosRef.current) {
+          const moved = prevNavPosRef.current.distanceTo(e.latlng)
+          if (moved > 5) hdg = computeBearing(prevNavPosRef.current.lat, prevNavPosRef.current.lng, e.latlng.lat, e.latlng.lng)
+        }
+        prevNavPosRef.current = e.latlng
+        if (hdg != null) {
+          headingRef.current = headingRef.current == null
+            ? hdg
+            : (headingRef.current + shortestAngleDelta(headingRef.current, hdg) * 0.35 + 360) % 360
+        }
+        map.setView(e.latlng, map.getZoom(), { animate: false })
+        if (headingRef.current != null) map.setBearing(-headingRef.current) // kierunek jazdy „w górę"
+      } else if (followingRef.current) {
+        map.setView(e.latlng, map.getZoom())
+      }
     }
 
     map.on('locationfound', onLocationFound)
@@ -1365,6 +1448,13 @@ export function FireMapPage() {
   }, [following])
 
   useEffect(() => {
+    if (!navMode) { setNavToast(false); return }
+    setNavToast(true)
+    const t = setTimeout(() => setNavToast(false), 3500)
+    return () => clearTimeout(t)
+  }, [navMode])
+
+  useEffect(() => {
     if (!isSharing) { setShareToast(false); return }
     setShareToast(true)
     const t = setTimeout(() => setShareToast(false), 3000)
@@ -1761,6 +1851,19 @@ export function FireMapPage() {
         Śledź moją pozycję
       </div>
 
+      {/* Nav mode toast */}
+      <div className={cn(
+        'absolute bottom-16 right-14 z-[1000]',
+        'flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg',
+        'bg-surface-900 border border-slate-700/60',
+        'text-[12px] text-slate-200 whitespace-nowrap pointer-events-none',
+        'transition-all duration-300',
+        navToast ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2',
+      )}>
+        <Navigation2 className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+        Nawigacja — mapa obraca się wg jazdy
+      </div>
+
       {/* Share label toast */}
       <div
         style={{ bottom: isAdmin ? '10.25rem' : '7.25rem' }}
@@ -1974,9 +2077,38 @@ export function FireMapPage() {
         </button>
         <button
           onClick={() => {
+            const next = !navMode
+            setNavMode(next)
+            headingRef.current = null
+            prevNavPosRef.current = null
+            if (next) {
+              setFollowing(false)
+              if (userPos) mapRef.current?.setView(userPos, NAV_ZOOM)
+            } else {
+              mapRef.current?.setBearing(0)
+            }
+          }}
+          disabled={!userPos}
+          title={navMode ? 'Wyłącz nawigację' : 'Nawigacja — mapa obraca się wg kierunku jazdy'}
+          className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shadow-lg border transition-colors',
+            navMode
+              ? 'bg-brand-600 text-white border-brand-500'
+              : userPos
+                ? 'bg-surface-900 text-slate-400 border-slate-700/60 hover:text-slate-200'
+                : 'bg-surface-900 text-slate-600 border-slate-700/60 cursor-not-allowed',
+          )}
+        >
+          <Navigation2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => {
             const next = !following
             setFollowing(next)
-            if (next && userPos) mapRef.current?.setView(userPos, 15)
+            if (next) {
+              if (navMode) { setNavMode(false); mapRef.current?.setBearing(0); headingRef.current = null }
+              if (userPos) mapRef.current?.setView(userPos, 15)
+            }
           }}
           disabled={!userPos}
           title={following ? 'Wyłącz śledzenie pozycji' : 'Śledź moją pozycję'}

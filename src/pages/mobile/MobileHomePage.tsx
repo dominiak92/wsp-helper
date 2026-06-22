@@ -1048,16 +1048,18 @@ function CrewAbsencesCollapsible({
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <CalendarX className="w-4 h-4 text-red-400/70 shrink-0" />
-          <p className="text-sm font-medium text-white">Nieobecności na służbach</p>
-          {todayCount > 0 && (
-            <span className="text-[10px] font-medium text-red-400 bg-red-950/40 px-2 py-0.5 rounded-md border border-red-900/40">
-              Dzisiaj {todayCount} {todayCount === 1 ? 'nieobecny' : 'nieobecnych'}
-            </span>
-          )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white truncate">Nieobecności na służbach</p>
+            {todayCount > 0 && (
+              <p className="text-[11px] text-red-400/90 leading-tight">
+                Dzisiaj {todayCount} {todayCount === 1 ? 'nieobecny' : 'nieobecnych'}
+              </p>
+            )}
+          </div>
         </div>
-        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
+        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300 ml-2', open && 'rotate-180')} />
       </button>
 
       <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', open ? 'max-h-[1500px] opacity-100' : 'max-h-0 opacity-0')}>

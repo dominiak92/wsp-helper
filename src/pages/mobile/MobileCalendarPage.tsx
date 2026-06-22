@@ -154,7 +154,7 @@ export function MobileCalendarPage() {
         if (parsed) setAssignmentMap(prev => new Map(prev).set(selectedDate, parsed))
         setAssignmentLoading(false)
       })
-  }, [selectedDate])
+  }, [selectedDate, assignmentMap])
 
   function prevMonth() {
     setSelectedDate(null)

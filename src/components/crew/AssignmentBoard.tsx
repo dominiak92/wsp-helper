@@ -15,6 +15,7 @@ export interface DragCtx {
   onTap: (key: string, hasPerson: boolean) => void
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function getPersonAtSlotKey(a: ShiftAssignment, key: string): string | null {
   if (!key || key === 'unassigned') return null
   if (key.startsWith('unassigned:')) return key.split(':')[1]

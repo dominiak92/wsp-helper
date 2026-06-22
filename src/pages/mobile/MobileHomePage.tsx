@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { DailyWeatherCollapsible } from '../../components/DailyWeatherWidget'
 import { PushBell } from '../../components/PushBell'
 import { sendPushTrigger, isSubscribed, isPushSupported } from '../../lib/pushNotifications'
 import {
   currentOrNextDutyDate, todayYmdKey, isDutyDay, ymdKey,
-  formatDateShort, formatDateLong,
+  formatDateShort, formatDateLong, formatDateShortWithDay,
 } from '../../lib/duty'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, VEHICLE_EXTRA_RESCUERS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons } from '../../lib/crew'
-import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Plane } from 'lucide-react'
+import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, VEHICLE_EXTRA_RESCUERS, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons, emptyAssignment, applySelfAbsence, withdrawSelfAbsence } from '../../lib/crew'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, ChevronDown, Flame, Thermometer, Droplets, Leaf, Wind, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Plane, Undo2, CalendarOff } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 import type { WeatherReading, WeatherData } from '../../lib/weather'
@@ -261,11 +261,11 @@ export function MobileHomePage() {
   const myPersonId = user ? (personnel.find(p => p.login === user.login)?.id ?? null) : null
   const isDutyOfficer = !!(myPersonId && assignment?.dutyOfficerIds.includes(myPersonId))
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     const upcomingKeys = nextDutyKeys(16) // next 16 duty days
     const [firstKey, ...restKeys] = upcomingKeys
 
-    Promise.all([
+    return Promise.all([
       supabase.from('personnel').select('*'),
       // current/next duty assignment
       supabase
@@ -314,7 +314,11 @@ export function MobileHomePage() {
       if (noteData?.message) setAnnouncement(noteData.message)
       setLoading(false)
     })
+  }, [dutyDate])
 
+  useEffect(() => { reload() }, [reload])
+
+  useEffect(() => {
     const today = new Date()
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     supabase
@@ -326,7 +330,7 @@ export function MobileHomePage() {
       .then(({ data }) => {
         if (data) setUpcomingEvents(data as CalendarEvent[])
       })
-  }, [dutyDate])
+  }, [])
 
   function fetchWeather() {
     setWeatherLoading(true)
@@ -508,6 +512,64 @@ export function MobileHomePage() {
     }
   }
 
+  // Obsada danego dnia z już załadowanych danych (bieżąca w `assignment`, przyszłe w `savedMap`)
+  function dayAssignment(date: string): ShiftAssignment | null {
+    if (date === dutyDate) return assignment
+    return savedMap.get(date) ?? null
+  }
+
+  // Pobierz najświeższy zapis obsady dla danego dnia (tuż przed zapisem, by nie nadpisać zmian dyżurnego)
+  async function fetchLatestAssignmentRow(date: string) {
+    const { data } = await supabase
+      .from('duty_assignments')
+      .select('id, assignment_json')
+      .eq('duty_date', date)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const row = data?.[0]
+    return { id: (row?.id as string | undefined) ?? null, parsed: parseShiftAssignment(row?.assignment_json) }
+  }
+
+  async function notifyDuty(message: string) {
+    if (!user) return
+    await supabase.from('duty_messages').insert({
+      sender_login: user.login,
+      sender_name: user.displayName,
+      message,
+    })
+    sendPushTrigger({ type: 'new_message', senderLogin: user.login, senderName: user.displayName, message })
+  }
+
+  // User zgłasza nieobecność: ściąga się ze składu danego dnia i informuje dyżurnego
+  async function submitAbsence(date: string, type: AbsenceType, note: string) {
+    if (!user || !myPersonId) return
+    const { id, parsed } = await fetchLatestAssignmentRow(date)
+    const base = parsed ?? emptyAssignment()
+    const next = applySelfAbsence(base, myPersonId, type)
+    if (id) {
+      await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id)
+    } else {
+      await supabase.from('duty_assignments').delete().eq('duty_date', date)
+      await supabase.from('duty_assignments').insert({ duty_date: date, assignment_json: next })
+    }
+    const trimmed = note.trim()
+    await notifyDuty(`🚫 Zgłoszenie nieobecności — ${formatDateShortWithDay(date)}: ${ABSENCE_LABELS[type]}${trimmed ? `\n${trimmed}` : ''}`)
+    await Promise.all([reload(), fetchMyMessages()])
+  }
+
+  // User wycofuje własną nieobecność i wraca na swoje poprzednie miejsce w składzie
+  async function withdrawAbsence(date: string) {
+    if (!user || !myPersonId) return
+    const { id, parsed } = await fetchLatestAssignmentRow(date)
+    if (!id || !parsed) return
+    const next = withdrawSelfAbsence(parsed, myPersonId)
+    await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id)
+    await notifyDuty(`↩️ Wycofanie nieobecności — ${formatDateShortWithDay(date)} (powrót do składu)`)
+    await Promise.all([reload(), fetchMyMessages()])
+  }
+
+  const myAbsenceIsSelf = !!(myPersonId && assignment?.selfAbsences?.[myPersonId])
+
   return (
     <div className="px-3 sm:px-5 py-4 space-y-5 pb-8">
 
@@ -641,12 +703,20 @@ export function MobileHomePage() {
           ) : isAbsentNow ? (
             <div className="bg-surface-800 rounded-xl border border-red-900/40 p-4 flex items-center gap-3">
               <UserX className="w-8 h-8 text-red-500 shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-red-400">Nieobecny</p>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {ABSENCE_LABELS[myAbsenceNow!]}
                 </p>
               </div>
+              {myAbsenceIsSelf && (
+                <button
+                  onClick={() => withdrawAbsence(dutyDate)}
+                  className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors shrink-0"
+                >
+                  <Undo2 className="w-3.5 h-3.5" /> Cofnij
+                </button>
+              )}
             </div>
           ) : (
             <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-4 flex items-center gap-3">
@@ -671,7 +741,7 @@ export function MobileHomePage() {
               <Send className="w-4 h-4 text-brand-400 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-white">Informacja dla dyżurnego</p>
-                <p className="text-[11px] text-slate-500">Stan licznika, zmiana w służbach, inne</p>
+                <p className="text-[11px] text-slate-500">M.in. stan licznika, informacja na radiowęzeł, inne</p>
               </div>
             </div>
             <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', showMsgForm && 'rotate-180')} />
@@ -720,6 +790,17 @@ export function MobileHomePage() {
           </div>
         </div>
       </div>
+
+      {/* Zgłoś nieobecność */}
+      {myPersonId && (
+        <ReportAbsenceCard
+          dutyKeys={nextDutyKeys(8)}
+          myPersonId={myPersonId}
+          dayAssignment={dayAssignment}
+          onSubmit={submitAbsence}
+          onWithdraw={withdrawAbsence}
+        />
+      )}
 
       {/* Moje wiadomości do dyżurnego */}
       {myMessages.length > 0 && (
@@ -1215,6 +1296,177 @@ function RowInline({ label, value, Icon, iconClass, isMe }: {
         {isMe && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-400 mr-1.5 mb-0.5 shrink-0" />}
         {value}
       </span>
+    </div>
+  )
+}
+
+// ── Zgłoś nieobecność ─────────────────────────────────────────────────────────
+
+function ReportAbsenceCard({
+  dutyKeys,
+  myPersonId,
+  dayAssignment,
+  onSubmit,
+  onWithdraw,
+}: {
+  dutyKeys: string[]
+  myPersonId: string
+  dayAssignment: (date: string) => ShiftAssignment | null
+  onSubmit: (date: string, type: AbsenceType, note: string) => Promise<void>
+  onWithdraw: (date: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [date, setDate] = useState(dutyKeys[0] ?? '')
+  const [type, setType] = useState<AbsenceType | null>(null)
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [okMsg, setOkMsg] = useState<string | null>(null)
+
+  const a = date ? dayAssignment(date) : null
+  const myAbs = a?.absenceMap?.[myPersonId] ?? null
+  const isSelf = !!a?.selfAbsences?.[myPersonId]
+
+  async function handleSubmit() {
+    if (!date || !type) return
+    setBusy(true)
+    try {
+      await onSubmit(date, type, note)
+      setNote('')
+      setType(null)
+      setOkMsg('Zgłoszono nieobecność — dyżurny powiadomiony')
+      setTimeout(() => setOkMsg(null), 4000)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleWithdraw() {
+    setBusy(true)
+    try {
+      await onWithdraw(date)
+      setOkMsg('Nieobecność wycofana — wracasz do składu')
+      setTimeout(() => setOkMsg(null), 4000)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <CalendarOff className="w-4 h-4 text-amber-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-white">Zgłoś nieobecność</p>
+            <p className="text-[11px] text-slate-500">Wybierz dzień służby oraz rodzaj nieobecności</p>
+          </div>
+        </div>
+        <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
+      </button>
+
+      {okMsg && (
+        <div className="mt-2 flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
+          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          <p className="text-sm text-emerald-300">{okMsg}</p>
+        </div>
+      )}
+
+      <div className={cn('overflow-hidden transition-all duration-300 ease-in-out', open ? 'max-h-[700px] opacity-100' : 'max-h-0 opacity-0')}>
+        <div className="mt-2 bg-surface-800 rounded-xl border border-slate-700/40 p-3 space-y-3">
+          {/* Wybór dnia */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600 mb-1.5">Służba</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {dutyKeys.map(k => {
+                const selected = k === date
+                const weekday = formatDateLong(k).split(',')[0]
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setDate(k)}
+                    className={cn(
+                      'shrink-0 rounded-lg border px-3 py-2 text-left transition-colors',
+                      selected ? 'border-brand-500 bg-brand-950/40' : 'border-slate-700 bg-surface-900 hover:border-slate-600',
+                    )}
+                  >
+                    <p className={cn('text-sm font-semibold whitespace-nowrap', selected ? 'text-brand-200' : 'text-white')}>{formatDateShort(k)}</p>
+                    <p className="text-[10px] text-slate-500 whitespace-nowrap">{weekday}</p>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Stan dnia: już zgłoszona / ustawiona przez dyżurnego / formularz */}
+          {myAbs && isSelf ? (
+            <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 flex items-center gap-3">
+              <UserX className="w-5 h-5 text-amber-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-300">Zgłoszono nieobecność</p>
+                <p className="text-[11px] text-slate-500">{ABSENCE_LABELS[myAbs]}</p>
+              </div>
+              <button
+                onClick={handleWithdraw}
+                disabled={busy}
+                className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors shrink-0 disabled:opacity-50"
+              >
+                <Undo2 className="w-3.5 h-3.5" /> {busy ? 'Cofanie…' : 'Cofnij'}
+              </button>
+            </div>
+          ) : myAbs ? (
+            <div className="rounded-lg border border-slate-700 bg-surface-900 p-3 flex items-center gap-3">
+              <UserX className="w-5 h-5 text-slate-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-300">Masz już nieobecność na ten dzień</p>
+                <p className="text-[11px] text-slate-500">{ABSENCE_LABELS[myAbs]} — ustawione przez dyżurnego</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600 mb-1.5">Rodzaj nieobecności</p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {ABSENCE_ORDER.map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setType(t)}
+                      className={cn(
+                        'rounded-lg border px-3 py-2 text-sm text-left transition-colors',
+                        type === t
+                          ? 'border-brand-500 bg-brand-950/40 text-brand-200 font-semibold'
+                          : 'border-slate-700 bg-surface-900 text-slate-300 hover:border-slate-600',
+                      )}
+                    >
+                      {ABSENCE_LABELS[t]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                className="w-full bg-surface-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-500 resize-none placeholder:text-slate-600"
+                rows={2}
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="Notatka dla dyżurnego (opcjonalnie)"
+              />
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] text-slate-500">W razie pomyłki zgłoszenie cofniesz jednym kliknięciem.</p>
+                <button
+                  onClick={handleSubmit}
+                  disabled={busy || !type || !date}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-brand-700 hover:bg-brand-600 text-white transition-colors disabled:opacity-50 shrink-0"
+                >
+                  <Send className="w-3 h-3" />
+                  {busy ? 'Zgłaszanie…' : 'Zgłoś nieobecność'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

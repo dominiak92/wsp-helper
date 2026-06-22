@@ -37,7 +37,7 @@ Defined in `src/lib/database.types.ts`. Additional table used but not typed ther
 | `personnel` | Firefighter roster (id, name, roles[], preferred_vehicle_id, absence, login) |
 | `duty_assignments` | Serialised `ShiftAssignment` JSON keyed by `duty_date` (YYYY-MM-DD) |
 | `announcements` | Single row (id=1) with a shared text note shown on dashboard and mobile |
-| `duty_messages` | Messages sent from mobile users to the duty officer; confirmed with `read_at`. Both the admin (dashboard) **and the day's duty officer** (the user in the current assignment's `dutyOfficerIds`, on mobile home) can read all messages and confirm them — confirming fires a `confirmed` push to the sender. Relies on permissive RLS (any authenticated user can read/update). |
+| `duty_messages` | Messages sent from mobile users to the duty officer; confirmed with `read_at`. Both the admin (dashboard) **and the day's duty officer** (the user in the current assignment's `dutyOfficerIds`, on mobile home) can read all messages and confirm them — confirming fires a `confirmed` push to the sender. Relies on permissive RLS (any authenticated user can read/update). Self-reported absences (see mobile home "Zgłoś nieobecność") also flow through this table as a plain message (`🚫 Zgłoszenie nieobecności …` / `↩️ Wycofanie …`) + `new_message` push — no schema change. |
 | `push_subscriptions` | Web Push subscriptions (user_login, user_role, subscription JSON) |
 | `weather_cache` | Single row (id=1) written by a GitHub Actions cron, read by the Netlify function |
 | `calendar_events` | Upcoming events shown on mobile home (id, event_date, label) — not in database.types.ts |
@@ -60,7 +60,7 @@ This means the same person can have different absences on different duty dates. 
 ### Business logic libraries
 
 - **`src/lib/duty.ts`** — duty-day calendar math. Duty cycle is every 4 days anchored to `2026-05-01`; billing cycle is every 28 days anchored to `2026-04-21`. `currentOrNextDutyDate()` is the primary entry point used across pages.
-- **`src/lib/crew.ts`** — personnel types (`Person`, `ShiftAssignment`, `VehicleAssignment`), the `generateCrew()` auto-assignment algorithm, and all drag-and-drop helpers (`applyDrop`, slot key format below). The three crew vehicles are `gba`, `gcba532`, `gcba1060`. `DEFAULT_PERSONNEL` is a hardcoded fallback for development; real data always comes from Supabase.
+- **`src/lib/crew.ts`** — personnel types (`Person`, `ShiftAssignment`, `VehicleAssignment`), the `generateCrew()` auto-assignment algorithm, and all drag-and-drop helpers (`applyDrop`, slot key format below). The three crew vehicles are `gba`, `gcba532`, `gcba1060`. `DEFAULT_PERSONNEL` is a hardcoded fallback for development; real data always comes from Supabase. Self-reported absences use `applySelfAbsence` / `withdrawSelfAbsence`: the former records the person's prior slot in `ShiftAssignment.selfAbsences` (`personId → CrewSlot`) and pulls them via `removePersonFromAssignment` + sets `absenceMap`; the latter restores them to that slot (`restorePersonToSlot`, falling back to reserve if taken). `selfAbsences` distinguishes user-reported absences (undoable on mobile) from admin-set ones.
 - **`src/lib/incident.ts`** — generates incident report text in two formats: `MON` (military internal) and `Civilian`. `generateDescription(form)` is the public API.
 - **`src/lib/mapFeatures.ts`** — CRUD + types for persistent fire-map objects (`MapFeature`, `FeatureKind` = `water | unit | poi | road`, point/line geometry). `KIND_META` maps each kind to colour/emoji; `POI_ICONS` is the emoji picker for important points. `SEED_FEATURES` / `seedFeatures()` one-time import the approximate positions read off the paper map.
 - **`src/lib/liveMap.ts`** — CRUD for the two ephemeral fire-map layers: `map_alerts` (pulsing alert points, 2h TTL) and `live_locations` (shared user positions, 30 min TTL). Polled every ~10 s by `FireMapPage`.
@@ -110,7 +110,7 @@ Key capabilities:
 | `/incident-generator` | Dashboard | Generate formatted incident report text (MON or Civilian format) |
 | `/vademecum` | Dashboard | Static page: important phone numbers, vehicles list, alarm procedure checklist (local state only, no DB), duty report schedule |
 | `/map` | Dashboard | Interactive fire map (see "Fire map" above) |
-| `/mobile` | Mobile | Personal assignment, message to duty officer, crew summary, weather, upcoming absences |
+| `/mobile` | Mobile | Personal assignment, message to duty officer, **self-report absence** ("Zgłoś nieobecność" — pick an upcoming duty day + absence type; pulls the user from that day's crew, sets `absenceMap`, notifies duty officer; "Cofnij" restores their prior slot), crew summary, weather, upcoming absences |
 | `/mobile/calendar` | Mobile | Duty calendar for mobile users |
 | `/mobile/crew-generator` | Mobile | Read-only crew view for mobile users |
 | `/mobile/map` | Mobile | Same `FireMapPage` as `/map` |

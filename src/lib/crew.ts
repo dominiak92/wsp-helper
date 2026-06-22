@@ -113,6 +113,14 @@ export interface Guest {
   name: string
 }
 
+// Slot a person occupies in an assignment. Captured when a user self-reports an
+// absence so the move can be undone (restore the person to where they were).
+export type CrewSlot =
+  | { kind: 'shiftCommander' }
+  | { kind: 'dutyOfficer' }
+  | { kind: 'vehicle'; vehicleId: CrewVehicleId; role: 'commander' | 'driver' | 'rescuer' }
+  | { kind: 'reserve' }
+
 export interface ShiftAssignment {
   shiftCommanderId: string | null
   dutyOfficerIds: string[]
@@ -122,6 +130,7 @@ export interface ShiftAssignment {
   partial8hIds?: string[] // osoby obecne tylko 8h tego dnia
   guests?: Guest[]
   dinner?: boolean | null
+  selfAbsences?: Record<string, CrewSlot> // personId → slot held before self-reporting absence (for undo)
 }
 
 // Build Person entries for an assignment's guests so name lookups / DnD work
@@ -265,6 +274,105 @@ export function removePersonFromAssignment(a: ShiftAssignment, personId: string)
       driverId: v.driverId === personId ? null : v.driverId,
       rescuerIds: v.rescuerIds.filter(id => id !== personId),
     })),
+  }
+}
+
+// Pusta, ale poprawna obsada — używana, gdy dla danego dnia nie ma jeszcze zapisu,
+// a user zgłasza nieobecność z wyprzedzeniem (nieobecność jedzie w absenceMap).
+export function emptyAssignment(): ShiftAssignment {
+  return {
+    shiftCommanderId: null,
+    dutyOfficerIds: [],
+    vehicles: CREW_VEHICLE_IDS.map(id => ({ vehicleId: id, commanderId: null, driverId: null, rescuerIds: [] })),
+    unassignedIds: [],
+  }
+}
+
+// Gdzie w obsadzie znajduje się dana osoba (lub null, jeśli jej nie ma).
+export function findPersonSlot(a: ShiftAssignment, personId: string): CrewSlot | null {
+  if (a.shiftCommanderId === personId) return { kind: 'shiftCommander' }
+  if (a.dutyOfficerIds.includes(personId)) return { kind: 'dutyOfficer' }
+  for (const v of a.vehicles) {
+    if (v.commanderId === personId) return { kind: 'vehicle', vehicleId: v.vehicleId, role: 'commander' }
+    if (v.driverId === personId) return { kind: 'vehicle', vehicleId: v.vehicleId, role: 'driver' }
+    if (v.rescuerIds.includes(personId)) return { kind: 'vehicle', vehicleId: v.vehicleId, role: 'rescuer' }
+  }
+  if (a.unassignedIds.includes(personId)) return { kind: 'reserve' }
+  return null
+}
+
+// Wstaw osobę z powrotem na zapisany slot. Jeśli slot jest już zajęty (ktoś inny
+// go przejął w międzyczasie), bezpiecznie ląduje w rezerwie.
+export function restorePersonToSlot(a: ShiftAssignment, personId: string, slot: CrewSlot): ShiftAssignment {
+  const base = removePersonFromAssignment(a, personId) // never duplicate
+  const toReserve = (): ShiftAssignment => ({ ...base, unassignedIds: [...base.unassignedIds, personId] })
+
+  switch (slot.kind) {
+    case 'shiftCommander': {
+      if (base.shiftCommanderId) return toReserve()
+      // dowódca zmiany jedzie GBA — uzupełnij też dowódcę GBA, jeśli wolny
+      const gba = base.vehicles.find(v => v.vehicleId === 'gba')
+      const vehicles = gba && !gba.commanderId
+        ? base.vehicles.map(v => (v.vehicleId === 'gba' ? { ...v, commanderId: personId } : v))
+        : base.vehicles
+      return { ...base, shiftCommanderId: personId, vehicles }
+    }
+    case 'dutyOfficer':
+      return { ...base, dutyOfficerIds: [...base.dutyOfficerIds, personId] }
+    case 'vehicle': {
+      const v = base.vehicles.find(x => x.vehicleId === slot.vehicleId)
+      if (!v) return toReserve()
+      if (slot.role === 'commander') {
+        if (v.commanderId) return toReserve()
+        const next: ShiftAssignment = {
+          ...base,
+          vehicles: base.vehicles.map(x => (x.vehicleId === slot.vehicleId ? { ...x, commanderId: personId } : x)),
+        }
+        // dowódca GBA jest też dowódcą zmiany, jeśli ten slot jest wolny
+        if (slot.vehicleId === 'gba' && !next.shiftCommanderId) return { ...next, shiftCommanderId: personId }
+        return next
+      }
+      if (slot.role === 'driver') {
+        if (v.driverId) return toReserve()
+        return {
+          ...base,
+          vehicles: base.vehicles.map(x => (x.vehicleId === slot.vehicleId ? { ...x, driverId: personId } : x)),
+        }
+      }
+      // rescuer — dołącz do listy ratowników pojazdu
+      return {
+        ...base,
+        vehicles: base.vehicles.map(x => (x.vehicleId === slot.vehicleId ? { ...x, rescuerIds: [...x.rescuerIds, personId] } : x)),
+      }
+    }
+    default:
+      return toReserve()
+  }
+}
+
+// User zgłasza własną nieobecność: zapamiętaj slot, ściągnij ze składu, ustaw nieobecność.
+export function applySelfAbsence(a: ShiftAssignment, personId: string, type: AbsenceType): ShiftAssignment {
+  const slot = findPersonSlot(a, personId) ?? { kind: 'reserve' as const }
+  const cleared = removePersonFromAssignment(a, personId)
+  return {
+    ...cleared,
+    absenceMap: { ...(cleared.absenceMap ?? {}), [personId]: type },
+    selfAbsences: { ...(a.selfAbsences ?? {}), [personId]: slot },
+  }
+}
+
+// User wycofuje własną nieobecność: zdejmij nieobecność i wróć na zapamiętany slot.
+export function withdrawSelfAbsence(a: ShiftAssignment, personId: string): ShiftAssignment {
+  const slot = a.selfAbsences?.[personId] ?? { kind: 'reserve' as const }
+  const restored = restorePersonToSlot(a, personId, slot)
+  const absenceMap = { ...(restored.absenceMap ?? {}) }
+  delete absenceMap[personId]
+  const selfAbsences = { ...(restored.selfAbsences ?? {}) }
+  delete selfAbsences[personId]
+  return {
+    ...restored,
+    absenceMap: Object.keys(absenceMap).length ? absenceMap : undefined,
+    selfAbsences: Object.keys(selfAbsences).length ? selfAbsences : undefined,
   }
 }
 

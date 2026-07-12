@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ArrowLeft, ArrowRight, RefreshCw, CalendarClock, Printer } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RefreshCw, CalendarClock } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
 import { ymdKey, isDutyDayKey, isBillingStartKey } from '../lib/duty'
@@ -41,17 +41,6 @@ function daysInMonth(year: number, month0: number): number {
   return new Date(year, month0 + 1, 0).getDate()
 }
 
-// Nominalna norma miesięczna = dni robocze (pn–pt) × 8h (bez uwzględniania świąt)
-function nominalNorm(year: number, month0: number): number {
-  let wd = 0
-  const n = daysInMonth(year, month0)
-  for (let d = 1; d <= n; d++) {
-    const day = new Date(year, month0, d).getDay()
-    if (day !== 0 && day !== 6) wd++
-  }
-  return wd * 8
-}
-
 export function SchedulePage() {
   const [members, setMembers] = useState<Member[]>([])
   const [entries, setEntries] = useState<Record<string, Record<string, HourCode>>>({})
@@ -86,7 +75,6 @@ export function SchedulePage() {
   }, [])
 
   const months = [quarter * 3, quarter * 3 + 1, quarter * 3 + 2]
-  const norms = months.map(m => nominalNorm(year, m))
 
   function setEntry(personId: string, date: string, code: HourCode | null) {
     setEntries(prev => {
@@ -131,7 +119,6 @@ export function SchedulePage() {
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 border-b border-slate-800 shrink-0 print:hidden">
         <div className="min-w-0">
           <h1 className="text-base sm:text-lg font-bold text-white">Grafik godzinowy</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Cała zmiana · edytowalny · wspólne dane z kalkulatorem</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
@@ -152,14 +139,6 @@ export function SchedulePage() {
             {importing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">Z obsad</span>
           </button>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white transition-colors"
-            title="Drukuj / zapisz PDF"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Drukuj</span>
-          </button>
         </div>
       </div>
 
@@ -172,13 +151,10 @@ export function SchedulePage() {
           {/* Arkusz (jasny, jak na papierze) */}
           <div className="inline-block min-w-full bg-white text-slate-900 rounded-lg shadow-xl print:shadow-none">
             {/* Nagłówek arkusza */}
-            <div className="flex items-baseline justify-between gap-4 px-3 py-2 border-b-2 border-slate-800">
+            <div className="px-3 py-2 border-b-2 border-slate-800">
               <h2 className="text-sm sm:text-base font-bold tracking-tight">
                 HARMONOGRAM GODZINOWY II ZMIANY WSP za {ROMAN[quarter]} kwartał {year} r.
               </h2>
-              <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">
-                {norms.join(' + ')} = {norms.reduce((a, b) => a + b, 0)}
-              </span>
             </div>
 
             {months.map((m, i) => (

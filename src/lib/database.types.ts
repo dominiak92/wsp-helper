@@ -7,6 +7,8 @@ interface PersonnelRow {
   preferred_vehicle_id: string | null
   absence: string | null
   login: string | null
+  is_soldier: boolean
+  hours_seed: number
   created_at: string
 }
 
@@ -17,6 +19,21 @@ interface PersonnelInsert {
   preferred_vehicle_id?: string | null
   absence?: string | null
   login?: string | null
+  is_soldier?: boolean
+  hours_seed?: number
+}
+
+interface WorkHoursRow {
+  person_id: string
+  date: string
+  code: string
+  updated_at: string
+}
+
+interface WorkHoursInsert {
+  person_id: string
+  date: string
+  code: string
 }
 
 interface DutyAssignmentRow {
@@ -82,6 +99,11 @@ export interface Database {
         Row: DutyMessageRow
         Insert: DutyMessageInsert
         Update: Partial<DutyMessageInsert>
+      }
+      work_hours: {
+        Row: WorkHoursRow
+        Insert: WorkHoursInsert
+        Update: Partial<WorkHoursInsert>
       }
     }
   }

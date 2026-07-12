@@ -49,6 +49,34 @@ export function nextDutyDate(from: string): string {
   return ymdKey(dt.getFullYear(), dt.getMonth(), dt.getDate())
 }
 
+// ── Operacje na kluczach YYYY-MM-DD ─────────────────────────────────────────
+
+export function addDaysKey(key: string, n: number): string {
+  const [y, m, d] = key.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + n)
+  return ymdKey(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate())
+}
+
+export function isDutyDayKey(key: string): boolean {
+  const [y, m, d] = key.split('-').map(Number)
+  return isDutyDay(y, m - 1, d)
+}
+
+export function isBillingStartKey(key: string): boolean {
+  const [y, m, d] = key.split('-').map(Number)
+  return isBillingDay(y, m - 1, d)
+}
+
+// Początek (YYYY-MM-DD) 28-dniowego okresu rozliczeniowego zawierającego `key`.
+// Dzień rozliczeniowy = pierwszy dzień okresu (żółta kolumna na harmonogramie).
+export function billingPeriodStartKey(key: string): string {
+  const [y, m, d] = key.split('-').map(Number)
+  const t = Date.UTC(y, m - 1, d)
+  const offset = ((Math.floor((t - BILLING_REF_UTC) / 86400000) % 28) + 28) % 28
+  return addDaysKey(key, -offset)
+}
+
 export const MONTHS_GEN = [
   'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
   'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',

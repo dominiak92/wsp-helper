@@ -73,6 +73,7 @@ export function CrewGeneratorPage() {
             roles: row.roles as RoleType[],
             preferredVehicleId: row.preferred_vehicle_id ?? undefined,
             absence: row.absence as AbsenceType | null,
+            isSoldier: !!row.is_soldier,
           })))
         }
       })
@@ -120,6 +121,7 @@ export function CrewGeneratorPage() {
           // Use only the date-specific absenceMap — ignore global personnel.absence
           absence: (loadedAssignment?.absenceMap?.[pRow.id] ?? null) as AbsenceType | null,
           partial8h: !!loadedAssignment?.partial8hIds?.includes(pRow.id),
+          isSoldier: !!pRow.is_soldier,
         })))
       }
       if (loadedAssignment) setAssignment(loadedAssignment)
@@ -211,6 +213,7 @@ export function CrewGeneratorPage() {
       name: updated.name,
       roles: updated.roles,
       preferred_vehicle_id: updated.preferredVehicleId ?? null,
+      is_soldier: !!updated.isSoldier,
       // When dutyDate is set, absence is stored only in assignment.absenceMap —
       // never write it back to the global personnel table.
       ...(dutyDate ? {} : { absence: updated.absence }),

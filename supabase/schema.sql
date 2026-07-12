@@ -8,8 +8,14 @@ create table if not exists personnel (
   roles                text[] not null default '{}',
   preferred_vehicle_id text,
   absence              text,
+  is_soldier           boolean not null default false, -- true = żołnierz (liczony w kalkulatorze godzin)
+  hours_seed           integer not null default 0,     -- saldo godzin przeniesione na start śledzenia
   created_at           timestamptz default now()
 );
+
+-- Gdy tabela już istnieje (migracja):
+alter table personnel add column if not exists is_soldier boolean not null default false;
+alter table personnel add column if not exists hours_seed integer not null default 0;
 
 -- Tabela: przydziały obsady (per dzień/zmiana)
 create table if not exists duty_assignments (
@@ -136,3 +142,21 @@ create policy "public read live_locations"
 
 create policy "public write live_locations"
   on live_locations for all using (true);
+
+-- Tabela: godziny służbowe żołnierzy (kalkulator godzin / rozliczenie 28-dniowe)
+-- Jeden kod na osobę na dzień. code ∈ '24' | '8' | 'W' | 'WH' | '8W' | 'L4' | 'oddelegowanie'
+create table if not exists work_hours (
+  person_id  text not null,
+  date       date not null,
+  code       text not null,
+  updated_at timestamptz default now(),
+  primary key (person_id, date)
+);
+
+alter table work_hours enable row level security;
+
+create policy "public read work_hours"
+  on work_hours for select using (true);
+
+create policy "public write work_hours"
+  on work_hours for all using (true);

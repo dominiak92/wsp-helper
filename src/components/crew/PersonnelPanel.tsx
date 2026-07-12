@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, X } from 'lucide-react'
+import { Pencil, X, Shield } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { Person, RoleType, AbsenceType } from '../../lib/crew'
 import { ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS } from '../../lib/crew'
@@ -77,8 +77,11 @@ export function PersonnelRow({ person, onUpdate, onDelete, notAssigned }: {
             autoFocus
           />
         ) : (
-          <span className={cn('text-sm font-medium text-white flex-1 truncate', absent && 'line-through')}>
-            {person.name}
+          <span className={cn('text-sm font-medium text-white flex-1 truncate flex items-center gap-1.5', absent && 'line-through')}>
+            {person.isSoldier && (
+              <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="currentColor" aria-label="Żołnierz" />
+            )}
+            <span className="truncate">{person.name}</span>
           </span>
         )}
         {notAssigned && !editing && (
@@ -112,6 +115,19 @@ export function PersonnelRow({ person, onUpdate, onDelete, notAssigned }: {
       </div>
       {editing && (
         <div className="mt-2 pt-2 border-t border-slate-800 space-y-2">
+          <button
+            onClick={() => onUpdate({ ...person, isSoldier: !person.isSoldier })}
+            className={cn(
+              'flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded border font-medium leading-none transition-colors',
+              person.isSoldier
+                ? 'text-emerald-300 border-emerald-700 bg-emerald-950/40'
+                : 'text-slate-500 border-slate-700 hover:border-slate-500',
+            )}
+            title="Żołnierz — liczony w kalkulatorze godzin"
+          >
+            <Shield className="w-3 h-3" fill={person.isSoldier ? 'currentColor' : 'none'} />
+            Żołnierz
+          </button>
           <div className="flex gap-1 flex-wrap">
             {ALL_ROLES.map(role => {
               const active = person.roles.includes(role)

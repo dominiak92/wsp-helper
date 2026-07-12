@@ -15,6 +15,17 @@ npm run preview    # preview production build
 
 No test suite is configured. Netlify functions can be tested locally with `netlify dev` (requires Netlify CLI).
 
+### Node version
+
+This project runs on **Node 18** (see [.nvmrc](.nvmrc) → `18.16.0`). Other local projects (e.g. `duty-manager`) use Node 22, so switch before working here. Node is managed with **nvm-windows**; the active version is symlinked at `C:\nvm4w\nodejs` (which must be on `PATH`):
+
+```powershell
+nvm use 18.16.0   # switch to this project's Node
+nvm list          # show installed versions
+```
+
+If a shell reports `node: not found`, no version is currently active (mid-switch) — run `nvm use 18.16.0`. When invoking nvm from a non-interactive shell, it needs `NVM_HOME=C:\Users\<user>\AppData\Local\nvm` and `NVM_SYMLINK=C:\nvm4w\nodejs` set.
+
 ## Architecture overview
 
 **WSP Helper** is a fire-station management PWA for WSP OSPWL Wędrzyn (military fire station). Stack: React 18 + TypeScript + Vite + Tailwind + Supabase + Netlify + Leaflet (fire map).
@@ -34,7 +45,7 @@ Defined in `src/lib/database.types.ts`. Additional table used but not typed ther
 
 | Table | Purpose |
 |---|---|
-| `personnel` | Firefighter roster (id, name, roles[], preferred_vehicle_id, absence, login) |
+| `personnel` | Firefighter roster (id, name, roles[], preferred_vehicle_id, absence, login, `is_soldier`, `hours_seed`). `is_soldier=true` marks a soldier (żołnierz) — the only people counted in the hours calculator; `hours_seed` is their carried-in hours balance at the start of tracking |
 | `duty_assignments` | Serialised `ShiftAssignment` JSON keyed by `duty_date` (YYYY-MM-DD) |
 | `announcements` | Single row (id=1) with a shared text note shown on dashboard and mobile |
 | `duty_messages` | Messages sent from mobile users to the duty officer; confirmed with `read_at`. Both the admin (dashboard) **and the day's duty officer** (the user in the current assignment's `dutyOfficerIds`, on mobile home) can read all messages and confirm them — confirming fires a `confirmed` push to the sender. Relies on permissive RLS (any authenticated user can read/update). Self-reported absences (see mobile home "Zgłoś nieobecność") also flow through this table as a plain message (`🚫 Zgłoszenie nieobecności …` / `↩️ Wycofanie …`) + `new_message` push — no schema change. |
@@ -44,8 +55,9 @@ Defined in `src/lib/database.types.ts`. Additional table used but not typed ther
 | `map_features` | Persistent fire-map objects (water points, units, POIs, fire roads). `geometry` jsonb is point or line; `confirmed=false` marks an approximate position read off the paper map |
 | `map_alerts` | Pulsing alert points on the fire map, visible to everyone, auto-expire after 2h (`expires_at`) |
 | `live_locations` | Live shared user positions on the fire map (one row per `user_login`, expires after 30 min) |
+| `work_hours` | Soldiers' duty hours for the hours calculator. One row per `(person_id, date)` with a `code` (`24`/`8`/`W`/`WH`/`8W`/`L4`/`oddelegowanie`). Read/written only by the hours calculator page |
 
-Tables `personnel`, `duty_assignments`, `map_features`, `map_alerts`, and `live_locations` are defined in [supabase/schema.sql](supabase/schema.sql) with fully public RLS policies (no auth required on the DB level).
+Tables `personnel`, `duty_assignments`, `map_features`, `map_alerts`, `live_locations`, and `work_hours` are defined in [supabase/schema.sql](supabase/schema.sql) with fully public RLS policies (no auth required on the DB level).
 
 ### Critical: how absences work
 
@@ -59,7 +71,8 @@ This means the same person can have different absences on different duty dates. 
 
 ### Business logic libraries
 
-- **`src/lib/duty.ts`** — duty-day calendar math. Duty cycle is every 4 days anchored to `2026-05-01`; billing cycle is every 28 days anchored to `2026-04-21`. `currentOrNextDutyDate()` is the primary entry point used across pages.
+- **`src/lib/duty.ts`** — duty-day calendar math. Duty cycle is every 4 days anchored to `2026-05-01`; billing cycle is every 28 days anchored to `2026-04-21`. `currentOrNextDutyDate()` is the primary entry point used across pages. Key-based helpers (`YYYY-MM-DD`): `addDaysKey`, `isDutyDayKey`, `isBillingStartKey`, `billingPeriodStartKey` (start day of the 28-day billing period containing a date — the "yellow column").
+- **`src/lib/hours.ts`** — hours-calculator logic. `HourCode` = `24`/`8`/`W`/`WH`/`8W`/`L4`/`oddelegowanie`; `HOUR_VALUES` maps each to credited hours (`24`→24, `8`/`8W`→8, all full-day leave/`WH`/`oddelegowanie`→24). `NORM` = 160h per 28-day period. `computePeriods(entries, seed, lastNeededStart)` returns per-period `{worked, diff, cumulative}` with a running balance (starts from the earliest period that has data, seeded by `hours_seed`).
 - **`src/lib/crew.ts`** — personnel types (`Person`, `ShiftAssignment`, `VehicleAssignment`), the `generateCrew()` auto-assignment algorithm, and all drag-and-drop helpers (`applyDrop`, slot key format below). The three crew vehicles are `gba`, `gcba532`, `gcba1060`. `DEFAULT_PERSONNEL` is a hardcoded fallback for development; real data always comes from Supabase. Self-reported absences use `applySelfAbsence` / `withdrawSelfAbsence`: the former records the person's prior slot in `ShiftAssignment.selfAbsences` (`personId → CrewSlot`) and pulls them via `removePersonFromAssignment` + sets `absenceMap`; the latter restores them to that slot (`restorePersonToSlot`, falling back to reserve if taken). `selfAbsences` distinguishes user-reported absences (undoable on mobile) from admin-set ones.
 - **`src/lib/incident.ts`** — generates incident report text in two formats: `MON` (military internal) and `Civilian`. `generateDescription(form)` is the public API.
 - **`src/lib/mapFeatures.ts`** — CRUD + types for persistent fire-map objects (`MapFeature`, `FeatureKind` = `water | unit | poi | road`, point/line geometry). `KIND_META` maps each kind to colour/emoji; `POI_ICONS` is the emoji picker for important points. `SEED_FEATURES` / `seedFeatures()` one-time import the approximate positions read off the paper map.
@@ -107,6 +120,7 @@ Key capabilities:
 | `/dashboard` | Dashboard | Duty overview, crew assignment, fire threat, hourly weather, messages, announcement |
 | `/crew-generator` | Dashboard | Generate/edit/save duty assignments with drag-and-drop; navigates by duty date via `?date=` query param |
 | `/duty-calendar` | Dashboard | Calendar view of duty days and billing cycles |
+| `/hours-calculator` | Dashboard | Hours calculator for soldiers (`is_soldier`). Grid of day-cells (click a cell → pick a `HourCode`, saved to `work_hours`); view toggles Okres (1 billing period) / Miesiąc / Kwartał (3 periods). Per-period summary shows worked vs `NORM` (160h), diff, and running overtime balance (`hours_seed` + Σ diffs). See `hours.ts` |
 | `/garage` | Dashboard | Garage bay view showing crew assignment per vehicle for the current duty date |
 | `/incident-generator` | Dashboard | Generate formatted incident report text (MON or Civilian format) |
 | `/vademecum` | Dashboard | Static page: important phone numbers, vehicles list, alarm procedure checklist (local state only, no DB), duty report schedule |

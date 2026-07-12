@@ -7,12 +7,28 @@ import {
   HourCode, HOUR_CODES, HOUR_CODE_LABELS, HOUR_CODE_SHORT, codeHours, isWorkedCode,
 } from '../lib/hours'
 import { fetchWorkHours, setWorkHour, importFromAssignments } from '../lib/workHours'
+import { SOLDIER_RANKS, civilianFunction, type RoleType } from '../lib/crew'
 
 interface Member {
   id: string
   name: string
   rank: string | null
   isSoldier: boolean
+  roles: RoleType[]
+}
+
+// Etykieta stopnia/funkcji pokazywana w grafiku
+function rankLabel(m: Member): string {
+  return m.isSoldier ? (m.rank ?? '') : civilianFunction(m.roles)
+}
+
+// Klucz sortowania: żołnierze wg stopnia (najwyższy u góry) → ratownicy → kier. rat.
+function rankSortKey(m: Member): [number, number, string] {
+  if (m.isSoldier) {
+    const idx = SOLDIER_RANKS.indexOf(m.rank as typeof SOLDIER_RANKS[number])
+    return [0, idx < 0 ? SOLDIER_RANKS.length : idx, m.name]
+  }
+  return [1, m.roles.includes('DRIVER_RESCUER') ? 1 : 0, m.name]
 }
 
 const MONTHS_NOM = [
@@ -50,15 +66,18 @@ export function SchedulePage() {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      supabase.from('personnel').select('id, name, rank, is_soldier'),
+      supabase.from('personnel').select('id, name, rank, is_soldier, roles'),
       fetchWorkHours(),
     ]).then(([{ data: pData }, map]) => {
       if (cancelled) return
-      const list = (pData ?? []).map(r => ({ id: r.id, name: r.name, rank: r.rank ?? null, isSoldier: !!r.is_soldier }))
-      // Żołnierze na górze (jak na papierze), potem cywile; alfabetycznie w grupie
-      list.sort((a, b) =>
-        (a.isSoldier === b.isSoldier ? 0 : a.isSoldier ? -1 : 1) || a.name.localeCompare(b.name, 'pl'),
-      )
+      const list: Member[] = (pData ?? []).map(r => ({
+        id: r.id, name: r.name, rank: r.rank ?? null, isSoldier: !!r.is_soldier, roles: (r.roles ?? []) as RoleType[],
+      }))
+      // Żołnierze wg stopnia (najwyższy u góry) → ratownicy cywile → kier. rat. cywile
+      list.sort((a, b) => {
+        const ka = rankSortKey(a), kb = rankSortKey(b)
+        return ka[0] - kb[0] || ka[1] - kb[1] || ka[2].localeCompare(kb[2], 'pl')
+      })
       setMembers(list)
       setEntries(map)
       setLoading(false)
@@ -78,13 +97,6 @@ export function SchedulePage() {
       return next
     })
     setWorkHour(personId, date, code)
-  }
-
-  function saveRank(personId: string, rank: string) {
-    const value = rank.trim() || null
-    setMembers(prev => prev.map(m => m.id === personId ? { ...m, rank: value } : m))
-    supabase.from('personnel').update({ rank: value }).eq('id', personId)
-      .then(({ error }) => { if (error) console.error('[supabase] update rank:', error) })
   }
 
   async function handleImport() {
@@ -176,7 +188,6 @@ export function SchedulePage() {
                 month0={m}
                 members={members}
                 entries={entries}
-                onRank={saveRank}
                 onCell={(personId, date, e) => {
                   e.stopPropagation()
                   setEditing({ personId, date, x: e.clientX, y: e.clientY })
@@ -217,12 +228,11 @@ export function SchedulePage() {
   )
 }
 
-function MonthBlock({ year, month0, members, entries, onRank, onCell, last }: {
+function MonthBlock({ year, month0, members, entries, onCell, last }: {
   year: number
   month0: number
   members: Member[]
   entries: Record<string, Record<string, HourCode>>
-  onRank: (personId: string, rank: string) => void
   onCell: (personId: string, date: string, e: React.MouseEvent) => void
   last: boolean
 }) {
@@ -278,15 +288,13 @@ function MonthBlock({ year, month0, members, entries, onRank, onCell, last }: {
             const suma = zapl + url
             const soldierDivider = idx === firstSoldierBreak && firstSoldierBreak > 0
             return (
-              <tr key={mem.id} className={cn(soldierDivider && 'border-t-2 border-t-slate-800')}>
-                <td className="border border-slate-400 px-1 py-0.5">
-                  <div className="flex items-center gap-1">
-                    <input
-                      defaultValue={mem.rank ?? ''}
-                      onBlur={e => { if ((e.target.value.trim() || null) !== (mem.rank ?? null)) onRank(mem.id, e.target.value) }}
-                      placeholder="stopień"
-                      className="w-16 shrink-0 text-[10px] italic text-slate-500 bg-transparent outline-none border-b border-transparent focus:border-slate-400 placeholder:text-slate-300 print:border-none"
-                    />
+              <tr
+                key={mem.id}
+                className={cn('group hover:bg-brand-100/70', soldierDivider && 'border-t-2 border-t-slate-800')}
+              >
+                <td className="border border-slate-400 px-1 py-0.5 group-hover:bg-brand-100">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-14 shrink-0 text-[10px] italic text-slate-500 truncate">{rankLabel(mem)}</span>
                     <span className="font-medium truncate">{mem.name}</span>
                   </div>
                 </td>
@@ -297,19 +305,18 @@ function MonthBlock({ year, month0, members, entries, onRank, onCell, last }: {
                       key={d}
                       onClick={e => onCell(mem.id, d, e)}
                       className={cn(
-                        'border border-slate-400 text-center cursor-pointer h-6',
+                        'border border-slate-400 text-center cursor-pointer h-6 hover:!bg-brand-300',
                         isBillingStartKey(d) && 'bg-yellow-200',
                         code && (isWorkedCode(code) ? 'font-semibold' : 'text-amber-700 bg-amber-50'),
-                        'hover:bg-brand-100',
                       )}
                     >
                       {code ? HOUR_CODE_SHORT[code] : ''}
                     </td>
                   )
                 })}
-                <td className="border border-slate-400 text-center font-semibold">{zapl || ''}</td>
-                <td className="border border-slate-400 text-center text-amber-700">{url || ''}</td>
-                <td className="border border-slate-400 text-center font-bold">{suma || ''}</td>
+                <td className="border border-slate-400 text-center font-semibold group-hover:bg-brand-100">{zapl || ''}</td>
+                <td className="border border-slate-400 text-center text-amber-700 group-hover:bg-brand-100">{url || ''}</td>
+                <td className="border border-slate-400 text-center font-bold group-hover:bg-brand-100">{suma || ''}</td>
               </tr>
             )
           })}

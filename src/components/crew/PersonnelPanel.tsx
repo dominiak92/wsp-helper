@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Pencil, X, Shield } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { Person, RoleType, AbsenceType } from '../../lib/crew'
-import { ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS } from '../../lib/crew'
+import { ALL_ROLES, ROLE_LABELS, ROLE_COLORS, ABSENCE_LABELS, SOLDIER_RANKS } from '../../lib/crew'
 
 export function RoleChip({ role }: { role: RoleType }) {
   return (
@@ -115,19 +115,32 @@ export function PersonnelRow({ person, onUpdate, onDelete, notAssigned }: {
       </div>
       {editing && (
         <div className="mt-2 pt-2 border-t border-slate-800 space-y-2">
-          <button
-            onClick={() => onUpdate({ ...person, isSoldier: !person.isSoldier })}
-            className={cn(
-              'flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded border font-medium leading-none transition-colors',
-              person.isSoldier
-                ? 'text-emerald-300 border-emerald-700 bg-emerald-950/40'
-                : 'text-slate-500 border-slate-700 hover:border-slate-500',
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => onUpdate({ ...person, isSoldier: !person.isSoldier, rank: person.isSoldier ? null : person.rank })}
+              className={cn(
+                'flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded border font-medium leading-none transition-colors',
+                person.isSoldier
+                  ? 'text-emerald-300 border-emerald-700 bg-emerald-950/40'
+                  : 'text-slate-500 border-slate-700 hover:border-slate-500',
+              )}
+              title="Żołnierz — liczony w kalkulatorze godzin"
+            >
+              <Shield className="w-3 h-3" fill={person.isSoldier ? 'currentColor' : 'none'} />
+              Żołnierz
+            </button>
+            {person.isSoldier && (
+              <select
+                value={person.rank ?? ''}
+                onChange={e => onUpdate({ ...person, rank: e.target.value || null })}
+                className="text-[10px] py-0.5 px-1 rounded border bg-surface-900 text-slate-300 border-slate-700 hover:border-slate-500 cursor-pointer outline-none"
+                title="Stopień"
+              >
+                <option value="">— stopień —</option>
+                {SOLDIER_RANKS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
             )}
-            title="Żołnierz — liczony w kalkulatorze godzin"
-          >
-            <Shield className="w-3 h-3" fill={person.isSoldier ? 'currentColor' : 'none'} />
-            Żołnierz
-          </button>
+          </div>
           <div className="flex gap-1 flex-wrap">
             {ALL_ROLES.map(role => {
               const active = person.roles.includes(role)

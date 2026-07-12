@@ -29,6 +29,14 @@ export const ROLE_COLORS: Record<RoleType, string> = {
   RESCUER: 'bg-slate-800 text-slate-300 border-slate-700',
 }
 
+// Stopnie żołnierzy — od najwyższego do najniższego (kolejność = sort w grafiku)
+export const SOLDIER_RANKS = ['st. sierż.', 'sierż.', 'st. kpr.', 'kpr.', 'st. szer.', 'szer.'] as const
+
+// Funkcja cywila wyprowadzona z roli (do wyświetlania/sortowania w grafiku)
+export function civilianFunction(roles: RoleType[]): string {
+  return roles.includes('DRIVER_RESCUER') ? 'kier. rat.' : 'ratownik'
+}
+
 export type AbsenceType = 'WH' | '8W' | 'W' | 'oddelegowanie' | 'L4'
 
 export const ABSENCE_LABELS: Record<AbsenceType, string> = {

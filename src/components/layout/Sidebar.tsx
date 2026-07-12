@@ -7,7 +7,6 @@ import {
   Truck,
   BookOpen,
   Map,
-  Clock,
   Table2,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -25,7 +24,6 @@ const navGroups = [
     items: [
       { label: 'Generator opisów', icon: ClipboardList, path: '/incident-generator' },
       { label: 'Kalendarz służb', icon: CalendarDays, path: '/duty-calendar' },
-      { label: 'Kalkulator godzin', icon: Clock, path: '/hours-calculator' },
       { label: 'Grafik godzinowy', icon: Table2, path: '/schedule' },
       { label: 'Garaż', icon: Truck, path: '/garage' },
       { label: 'Vademecum', icon: BookOpen, path: '/vademecum' },

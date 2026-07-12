@@ -4,11 +4,11 @@
 import { addDaysKey, billingPeriodStartKey } from './duty'
 import { parseShiftAssignment, type ShiftAssignment } from './crew'
 
-export type HourCode = '24' | '8' | 'W' | 'WH' | '8W' | 'L4' | 'oddelegowanie'
+export type HourCode = '24' | '8' | 'W' | 'WH' | '8W' | 'L4' | 'UN' | 'oddelegowanie'
 
 // Kody „przepracowane" (ZAPL. na papierze) vs „wolne/urlop" (URL.)
 export const WORKED_CODES: HourCode[] = ['24', '8']
-export const LEAVE_CODES: HourCode[] = ['W', 'WH', '8W', 'L4', 'oddelegowanie']
+export const LEAVE_CODES: HourCode[] = ['W', 'WH', '8W', 'L4', 'UN', 'oddelegowanie']
 
 export function isWorkedCode(code: HourCode): boolean {
   return code === '24' || code === '8'
@@ -22,6 +22,7 @@ export const HOUR_VALUES: Record<HourCode, number> = {
   W: 24,
   WH: 24,
   L4: 24,
+  UN: 24,
   oddelegowanie: 24,
   '8W': 8,
 }
@@ -33,6 +34,7 @@ export const HOUR_CODE_LABELS: Record<HourCode, string> = {
   WH: 'WH — wolna służba',
   '8W': '8W — 8h wolnego',
   L4: 'L4 — zwolnienie',
+  UN: 'UN — urlop nagrodowy',
   oddelegowanie: 'Oddelegowanie',
 }
 
@@ -44,6 +46,7 @@ export const HOUR_CODE_SHORT: Record<HourCode, string> = {
   WH: 'WH',
   '8W': '8W',
   L4: 'L4',
+  UN: 'UN',
   oddelegowanie: 'OD',
 }
 
@@ -55,11 +58,12 @@ export const HOUR_CODE_CELL_CLASS: Record<HourCode, string> = {
   WH: 'bg-purple-900/40 text-purple-200 border-purple-700/60',
   '8W': 'bg-slate-700/60 text-slate-200 border-slate-500/60',
   L4: 'bg-red-900/40 text-red-200 border-red-700/60',
+  UN: 'bg-fuchsia-900/40 text-fuchsia-200 border-fuchsia-700/60',
   oddelegowanie: 'bg-teal-900/40 text-teal-200 border-teal-700/60',
 }
 
 // Kolejność w menu wyboru kodu
-export const HOUR_CODES: HourCode[] = ['24', '8', 'W', 'WH', '8W', 'L4', 'oddelegowanie']
+export const HOUR_CODES: HourCode[] = ['24', '8', 'W', 'WH', '8W', 'L4', 'UN', 'oddelegowanie']
 
 export function codeHours(code: HourCode | null | undefined): number {
   return code ? HOUR_VALUES[code] : 0

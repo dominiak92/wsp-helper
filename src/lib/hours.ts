@@ -20,7 +20,7 @@ export const HOUR_VALUES: Record<HourCode, number> = {
   '24': 24,
   '8': 8,
   W: 24,
-  WH: 24,
+  WH: 0, // wolna służba — odbierana z banku nadgodzin, nie dokłada godzin
   L4: 24,
   UN: 24,
   oddelegowanie: 24,
@@ -31,7 +31,7 @@ export const HOUR_CODE_LABELS: Record<HourCode, string> = {
   '24': '24h — służba',
   '8': '8h',
   W: 'W — urlop',
-  WH: 'WH — wolna służba',
+  WH: 'WH — wolna służba (0h)',
   '8W': '8W — 8h wolnego',
   L4: 'L4 — zwolnienie',
   UN: 'UN — urlop nagrodowy',

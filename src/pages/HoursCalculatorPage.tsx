@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { ArrowLeft, ArrowRight, Shield, Info } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Shield, Info, RefreshCw, CalendarClock } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
 import {
@@ -8,8 +8,9 @@ import {
 } from '../lib/duty'
 import {
   HourCode, HOUR_CODES, HOUR_CODE_LABELS, HOUR_CODE_SHORT, HOUR_CODE_CELL_CLASS,
-  NORM, isHourCode, computePeriods, periodStatFor,
+  NORM, computePeriods, periodStatFor,
 } from '../lib/hours'
+import { fetchWorkHours, setWorkHour, importFromAssignments } from '../lib/workHours'
 
 type ViewMode = 'okres' | 'miesiac' | 'kwartal'
 
@@ -79,27 +80,39 @@ export function HoursCalculatorPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('okres')
   const [anchor, setAnchor] = useState<string>(() => todayYmdKey())
   const [editing, setEditing] = useState<{ personId: string; date: string; x: number; y: number } | null>(null)
+  const [importing, setImporting] = useState(false)
 
   // Wczytaj żołnierzy + wszystkie wpisy godzin (dane są niewielkie).
   useEffect(() => {
     let cancelled = false
     Promise.all([
       supabase.from('personnel').select('id, name, is_soldier, hours_seed').eq('is_soldier', true).order('name'),
-      supabase.from('work_hours').select('person_id, date, code'),
-    ]).then(([{ data: pData }, { data: wData }]) => {
+      fetchWorkHours(),
+    ]).then(([{ data: pData }, map]) => {
       if (cancelled) return
       setSoldiers((pData ?? []).map(r => ({ id: r.id, name: r.name, seed: r.hours_seed ?? 0 })))
-      const map: Record<string, Record<string, HourCode>> = {}
-      for (const row of wData ?? []) {
-        if (!isHourCode(row.code)) continue
-        const date = String(row.date).slice(0, 10)
-        ;(map[row.person_id] ??= {})[date] = row.code
-      }
       setEntries(map)
       setLoading(false)
     })
     return () => { cancelled = true }
   }, [])
+
+  async function handleImport() {
+    if (!confirm('Uzupełnić godziny na podstawie zapisanych obsad? Nadpisze wpisy tylko w dniach, które mają obsadę.')) return
+    setImporting(true)
+    try {
+      const rows = await importFromAssignments()
+      setEntries(prev => {
+        const next = { ...prev }
+        for (const r of rows) next[r.person_id] = { ...(next[r.person_id] ?? {}), [r.date]: r.code }
+        return next
+      })
+    } catch {
+      alert('Import nie powiódł się — spróbuj ponownie.')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const { start, end } = useMemo(() => rangeFor(viewMode, anchor), [viewMode, anchor])
   const days = useMemo(() => daysInRange(start, end), [start, end])
@@ -136,13 +149,7 @@ export function HoursCalculatorPage() {
       next[personId] = forPerson
       return next
     })
-    if (code) {
-      supabase.from('work_hours').upsert({ person_id: personId, date, code })
-        .then(({ error }) => { if (error) console.error('[supabase] upsert work_hours:', error) })
-    } else {
-      supabase.from('work_hours').delete().eq('person_id', personId).eq('date', date)
-        .then(({ error }) => { if (error) console.error('[supabase] delete work_hours:', error) })
-    }
+    setWorkHour(personId, date, code)
   }, [])
 
   function saveSeed(personId: string, seed: number) {
@@ -203,6 +210,15 @@ export function HoursCalculatorPage() {
             className="text-xs px-2.5 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white transition-colors"
           >
             Dziś
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={importing}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-brand-700 hover:bg-brand-600 disabled:opacity-60 text-white transition-colors"
+            title="Uzupełnij godziny na podstawie zapisanych obsad"
+          >
+            {importing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Z obsad</span>
           </button>
         </div>
       </div>

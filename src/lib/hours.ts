@@ -2,8 +2,17 @@
 // Kody służb i ich wartość godzinowa. Każde całodniowe wolne / L4 / oddelegowanie
 // zalicza się jako 24h; 8W to 8h wolnego; 8 to dodatkowe 8h przepracowane.
 import { addDaysKey, billingPeriodStartKey } from './duty'
+import { parseShiftAssignment, type ShiftAssignment } from './crew'
 
 export type HourCode = '24' | '8' | 'W' | 'WH' | '8W' | 'L4' | 'oddelegowanie'
+
+// Kody „przepracowane" (ZAPL. na papierze) vs „wolne/urlop" (URL.)
+export const WORKED_CODES: HourCode[] = ['24', '8']
+export const LEAVE_CODES: HourCode[] = ['W', 'WH', '8W', 'L4', 'oddelegowanie']
+
+export function isWorkedCode(code: HourCode): boolean {
+  return code === '24' || code === '8'
+}
 
 export const NORM = 160 // godzin na 28-dniowy okres rozliczeniowy (tylko żołnierze)
 
@@ -104,6 +113,50 @@ export function computePeriods(
     cur = addDaysKey(cur, 28)
   }
   return out
+}
+
+// Wyprowadź kody godzin z obsady na dany dzień służbowy.
+// Osoba obecna w obsadzie (wóz / rola specjalna / rezerwa) = 24h (lub 8h, gdy
+// partial8h). Nieobecność z absenceMap nadpisuje kodem wolnego (typy AbsenceType
+// są podzbiorem HourCode). Goście (spoza personelu) pomijani przez `knownIds`.
+export function deriveDayCodes(a: ShiftAssignment, knownIds?: Set<string>): Record<string, HourCode> {
+  const out: Record<string, HourCode> = {}
+  const present = new Set<string>()
+  if (a.shiftCommanderId) present.add(a.shiftCommanderId)
+  for (const id of a.dutyOfficerIds) present.add(id)
+  for (const id of a.unassignedIds) present.add(id)
+  for (const v of a.vehicles) {
+    if (v.commanderId) present.add(v.commanderId)
+    if (v.driverId) present.add(v.driverId)
+    for (const id of v.rescuerIds) present.add(id)
+  }
+  const partial = new Set(a.partial8hIds ?? [])
+  for (const id of present) {
+    if (knownIds && !knownIds.has(id)) continue
+    out[id] = partial.has(id) ? '8' : '24'
+  }
+  for (const [id, code] of Object.entries(a.absenceMap ?? {})) {
+    if (knownIds && !knownIds.has(id)) continue
+    if (isHourCode(code)) out[id] = code
+  }
+  return out
+}
+
+// Zbuduj wiersze work_hours z listy obsad (duty_assignments) — do importu.
+export function buildWorkHoursRows(
+  assignments: { duty_date: string; assignment_json: unknown }[],
+  knownIds: Set<string>,
+): { person_id: string; date: string; code: HourCode }[] {
+  const rows: { person_id: string; date: string; code: HourCode }[] = []
+  for (const a of assignments) {
+    const parsed = parseShiftAssignment(a.assignment_json)
+    if (!parsed) continue
+    const date = String(a.duty_date).slice(0, 10)
+    for (const [person_id, code] of Object.entries(deriveDayCodes(parsed, knownIds))) {
+      rows.push({ person_id, date, code })
+    }
+  }
+  return rows
 }
 
 // Odczyt statystyk dla konkretnego okresu — z bezpiecznym fallbackiem dla

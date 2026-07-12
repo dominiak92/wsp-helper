@@ -9,6 +9,7 @@ interface PersonnelRow {
   login: string | null
   is_soldier: boolean
   hours_seed: number
+  rank: string | null
   created_at: string
 }
 
@@ -21,6 +22,7 @@ interface PersonnelInsert {
   login?: string | null
   is_soldier?: boolean
   hours_seed?: number
+  rank?: string | null
 }
 
 interface WorkHoursRow {

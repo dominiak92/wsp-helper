@@ -51,6 +51,7 @@ export interface Person {
   isGuest?: boolean // ad-hoc person from another shift, stored only in the assignment
   partial8h?: boolean // obecny tylko 8h danego dnia (odtwarzane z assignment.partial8hIds)
   isSoldier?: boolean // żołnierz — liczony w kalkulatorze godzin (trwałe, z tabeli personnel)
+  rank?: string | null // stopień/funkcja pokazywany na grafiku (np. 'st. sierż.', 'ratownik')
 }
 
 export const CREW_VEHICLE_IDS = ['gba', 'gcba532', 'gcba1060', 'gcba850'] as const

@@ -10,12 +10,14 @@ create table if not exists personnel (
   absence              text,
   is_soldier           boolean not null default false, -- true = żołnierz (liczony w kalkulatorze godzin)
   hours_seed           integer not null default 0,     -- saldo godzin przeniesione na start śledzenia
+  rank                 text,                            -- stopień/funkcja (np. 'st. sierż.', 'ratownik') — grafik
   created_at           timestamptz default now()
 );
 
 -- Gdy tabela już istnieje (migracja):
 alter table personnel add column if not exists is_soldier boolean not null default false;
 alter table personnel add column if not exists hours_seed integer not null default 0;
+alter table personnel add column if not exists rank text;
 
 -- Tabela: przydziały obsady (per dzień/zmiana)
 create table if not exists duty_assignments (

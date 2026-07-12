@@ -4,7 +4,7 @@ import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
 import { ymdKey, isDutyDayKey, isBillingStartKey, billingPeriodStartKey, addDaysKey, formatDateShort } from '../lib/duty'
 import {
-  HourCode, HOUR_CODES, HOUR_CODE_LABELS, HOUR_CODE_SHORT, codeHours, isWorkedCode, NORM,
+  HourCode, HOUR_CODES, HOUR_CODE_LABELS, HOUR_CODE_SHORT, HOUR_CODE_CELL_CLASS, codeHours, isWorkedCode, NORM,
 } from '../lib/hours'
 import { fetchWorkHours, setWorkHour, importFromAssignments } from '../lib/workHours'
 import { SOLDIER_RANKS, civilianFunction, type RoleType } from '../lib/crew'
@@ -151,8 +151,22 @@ export function SchedulePage() {
           {/* Podsumowanie żołnierzy — okresy 28-dniowe */}
           <SoldierSummary year={year} quarter={quarter} members={members} entries={entries} />
 
-          {/* Arkusz (jasny, jak na papierze) */}
-          <div className="inline-block min-w-full bg-white text-slate-900 rounded-lg shadow-xl print:shadow-none">
+          {/* Widok mobilny — karty per osoba z zakładkami miesięcy */}
+          <div className="sm:hidden">
+            <MobileSchedule
+              year={year}
+              months={months}
+              members={members}
+              entries={entries}
+              onCell={(personId, date, e) => {
+                e.stopPropagation()
+                setEditing({ personId, date, x: e.clientX, y: e.clientY })
+              }}
+            />
+          </div>
+
+          {/* Arkusz (jasny, jak na papierze) — desktop */}
+          <div className="hidden sm:inline-block min-w-full bg-white text-slate-900 rounded-lg shadow-xl print:shadow-none">
             {/* Nagłówek arkusza */}
             <div className="px-3 py-2 border-b-2 border-slate-800">
               <h2 className="text-sm sm:text-base font-bold tracking-tight">
@@ -301,6 +315,88 @@ function MonthBlock({ year, month0, members, entries, onCell, last }: {
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+// Widok mobilny — karty per osoba, zakładki miesięcy, dni jako kafelki.
+function MobileSchedule({ year, months, members, entries, onCell }: {
+  year: number
+  months: number[]
+  members: Member[]
+  entries: Record<string, Record<string, HourCode>>
+  onCell: (personId: string, date: string, e: React.MouseEvent) => void
+}) {
+  const [sel, setSel] = useState(() => {
+    const i = months.indexOf(new Date().getMonth())
+    return i >= 0 ? i : 0
+  })
+  const month0 = months[Math.min(sel, months.length - 1)]
+  const n = daysInMonth(year, month0)
+  const days = Array.from({ length: n }, (_, i) => ymdKey(year, month0, i + 1))
+
+  return (
+    <div className="space-y-3">
+      {/* Zakładki miesięcy (przyklejone u góry) */}
+      <div className="flex gap-1 sticky top-0 z-10 bg-surface-950 py-1">
+        {months.map((m, i) => (
+          <button
+            key={m}
+            onClick={() => setSel(i)}
+            className={cn(
+              'flex-1 text-sm font-semibold py-2 rounded-lg border transition-colors',
+              i === sel ? 'bg-brand-600 border-brand-500 text-white' : 'bg-surface-800 border-slate-700 text-slate-400',
+            )}
+          >
+            {MONTHS_NOM[m].charAt(0) + MONTHS_NOM[m].slice(1).toLowerCase()}
+          </button>
+        ))}
+      </div>
+
+      {members.map(mem => {
+        const forPerson = entries[mem.id] ?? {}
+        let zapl = 0, url = 0
+        for (const d of days) {
+          const c = forPerson[d]
+          if (!c) continue
+          if (isWorkedCode(c)) zapl += codeHours(c); else url += codeHours(c)
+        }
+        const suma = zapl + url
+        return (
+          <div key={mem.id} className="rounded-lg border border-slate-800 bg-surface-900 p-2.5">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-baseline gap-1.5 min-w-0">
+                {rankLabel(mem) && <span className="text-[10px] italic text-slate-500 shrink-0">{rankLabel(mem)}</span>}
+                <span className="font-semibold text-white truncate">{mem.name}</span>
+              </div>
+              {!mem.isSoldier && suma > 0 && (
+                <span className="text-xs text-slate-400 shrink-0">Σ <span className="text-white font-semibold">{suma}h</span></span>
+              )}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {days.map(d => {
+                const code = forPerson[d]
+                const dd = Number(d.slice(8))
+                return (
+                  <button
+                    key={d}
+                    onClick={e => onCell(mem.id, d, e)}
+                    className={cn(
+                      'relative h-9 rounded border text-[11px] font-semibold flex items-center justify-center',
+                      code ? HOUR_CODE_CELL_CLASS[code] : 'border-slate-800 text-slate-600',
+                      !code && isDutyDayKey(d) && 'border-emerald-800/60',
+                      isBillingStartKey(d) && 'ring-1 ring-amber-500',
+                    )}
+                  >
+                    <span className="absolute top-0.5 left-1 text-[8px] leading-none text-slate-500">{dd}</span>
+                    <span className="mt-1.5">{code ? HOUR_CODE_SHORT[code] : ''}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

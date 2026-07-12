@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { ArrowLeft, ArrowRight, RefreshCw, CalendarClock } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
-import { ymdKey, isDutyDayKey, isBillingStartKey } from '../lib/duty'
+import { ymdKey, isDutyDayKey, isBillingStartKey, billingPeriodStartKey, addDaysKey, formatDateShort } from '../lib/duty'
 import {
-  HourCode, HOUR_CODES, HOUR_CODE_LABELS, HOUR_CODE_SHORT, codeHours, isWorkedCode,
+  HourCode, HOUR_CODES, HOUR_CODE_LABELS, HOUR_CODE_SHORT, codeHours, isWorkedCode, NORM,
 } from '../lib/hours'
 import { fetchWorkHours, setWorkHour, importFromAssignments } from '../lib/workHours'
 import { SOLDIER_RANKS, civilianFunction, type RoleType } from '../lib/crew'
@@ -148,6 +148,9 @@ export function SchedulePage() {
         </div>
       ) : (
         <div className="flex-1 overflow-auto p-3 sm:p-6 print:p-0">
+          {/* Podsumowanie żołnierzy — okresy 28-dniowe */}
+          <SoldierSummary year={year} quarter={quarter} members={members} entries={entries} />
+
           {/* Arkusz (jasny, jak na papierze) */}
           <div className="inline-block min-w-full bg-white text-slate-900 rounded-lg shadow-xl print:shadow-none">
             {/* Nagłówek arkusza */}
@@ -222,7 +225,7 @@ function MonthBlock({ year, month0, members, entries, onCell, last }: {
         <thead>
           {/* Wiersz z nazwą miesiąca + GODZINY */}
           <tr className="bg-slate-100">
-            <th className="border border-slate-400 px-2 py-1 text-left font-semibold w-56 min-w-[14rem]">Imię i nazwisko</th>
+            <th className="sticky left-0 z-20 bg-slate-100 border border-slate-400 px-2 py-1 text-left font-semibold w-44 min-w-[11rem]">Imię i nazwisko</th>
             <th className="border border-slate-400 px-1 py-1 text-center font-bold uppercase" colSpan={n}>
               {MONTHS_NOM[month0]}
             </th>
@@ -230,7 +233,7 @@ function MonthBlock({ year, month0, members, entries, onCell, last }: {
           </tr>
           {/* Numery dni + ZAPL/URL/SUMA */}
           <tr className="bg-slate-50">
-            <th className="border border-slate-400 px-2 py-0.5" />
+            <th className="sticky left-0 z-20 bg-slate-50 border border-slate-400 px-2 py-0.5" />
             {days.map(d => {
               const dd = Number(d.slice(8))
               return (
@@ -268,9 +271,9 @@ function MonthBlock({ year, month0, members, entries, onCell, last }: {
                 key={mem.id}
                 className={cn('group hover:bg-brand-100/70', soldierDivider && 'border-t-2 border-t-slate-800')}
               >
-                <td className="border border-slate-400 px-1 py-0.5 group-hover:bg-brand-100">
+                <td className="sticky left-0 z-10 bg-white border border-slate-400 px-1 py-0.5 group-hover:bg-brand-100">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-14 shrink-0 text-[10px] italic text-slate-500 truncate">{rankLabel(mem)}</span>
+                    <span className="w-12 shrink-0 text-[10px] italic text-slate-500 truncate">{rankLabel(mem)}</span>
                     <span className="font-medium truncate">{mem.name}</span>
                   </div>
                 </td>
@@ -290,14 +293,91 @@ function MonthBlock({ year, month0, members, entries, onCell, last }: {
                     </td>
                   )
                 })}
-                <td className="border border-slate-400 text-center font-semibold group-hover:bg-brand-100">{zapl || ''}</td>
-                <td className="border border-slate-400 text-center text-amber-700 group-hover:bg-brand-100">{url || ''}</td>
-                <td className="border border-slate-400 text-center font-bold group-hover:bg-brand-100">{suma || ''}</td>
+                <td className="border border-slate-400 text-center font-semibold group-hover:bg-brand-100">{mem.isSoldier ? '' : (zapl || '')}</td>
+                <td className="border border-slate-400 text-center text-amber-700 group-hover:bg-brand-100">{mem.isSoldier ? '' : (url || '')}</td>
+                <td className="border border-slate-400 text-center font-bold group-hover:bg-brand-100">{mem.isSoldier ? '' : (suma || '')}</td>
               </tr>
             )
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+// Podsumowanie żołnierzy: suma godzin per 28-dniowy okres rozliczeniowy vs norma 160h.
+function SoldierSummary({ year, quarter, members, entries }: {
+  year: number
+  quarter: number
+  members: Member[]
+  entries: Record<string, Record<string, HourCode>>
+}) {
+  const soldiers = members.filter(m => m.isSoldier)
+  const periods = useMemo(() => {
+    const lastMonth = quarter * 3 + 2
+    const qEnd = ymdKey(year, lastMonth, daysInMonth(year, lastMonth))
+    const out: string[] = []
+    let s = billingPeriodStartKey(ymdKey(year, quarter * 3, 1))
+    for (let g = 0; g < 20 && s <= qEnd; g++) { out.push(s); s = addDaysKey(s, 28) }
+    return out
+  }, [year, quarter])
+
+  if (soldiers.length === 0) return null
+
+  function periodSum(personId: string, start: string): number {
+    let total = 0
+    for (let i = 0; i < 28; i++) {
+      const c = entries[personId]?.[addDaysKey(start, i)]
+      if (c) total += codeHours(c)
+    }
+    return total
+  }
+
+  return (
+    <div className="mb-5 rounded-lg border border-slate-800 bg-surface-900 overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-800">
+        <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
+          Rozliczenie żołnierzy — okresy 28-dniowe (norma {NORM}h)
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="border-collapse text-xs w-full">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 bg-surface-900 text-left font-semibold text-slate-400 px-3 py-1.5 min-w-[9rem]">Żołnierz</th>
+              {periods.map(p => (
+                <th key={p} className="px-3 py-1.5 text-center font-semibold text-brand-300 border-l border-slate-800 whitespace-nowrap">
+                  {formatDateShort(p)} – {formatDateShort(addDaysKey(p, 27))}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {soldiers.map(mem => (
+              <tr key={mem.id} className="border-t border-slate-800/70">
+                <td className="sticky left-0 z-10 bg-surface-900 px-3 py-1.5 text-white whitespace-nowrap">
+                  {mem.rank && <span className="text-slate-500 italic mr-1 text-[11px]">{mem.rank}</span>}
+                  {mem.name}
+                </td>
+                {periods.map(p => {
+                  const total = periodSum(mem.id, p)
+                  const diff = total - NORM
+                  const cls = total === NORM ? 'text-emerald-400' : total > NORM ? 'text-amber-400' : 'text-red-400'
+                  return (
+                    <td key={p} className="px-3 py-1.5 text-center border-l border-slate-800">
+                      <span className={cn('font-semibold', cls)}>{total}</span>
+                      <span className="text-slate-600"> / {NORM}</span>
+                      <span className={cn('ml-1 text-[11px]', diff === 0 ? 'text-slate-500' : diff > 0 ? 'text-amber-400' : 'text-red-400')}>
+                        {diff > 0 ? `+${diff}` : diff}
+                      </span>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

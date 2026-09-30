@@ -40,6 +40,12 @@ import { supabase } from '../lib/supabase'
 import { sendPushTrigger } from '../lib/pushNotifications'
 import { CREW_VEHICLE_NAMES, findPersonVehicleId, parseShiftAssignment } from '../lib/crew'
 import { currentOrNextDutyDate } from '../lib/duty'
+import { geocode, overpassFetch, reverseGeocode, nearestLocality, fetchRoute } from '../lib/mapServices'
+import { buildRoadRegex, computeBearing, shortestAngleDelta, vehicleSizeForZoom } from '../lib/geo'
+import {
+  navArrowIcon, makeFeatureIcon, makeClusterIcon, featurePopupHtml, alertPopupHtml,
+} from '../components/map/mapMarkup'
+import { WalkieTalkieIcon } from '../components/map/WalkieTalkieIcon'
 
 const SHARE_MS = 30 * 60 * 1000
 const SHARE_KEY = 'wsp-share-until'
@@ -51,9 +57,6 @@ const MAP_ZOOM = 12
 const NAV_ZOOM = 17 // przybliżenie w trybie nawigacji (jak nawigacja samochodowa)
 const ARRIVE_M = 35 // odległość od celu, przy której uznajemy dojazd (m)
 const REROUTE_OFF_ROUTE_M = 50 // zjazd z trasy powyżej tylu metrów → przelicz (m)
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
-const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving'
 // Bieżący wiatr (Open-Meteo, bez klucza) — te same współrzędne co widget pogodowy (Sulęcin)
 const WIND_URL =
   'https://api.open-meteo.com/v1/forecast?latitude=52.433&longitude=15.117' +
@@ -65,25 +68,10 @@ const REPORT_PREFIX = {
 } as const
 type ReportKind = keyof typeof REPORT_PREFIX
 
-const COUNTY = { south: 52.15, north: 52.62, west: 14.85, east: 15.50 }
 const OSPWL  = { south: 52.27558, north: 52.48582, west: 14.98, east: 15.52 }
 const STATION = L.latLng(52.43626, 15.18625)
-const NOMINATIM_VIEWBOX = `${COUNTY.west},${COUNTY.north},${COUNTY.east},${COUNTY.south}`
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface OsmWay {
-  type: 'way'
-  id: number
-  tags?: Record<string, string>
-  geometry: { lat: number; lon: number }[]
-}
-
-interface NominatimPlace {
-  display_name: string
-  lat: string
-  lon: string
-}
 
 declare global {
   interface Window {
@@ -95,234 +83,12 @@ declare global {
 
 type SearchState = 'idle' | 'loading' | 'notfound' | 'error'
 
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildRoadRegex(q: string): string {
-  const e = escapeRegex(q)
-  const pre = /^[0-9]/.test(q) ? '(^|[^0-9])' : ''
-  const suf = /[0-9]$/.test(q) ? '([^0-9]|$)' : ''
-  return `${pre}${e}${suf}`
-}
-
-async function overpassFetch(ql: string): Promise<OsmWay[]> {
-  const res = await fetch(OVERPASS_URL, {
-    method: 'POST',
-    body: `data=${encodeURIComponent(ql)}`,
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const json = await res.json()
-  return (json.elements ?? []).filter((e: { type: string }) => e.type === 'way') as OsmWay[]
-}
-
-async function geocode(q: string): Promise<NominatimPlace[]> {
-  const params = new URLSearchParams({
-    q, format: 'json', limit: '5', 'accept-language': 'pl',
-    viewbox: NOMINATIM_VIEWBOX, bounded: '1',
-  })
-  const res = await fetch(`${NOMINATIM_URL}?${params}`, {
-    headers: { 'User-Agent': 'WSP-Helper/1.0' },
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
-}
-
-const TYPE_PL: Record<string, string> = {
-  lake: 'Jezioro', river: 'Rzeka', stream: 'Strumień', pond: 'Staw', reservoir: 'Zbiornik wodny',
-  forest: 'Las', wood: 'Las', scrub: 'Zarośla', heath: 'Wrzosowisko', meadow: 'Łąka',
-  farmland: 'Pole uprawne', grass: 'Trawnik',
-  track: 'Droga leśna', path: 'Ścieżka', road: 'Droga',
-  military: 'Teren wojskowy', building: 'Budynek', house: 'Dom',
-  residential: 'Obszar zabudowany', village: 'Wieś', hamlet: 'Przysiółek',
-}
-
-async function reverseGeocode(latlng: L.LatLng): Promise<{ name: string; subtitle: string }> {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat.toFixed(6)}&lon=${latlng.lng.toFixed(6)}&format=json&accept-language=pl`,
-    { headers: { 'User-Agent': 'WSP-Helper/1.0' } },
-  )
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const d = await res.json()
-  const name =
-    d.name ||
-    d.address?.road ||
-    d.address?.hamlet ||
-    d.address?.village ||
-    d.address?.town ||
-    'Nieznane miejsce'
-  const typePl = TYPE_PL[d.type] || TYPE_PL[d.class] || ''
-  const place = [d.address?.village, d.address?.town, d.address?.city].find(Boolean) || ''
-  const subtitle = [typePl, place].filter(Boolean).join(' · ')
-  return { name, subtitle }
-}
-
-// Najbliższa miejscowość (punkt orientacyjny) dla danego punktu
-async function nearestLocality(latlng: L.LatLng): Promise<string> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat.toFixed(6)}&lon=${latlng.lng.toFixed(6)}&format=json&accept-language=pl&zoom=12`,
-      { headers: { 'User-Agent': 'WSP-Helper/1.0' } },
-    )
-    if (!res.ok) return ''
-    const d = await res.json()
-    return d.address?.village || d.address?.hamlet || d.address?.town
-      || d.address?.city || d.address?.municipality || d.name || ''
-  } catch {
-    return ''
-  }
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function ringsCentroid(rings: L.LatLng[][]): L.LatLng {
   let lat = 0, lng = 0, n = 0
   rings.forEach(r => r.forEach(p => { lat += p.lat; lng += p.lng; n++ }))
   return n ? L.latLng(lat / n, lng / n) : L.latLng(0, 0)
-}
-
-// Azymut (0=północ, 90=wschód) między dwoma punktami
-function computeBearing(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  const toRad = (d: number) => (d * Math.PI) / 180
-  const phi1 = toRad(aLat), phi2 = toRad(bLat), dLng = toRad(bLng - aLng)
-  const y = Math.sin(dLng) * Math.cos(phi2)
-  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLng)
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
-}
-
-// Najkrótsza różnica kątów (-180..180) — do płynnego wygładzania kierunku jazdy
-function shortestAngleDelta(from: number, to: number): number {
-  return ((to - from + 540) % 360) - 180
-}
-
-// Rozmiar znacznika pojazdu (px) skalowany wg zoomu mapy
-function vehicleSizeForZoom(z: number): number {
-  return Math.round(Math.max(34, Math.min(96, (z - 11) * 11 + 38)))
-}
-
-// Strzałka pozycji w trybie nawigacji — zawsze „w górę" ekranu = kierunek jazdy
-// (mapa obraca się pod nią, a markery leaflet-rotate pozostają wyprostowane do ekranu)
-function navArrowIcon(): L.DivIcon {
-  return L.divIcon({
-    className: '',
-    html:
-      '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center">' +
-      '<svg viewBox="0 0 24 24" width="30" height="30" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))">' +
-      '<path d="M12 2 L20 21 L12 16 L4 21 Z" fill="#3b82f6" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>' +
-      '</svg></div>',
-    iconSize: [32, 32], iconAnchor: [16, 16],
-  })
-}
-
-async function fetchRoute(from: L.LatLng, to: L.LatLng): Promise<L.LatLng[]> {
-  const url =
-    `${OSRM_URL}/${from.lng.toFixed(6)},${from.lat.toFixed(6)};` +
-    `${to.lng.toFixed(6)},${to.lat.toFixed(6)}?geometries=geojson&overview=full`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const json = await res.json()
-  if (json.code !== 'Ok') throw new Error('Nie znaleziono trasy')
-  return (json.routes[0].geometry.coordinates as [number, number][]).map(
-    ([lon, lat]) => L.latLng(lat, lon),
-  )
-}
-
-// ── Map-feature helpers ─────────────────────────────────────────────────────
-
-function makeFeatureIcon(kind: FeatureKind, confirmed: boolean, icon?: string | null): L.DivIcon {
-  const meta = KIND_META[kind]
-  const emoji = icon || meta.emoji
-  const ring = confirmed ? meta.color : '#f59e0b'
-  const dash = confirmed ? '' : 'border-style:dashed;'
-  const op = confirmed ? '1' : '0.72'
-  return L.divIcon({
-    className: '',
-    html:
-      `<div style="opacity:${op};width:30px;height:30px;display:flex;align-items:center;` +
-      `justify-content:center;background:rgba(8,15,30,0.88);border:2px solid ${ring};${dash}` +
-      `border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.5);font-size:15px;line-height:1">${emoji}</div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    popupAnchor: [0, -16],
-  })
-}
-
-// Ikona krótkofalówki (radio do ręki) — własna, bo lucide nie ma walkie-talkie
-function WalkieTalkieIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M16 2.5V6" />
-      <rect x="6.5" y="6" width="11" height="15.5" rx="2" />
-      <rect x="9.5" y="9" width="5" height="3.2" rx="0.6" />
-      <path d="M10 15.5h4M10 18h4" />
-      <path d="M4 9.5v3.5" />
-    </svg>
-  )
-}
-
-// Ikona klastra (grupa nakładających się znaczników) — ciemne kółko z liczbą
-function makeClusterIcon(count: number): L.DivIcon {
-  const size = count < 10 ? 36 : count < 100 ? 42 : 48
-  return L.divIcon({
-    className: '',
-    html:
-      `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;` +
-      `justify-content:center;background:rgba(8,15,30,0.92);border:2px solid #38bdf8;` +
-      `border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.55);color:#e2e8f0;` +
-      `font-size:13px;font-weight:700;font-family:sans-serif;line-height:1">${count}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  })
-}
-
-function featurePopupHtml(f: MapFeature, lat: number, lng: number): string {
-  const safeName = encodeURIComponent(f.label)
-  const desc = f.description
-    ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${f.description}</div>`
-    : ''
-  const warn = f.confirmed
-    ? ''
-    : `<div style="font-size:10px;color:#fbbf24;margin-top:4px">⚠ pozycja przybliżona</div>`
-  return [
-    '<div style="font-family:sans-serif;min-width:180px">',
-    `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${KIND_META[f.kind].emoji} ${f.label}</div>`,
-    desc, warn,
-    '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,116,139,0.2)">',
-    `<button onclick="window.__wspNavigateTo(${lat},${lng},decodeURIComponent('${safeName}'),'gps')" ` +
-      'style="width:100%;padding:6px 10px;border-radius:12px;border:none;font-size:11px;font-family:sans-serif;' +
-      'font-weight:500;cursor:pointer;text-align:left;background:rgba(59,130,246,0.2);color:#93c5fd">' +
-      'Nawiguj z mojej pozycji</button>',
-    '</div></div>',
-  ].join('')
-}
-
-function alertPopupHtml(a: AlertPoint): string {
-  const safe = encodeURIComponent(a.description)
-  const exp = new Date(a.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
-  const meta = `wygasa o ${exp}${a.createdBy ? ' · ' + a.createdBy : ''}`
-  const btn = (onclick: string, label: string, bg: string, color: string) =>
-    `<button onclick="${onclick}" style="width:100%;padding:6px 10px;border-radius:12px;border:none;` +
-    `font-size:11px;font-family:sans-serif;font-weight:500;cursor:pointer;text-align:left;` +
-    `background:${bg};color:${color}">${label}</button>`
-  return [
-    '<div style="font-family:sans-serif;min-width:190px">',
-    `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${a.description}</div>`,
-    `<div style="font-size:10px;color:#64748b;margin-top:3px">${meta}</div>`,
-    '<div style="display:flex;flex-direction:column;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,116,139,0.2)">',
-    btn(`window.__wspNavigateTo(${a.lat},${a.lng},decodeURIComponent('${safe}'),'gps')`,
-      'Nawiguj z mojej pozycji', 'rgba(59,130,246,0.2)', '#93c5fd'),
-    btn(`window.__wspDeleteAlert('${a.id}')`, 'Usuń punkt', 'rgba(239,68,68,0.18)', '#fca5a5'),
-    '</div></div>',
-  ].join('')
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────

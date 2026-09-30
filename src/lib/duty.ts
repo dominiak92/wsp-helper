@@ -35,6 +35,18 @@ export function currentOrNextDutyDate(): string {
   return ymdKey(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
+// Najbliższe `count` dni służby (YYYY-MM-DD), licząc od `from` włącznie
+export function nextDutyKeys(count: number, from: Date = new Date()): string[] {
+  const keys: string[] = []
+  for (let i = 0; keys.length < count && i < 400; i++) {
+    const nd = new Date(from)
+    nd.setDate(from.getDate() + i)
+    if (isDutyDay(nd.getFullYear(), nd.getMonth(), nd.getDate()))
+      keys.push(ymdKey(nd.getFullYear(), nd.getMonth(), nd.getDate()))
+  }
+  return keys
+}
+
 export function previousDutyDate(from: string): string {
   const [y, m, d] = from.split('-').map(Number)
   const dt = new Date(y, m - 1, d)

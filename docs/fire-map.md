@@ -13,7 +13,7 @@ The page is **lazy-loaded** in `App.tsx` so Leaflet + plugins stay out of the ma
 | `src/pages/FireMapPage.tsx` | The component: state, refs, Leaflet layer management, navigation logic, UI |
 | `src/lib/geo.ts` | Pure math/text helpers, **no Leaflet** (unit-tested in `geo.test.ts`): `computeBearing`, `shortestAngleDelta`, `vehicleSizeForZoom`, `buildRoadRegex`, `escapeRegex` |
 | `src/lib/mapServices.ts` | External APIs (imports Leaflet): `overpassFetch`, `geocode`, `reverseGeocode`, `nearestLocality`, `fetchRoute` |
-| `src/components/map/mapMarkup.ts` | Leaflet `DivIcon`s and popup HTML: `navArrowIcon`, `makeFeatureIcon`, `makeClusterIcon`, `featurePopupHtml`, `alertPopupHtml` |
+| `src/components/map/mapMarkup.ts` | Leaflet `DivIcon`s and popup HTML: `navArrowIcon`, `makeFeatureIcon`, `makeClusterIcon`, `featurePopupHtml`, `alertPopupHtml` — all dynamic text is escaped (`escapeHtml` / `encodeJsArg` from `src/lib/html.ts`) |
 | `src/components/map/WalkieTalkieIcon.tsx` | Custom SVG icon (lucide has no walkie-talkie) |
 | `src/lib/mapFeatures.ts` | CRUD + types for persistent `map_features` |
 | `src/lib/liveMap.ts` | CRUD for ephemeral `map_alerts` (2h TTL) and `live_locations` (30 min TTL) |
@@ -37,5 +37,6 @@ Car-navigation-style mode built on the `leaflet-rotate` plugin (map init: `rotat
 - **Off-route re-routing** — each GPS tick measures min distance to the current route points (`routePtsRef`); beyond `REROUTE_OFF_ROUTE_M` (50 m) it recomputes from the live position (`drawNavRoute`), throttled by `reroutingRef` + an 8 s cooldown (`lastRerouteAtRef`).
 - **Exit** — **only** via the single bottom "Zakończ nawigację" button (`endNavigation`) or automatically on arrival (`< ARRIVE_M`, 35 m → `arrivedToast`); panning/zooming does NOT exit (the next GPS tick re-centers).
 - **Manual rotation** — `touchRotate: true` lets the user two-finger-rotate even mid-navigation; a manual rotate sets `navManualRef` (detected via the `rotate` event when `applyingAutoBearingRef` is false), which pauses auto track-up so the map keeps the user's angle (centering/re-routing continue). A compass button (top of the bottom-right column, shown while navigating or whenever the map is off-north; rotates to show north) resumes track-up during nav (`navManualRef = false` + re-apply `-heading`) or resets to north outside nav (`setBearing(0)`). Map bearing is mirrored into `bearingDeg` from the `rotate` event.
+- **Screen wake lock** — while `navMode` is on, a `navigator.wakeLock` screen lock keeps the display on; it is re-acquired on `visibilitychange` (the OS drops it when the tab is hidden) and released when navigation ends.
 - **Stale closures** — the GPS handler is registered once on mount, so it calls the latest `endNavigation`/`drawNavRoute` via `endNavigationRef`/`drawNavRouteRef`.
 - **Limits** — Leaflet is 2D: rotation only, **not** 3D/tilt perspective (that would need MapLibre GL).

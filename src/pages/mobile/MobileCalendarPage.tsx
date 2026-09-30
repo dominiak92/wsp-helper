@@ -308,7 +308,11 @@ export function MobileCalendarPage() {
               const userStatus = myPerson
                 ? resolveUserStatus(assignmentMap.get(key), myPerson.id)
                 : null
-              const tag = cellAbsenceTag(userStatus)
+              // Obecność tylko 8h (dla osoby w obsadzie lub rezerwie) — dopisana do znacznika dnia
+              const my8h = !!myPerson && !!userStatus && userStatus.kind !== 'absent'
+                && !!assignmentMap.get(key)?.partial8hIds?.includes(myPerson.id)
+              const baseTag = cellAbsenceTag(userStatus)
+              const tag = my8h ? (baseTag ? `${baseTag.replace('.', '')} 8h` : '8h') : baseTag
               const hasSaved = assignmentMap.has(key)
 
               // Cell color based on user status
@@ -333,7 +337,7 @@ export function MobileCalendarPage() {
                 >
                   <span className={cn('leading-none', tag ? 'text-[11px]' : 'text-[13px]')}>{day}</span>
                   {tag && !isSelected && (
-                    <span className="text-[8px] leading-none mt-0.5 font-semibold opacity-90 tracking-wide">
+                    <span className={cn('text-[8px] leading-none mt-0.5 font-semibold opacity-90 tracking-wide', my8h && 'text-amber-300 font-bold')}>
                       {tag}
                     </span>
                   )}

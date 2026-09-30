@@ -176,6 +176,13 @@ describe('self-reported absence', () => {
     expect(back.vehicles.find(v => v.vehicleId === 'gba')?.commanderId).toBe('sc')
   })
 
+  it('keeps the original slot when the same absence is reported twice', () => {
+    const a = withVehicle(emptyAssignment(), 'gba', { driverId: 'me' })
+    const twice = applySelfAbsence(applySelfAbsence(a, 'me', 'W'), 'me', 'L4')
+    expect(twice.selfAbsences?.me).toEqual({ kind: 'vehicle', vehicleId: 'gba', role: 'driver' })
+    expect(twice.absenceMap).toEqual({ me: 'L4' })
+  })
+
   it('keeps other people’s absences intact', () => {
     const a = { ...emptyAssignment(), unassignedIds: ['me'], absenceMap: { other: 'L4' as const } }
     const back = withdrawSelfAbsence(applySelfAbsence(a, 'me', 'W'), 'me')

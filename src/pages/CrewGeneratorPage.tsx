@@ -56,6 +56,7 @@ export function CrewGeneratorPage() {
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [showPrevDuty, setShowPrevDuty] = useState(false)
   const [prevAssignment, setPrevAssignment] = useState<ShiftAssignment | null>(null)
 
@@ -138,6 +139,7 @@ export function CrewGeneratorPage() {
     if (!dutyDate) return
     setSaving(true)
     setSavedOk(false)
+    setSaveError(null)
     try {
       const currentId = assignmentIdRef.current
       if (currentId) {
@@ -148,7 +150,8 @@ export function CrewGeneratorPage() {
         if (error) throw error
       } else {
         // Delete any stale duplicate rows first, then insert fresh
-        await supabase.from('duty_assignments').delete().eq('duty_date', dutyDate)
+        const del = await supabase.from('duty_assignments').delete().eq('duty_date', dutyDate)
+        if (del.error) throw del.error
         const { data: inserted, error } = await supabase
           .from('duty_assignments')
           .insert({ duty_date: dutyDate, assignment_json: a })
@@ -162,6 +165,8 @@ export function CrewGeneratorPage() {
       setTimeout(() => setSavedOk(false), 2500)
     } catch (err) {
       console.error('[supabase] save duty_assignment:', err)
+      setSaveError('Nie zapisano obsady — sprawdź połączenie i kliknij „Zapisz” ponownie.')
+      setIsDirty(true) // pokaż „Zapisz", także po nieudanym autozapisie
     } finally {
       setSaving(false)
     }
@@ -444,6 +449,9 @@ export function CrewGeneratorPage() {
               <span className="hidden sm:inline">{saving ? 'Zapisuję…' : 'Zapisz'}</span>
             </button>
           )}
+          {saveError && (
+            <span className="text-xs text-red-400 px-2 max-w-[16rem]">{saveError}</span>
+          )}
           {dutyDate && savedOk && !isDirty && (
             <span className="flex items-center gap-1 text-xs text-emerald-400 px-2">
               <Check className="w-3.5 h-3.5" /> Zapisano
@@ -489,12 +497,15 @@ export function CrewGeneratorPage() {
                 >
                   <Plus className="w-3 h-3" /> Dodaj
                 </button>
-                <button
-                  onClick={handleReset}
-                  className="text-[10px] text-slate-700 hover:text-red-500 transition-colors"
-                >
-                  Reset
-                </button>
+                {/* Dev-only: nadpisuje tabelę personnel danymi DEFAULT_PERSONNEL */}
+                {import.meta.env.DEV && (
+                  <button
+                    onClick={handleReset}
+                    className="text-[10px] text-slate-700 hover:text-red-500 transition-colors"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
             </div>
             {addingPerson && (

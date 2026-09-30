@@ -214,6 +214,7 @@ export function DashboardPage() {
   // Duty messages
   interface DutyMsg { id: string; sender_name: string | null; sender_login: string; message: string; created_at: string; read_at: string | null }
   const [dutyMessages, setDutyMessages] = useState<DutyMsg[]>([])
+  const [msgError, setMsgError] = useState<string | null>(null)
 
   // Announcement
   const [announcement, setAnnouncement] = useState<string | null>(null)
@@ -436,6 +437,7 @@ export function DashboardPage() {
                 )}
                 {user && <PushBell userLogin={user.login} userRole={user.role} className="ml-auto" />}
               </div>
+              {msgError && <p className="mb-2 text-xs text-red-400">{msgError}</p>}
               {dutyMessages.length === 0 ? (
                 <div className="flex items-center gap-2.5 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3">
                   <Bell className="w-4 h-4 text-slate-600 shrink-0" />
@@ -473,11 +475,17 @@ export function DashboardPage() {
                           ) : (
                             <button
                               onClick={async () => {
-                                await supabase.from('duty_messages').update({ read_at: new Date().toISOString() }).eq('id', msg.id)
-                                setDutyMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: new Date().toISOString() } : m))
+                                const now = new Date().toISOString()
+                                const { error } = await supabase.from('duty_messages').update({ read_at: now }).eq('id', msg.id)
+                                if (error) {
+                                  setMsgError('Nie udało się potwierdzić wiadomości — sprawdź połączenie.')
+                                  return
+                                }
+                                setMsgError(null)
+                                setDutyMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read_at: now } : m))
                                 sendPushTrigger({ type: 'confirmed', targetLogin: msg.sender_login })
                               }}
-                              className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-emerald-400 transition-colors px-1.5 py-0.5 rounded border border-slate-700 hover:border-emerald-800"
+                              className="flex items-center gap-1 text-xs text-slate-400 hover:text-emerald-400 transition-colors px-2.5 py-1.5 rounded border border-slate-700 hover:border-emerald-800"
                               title="Potwierdź odbiór wiadomości"
                             >
                               <Check className="w-3 h-3" />
@@ -486,11 +494,18 @@ export function DashboardPage() {
                           )}
                           <button
                             onClick={async () => {
-                              await supabase.from('duty_messages').delete().eq('id', msg.id)
+                              if (!window.confirm('Usunąć tę wiadomość na stałe?')) return
+                              const { error } = await supabase.from('duty_messages').delete().eq('id', msg.id)
+                              if (error) {
+                                setMsgError('Nie udało się usunąć wiadomości — sprawdź połączenie.')
+                                return
+                              }
+                              setMsgError(null)
                               setDutyMessages(prev => prev.filter(m => m.id !== msg.id))
                             }}
-                            className="text-[10px] text-slate-700 hover:text-red-400 transition-colors"
+                            className="ml-1 p-1.5 text-slate-500 hover:text-red-400 transition-colors"
                             title="Usuń"
+                            aria-label="Usuń wiadomość"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

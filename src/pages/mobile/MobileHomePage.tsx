@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, throwIfError, NETWORK_ERROR_MSG } from '../../lib/supabase'
 import { DailyWeatherCollapsible } from '../../components/DailyWeatherWidget'
 import { PushBell } from '../../components/PushBell'
 import { sendPushTrigger, isSubscribed, isPushSupported } from '../../lib/pushNotifications'
@@ -24,6 +24,18 @@ import { Badge8h, Partial8hCard } from '../../components/Partial8h'
 import { partial8hPersons } from '../../lib/crew'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+const HIDDEN_MSGS_KEY = 'wsp-hidden-msgs'
+const HIDDEN_MSGS_MAX = 100
+
+function loadHiddenMsgIds(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HIDDEN_MSGS_KEY) ?? '[]')
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 interface MyRole {
   label: string
@@ -104,6 +116,11 @@ export function MobileHomePage() {
   const [msgSentOk, setMsgSentOk] = useState(false)
   const [msgError, setMsgError] = useState<string | null>(null)
   const [myMessages, setMyMessages] = useState<DutyMsg[]>([])
+  // Potwierdzone wiadomości zamknięte przez użytkownika — ukrywane tylko lokalnie,
+  // bez kasowania z bazy (to historia dyżurnego/admina)
+  const [hiddenMsgIds, setHiddenMsgIds] = useState<string[]>(loadHiddenMsgIds)
+  const [withdrawBusy, setWithdrawBusy] = useState(false)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
   const [receivedMsgs, setReceivedMsgs] = useState<DutyMsg[]>([])
   // Świeżo potwierdzone — pokazane jeszcze chwilę jako „Potwierdzona", potem znikają
   const [fadingIds, setFadingIds] = useState<string[]>([])
@@ -281,6 +298,15 @@ export function MobileHomePage() {
     setTimeout(() => setFadingIds(prev => prev.filter(id => id !== msg.id)), 3500)
   }
 
+  function hideMyMessage(id: string) {
+    setHiddenMsgIds(prev => {
+      const next = [...prev.filter(x => x !== id), id].slice(-HIDDEN_MSGS_MAX)
+      try { localStorage.setItem(HIDDEN_MSGS_KEY, JSON.stringify(next)) } catch { /* private mode */ }
+      return next
+    })
+  }
+  const visibleMyMessages = myMessages.filter(m => !hiddenMsgIds.includes(m.id))
+
   function dismissReceived(id: string) {
     setFadingIds(prev => prev.filter(x => x !== id))
   }
@@ -379,24 +405,26 @@ export function MobileHomePage() {
   }
 
   // Pobierz najświeższy zapis obsady dla danego dnia (tuż przed zapisem, by nie nadpisać zmian dyżurnego)
+  // Rzuca przy błędzie odczytu — inaczej brak sieci wyglądałby jak „brak obsady"
+  // i zapis poniżej nadpisałby całą obsadę dnia pustą.
   async function fetchLatestAssignmentRow(date: string) {
-    const { data } = await supabase
+    const { data } = throwIfError(await supabase
       .from('duty_assignments')
       .select('id, assignment_json')
       .eq('duty_date', date)
       .order('created_at', { ascending: false })
-      .limit(1)
+      .limit(1), NETWORK_ERROR_MSG)
     const row = data?.[0]
     return { id: (row?.id as string | undefined) ?? null, parsed: parseShiftAssignment(row?.assignment_json) }
   }
 
   async function notifyDuty(message: string) {
     if (!user) return
-    await supabase.from('duty_messages').insert({
+    throwIfError(await supabase.from('duty_messages').insert({
       sender_login: user.login,
       sender_name: user.displayName,
       message,
-    })
+    }), 'Zmiana zapisana, ale nie udało się powiadomić dyżurnego — napisz do niego wiadomość.')
     sendPushTrigger({ type: 'new_message', senderLogin: user.login, senderName: user.displayName, message })
   }
 
@@ -407,14 +435,18 @@ export function MobileHomePage() {
     const base = parsed ?? emptyAssignment()
     const next = applySelfAbsence(base, myPersonId, type)
     if (id) {
-      await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id)
+      throwIfError(await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id), NETWORK_ERROR_MSG)
     } else {
-      await supabase.from('duty_assignments').delete().eq('duty_date', date)
-      await supabase.from('duty_assignments').insert({ duty_date: date, assignment_json: next })
+      throwIfError(await supabase.from('duty_assignments').delete().eq('duty_date', date), NETWORK_ERROR_MSG)
+      throwIfError(await supabase.from('duty_assignments').insert({ duty_date: date, assignment_json: next }), NETWORK_ERROR_MSG)
     }
     const trimmed = note.trim()
-    await notifyDuty(`🚫 Zgłoszenie nieobecności — ${user.displayName}\n${formatDateShortWithDay(date)}: ${ABSENCE_LABELS[type]}${trimmed ? `\n${trimmed}` : ''}`)
-    await Promise.all([reload(), fetchMyMessages()])
+    // Obsada jest już zapisana — odśwież nawet, gdy powiadomienie nie wyszło (żeby nie zgłaszać drugi raz)
+    try {
+      await notifyDuty(`🚫 Zgłoszenie nieobecności — ${user.displayName}\n${formatDateShortWithDay(date)}: ${ABSENCE_LABELS[type]}${trimmed ? `\n${trimmed}` : ''}`)
+    } finally {
+      await Promise.all([reload(), fetchMyMessages()])
+    }
   }
 
   // User wycofuje własną nieobecność i wraca na swoje poprzednie miejsce w składzie
@@ -423,9 +455,25 @@ export function MobileHomePage() {
     const { id, parsed } = await fetchLatestAssignmentRow(date)
     if (!id || !parsed) return
     const next = withdrawSelfAbsence(parsed, myPersonId)
-    await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id)
-    await notifyDuty(`↩️ Wycofanie nieobecności — ${user.displayName}\n${formatDateShortWithDay(date)} (powrót do składu)`)
-    await Promise.all([reload(), fetchMyMessages()])
+    throwIfError(await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id), NETWORK_ERROR_MSG)
+    try {
+      await notifyDuty(`↩️ Wycofanie nieobecności — ${user.displayName}\n${formatDateShortWithDay(date)} (powrót do składu)`)
+    } finally {
+      await Promise.all([reload(), fetchMyMessages()])
+    }
+  }
+
+  // „Cofnij" na karcie przydziału — blokada podwójnego tapnięcia + komunikat błędu
+  async function handleWithdrawNow() {
+    setWithdrawBusy(true)
+    setWithdrawError(null)
+    try {
+      await withdrawAbsence(dutyDate)
+    } catch (e) {
+      setWithdrawError(e instanceof Error ? e.message : NETWORK_ERROR_MSG)
+    } finally {
+      setWithdrawBusy(false)
+    }
   }
 
   const myAbsenceIsSelf = !!(myPersonId && assignment?.selfAbsences?.[myPersonId])
@@ -553,7 +601,7 @@ export function MobileHomePage() {
               <p className="text-sm text-slate-500">Obsada nie została jeszcze wygenerowana</p>
             </div>
           ) : myRole ? (
-            <div className={cn('bg-surface-800 rounded-xl border p-4 flex items-center gap-4', myRole.borderClass)}>
+            <div className={cn('bg-surface-800 rounded-xl border p-4 flex items-center gap-4', myPerson.partial8h ? 'border-amber-600/70 bg-amber-950/10' : myRole.borderClass)}>
               <myRole.Icon className={cn('w-7 h-7 shrink-0', myRole.iconClass)} />
               <div className="min-w-0">
                 <p className={cn('text-base font-bold truncate', myRole.colorClass)}>{myRole.label}</p>
@@ -561,10 +609,10 @@ export function MobileHomePage() {
                   <p className="text-xs text-slate-400 mt-0.5">{myRole.vehicle}</p>
                 )}
                 {myPerson.partial8h && (
-                  <p className="text-xs font-semibold text-amber-300 mt-1">Tej służby jesteś tylko na 8h</p>
+                  <p className="text-sm font-bold text-amber-300 mt-1">Służba 8h — nie całą dobę</p>
                 )}
               </div>
-              {myPerson.partial8h && <Badge8h className="ml-auto text-xs" />}
+              {myPerson.partial8h && <Badge8h className="ml-auto text-sm px-2 py-1" />}
             </div>
           ) : isAbsentNow ? (
             <div className="bg-surface-800 rounded-xl border border-red-900/40 p-4 flex items-center gap-3">
@@ -577,10 +625,11 @@ export function MobileHomePage() {
               </div>
               {myAbsenceIsSelf && (
                 <button
-                  onClick={() => withdrawAbsence(dutyDate)}
-                  className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors shrink-0"
+                  onClick={handleWithdrawNow}
+                  disabled={withdrawBusy}
+                  className="ml-auto flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors shrink-0 disabled:opacity-50"
                 >
-                  <Undo2 className="w-3.5 h-3.5" /> Cofnij
+                  <Undo2 className="w-3.5 h-3.5" /> {withdrawBusy ? 'Cofanie…' : 'Cofnij'}
                 </button>
               )}
             </div>
@@ -592,6 +641,9 @@ export function MobileHomePage() {
                 <p className="text-xs text-slate-600 mt-0.5">Nie figurujesz w aktywnej obsadzie</p>
               </div>
             </div>
+          )}
+          {withdrawError && (
+            <p className="mt-2 text-xs text-red-400">{withdrawError}</p>
           )}
         </div>
       )}
@@ -718,11 +770,11 @@ export function MobileHomePage() {
       )}
 
       {/* Moje wiadomości do dyżurnego */}
-      {myMessages.length > 0 && (
+      {visibleMyMessages.length > 0 && (
         <div>
           <SectionLabel>Moje wiadomości do dyżurnego</SectionLabel>
           <div className="space-y-2">
-            {myMessages.map(msg => (
+            {visibleMyMessages.map(msg => (
               <div
                 key={msg.id}
                 className={cn(
@@ -749,12 +801,10 @@ export function MobileHomePage() {
                     </span>
                     {msg.read_at && (
                       <button
-                        onClick={async () => {
-                          await supabase.from('duty_messages').delete().eq('id', msg.id)
-                          setMyMessages(prev => prev.filter(m => m.id !== msg.id))
-                        }}
-                        className="text-slate-600 hover:text-red-400 transition-colors"
-                        title="Zamknij"
+                        onClick={() => hideMyMessage(msg.id)}
+                        className="-m-2 p-2 text-slate-500 hover:text-slate-300 transition-colors"
+                        title="Ukryj"
+                        aria-label="Ukryj wiadomość"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>

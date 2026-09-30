@@ -4,6 +4,7 @@
 import L from 'leaflet'
 import { KIND_META, type MapFeature, type FeatureKind } from '../../lib/mapFeatures'
 import type { AlertPoint } from '../../lib/liveMap'
+import { escapeHtml, encodeJsArg } from '../../lib/html'
 
 // Strzałka pozycji w trybie nawigacji — zawsze „w górę" ekranu = kierunek jazdy
 // (mapa obraca się pod nią, a markery leaflet-rotate pozostają wyprostowane do ekranu)
@@ -21,7 +22,7 @@ export function navArrowIcon(): L.DivIcon {
 
 export function makeFeatureIcon(kind: FeatureKind, confirmed: boolean, icon?: string | null): L.DivIcon {
   const meta = KIND_META[kind]
-  const emoji = icon || meta.emoji
+  const emoji = escapeHtml(icon || meta.emoji)
   const ring = confirmed ? meta.color : '#f59e0b'
   const dash = confirmed ? '' : 'border-style:dashed;'
   const op = confirmed ? '1' : '0.72'
@@ -53,16 +54,16 @@ export function makeClusterIcon(count: number): L.DivIcon {
 }
 
 export function featurePopupHtml(f: MapFeature, lat: number, lng: number): string {
-  const safeName = encodeURIComponent(f.label)
+  const safeName = encodeJsArg(f.label)
   const desc = f.description
-    ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${f.description}</div>`
+    ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${escapeHtml(f.description)}</div>`
     : ''
   const warn = f.confirmed
     ? ''
     : `<div style="font-size:10px;color:#fbbf24;margin-top:4px">⚠ pozycja przybliżona</div>`
   return [
     '<div style="font-family:sans-serif;min-width:180px">',
-    `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${KIND_META[f.kind].emoji} ${f.label}</div>`,
+    `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${KIND_META[f.kind].emoji} ${escapeHtml(f.label)}</div>`,
     desc, warn,
     '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,116,139,0.2)">',
     `<button onclick="window.__wspNavigateTo(${lat},${lng},decodeURIComponent('${safeName}'),'gps')" ` +
@@ -74,21 +75,21 @@ export function featurePopupHtml(f: MapFeature, lat: number, lng: number): strin
 }
 
 export function alertPopupHtml(a: AlertPoint): string {
-  const safe = encodeURIComponent(a.description)
+  const safe = encodeJsArg(a.description)
   const exp = new Date(a.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
-  const meta = `wygasa o ${exp}${a.createdBy ? ' · ' + a.createdBy : ''}`
+  const meta = `wygasa o ${exp}${a.createdBy ? ' · ' + escapeHtml(a.createdBy) : ''}`
   const btn = (onclick: string, label: string, bg: string, color: string) =>
     `<button onclick="${onclick}" style="width:100%;padding:6px 10px;border-radius:12px;border:none;` +
     `font-size:11px;font-family:sans-serif;font-weight:500;cursor:pointer;text-align:left;` +
     `background:${bg};color:${color}">${label}</button>`
   return [
     '<div style="font-family:sans-serif;min-width:190px">',
-    `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${a.description}</div>`,
+    `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${escapeHtml(a.description)}</div>`,
     `<div style="font-size:10px;color:#64748b;margin-top:3px">${meta}</div>`,
     '<div style="display:flex;flex-direction:column;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(100,116,139,0.2)">',
     btn(`window.__wspNavigateTo(${a.lat},${a.lng},decodeURIComponent('${safe}'),'gps')`,
       'Nawiguj z mojej pozycji', 'rgba(59,130,246,0.2)', '#93c5fd'),
-    btn(`window.__wspDeleteAlert('${a.id}')`, 'Usuń punkt', 'rgba(239,68,68,0.18)', '#fca5a5'),
+    btn(`window.__wspDeleteAlert('${encodeJsArg(a.id)}')`, 'Usuń punkt', 'rgba(239,68,68,0.18)', '#fca5a5'),
     '</div></div>',
   ].join('')
 }

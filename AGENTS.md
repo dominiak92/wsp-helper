@@ -51,6 +51,9 @@ There is no CI — Netlify deploys `main` on push and only runs `npm run build`.
 - **Component files** export only components (the `react-refresh/only-export-components` rule, and lint fails on warnings). Put helpers/constants in a `.ts` file.
 - **Page size** — pages are already large (`FireMapPage` ~2.1k lines, `MobileHomePage` ~0.9k). Put new sub-components in `src/components/<area>/` rather than growing the page file.
 - **Leaflet** stays inside the lazily-loaded map chunk — see [docs/fire-map.md](docs/fire-map.md).
+- **HTML strings** (Leaflet `bindPopup`/`bindTooltip`/`divIcon` take raw HTML): every user-, DB- or API-provided value goes through `escapeHtml`, and values passed into inline `onclick` handlers through `encodeJsArg` (`src/lib/html.ts`). Anyone can write alert descriptions, so this is a real XSS vector.
+- **Supabase writes** resolve with `{ error }` instead of throwing. Check it — use `throwIfError(res, NETWORK_ERROR_MSG)` from `src/lib/supabase.ts` — and show the user a message; never show success (or send a push) before the write succeeded. A failed *read* that feeds a write must throw too, otherwise "no data" gets written back over real data.
+- **Crash safety** — the app is wrapped in `ErrorBoundary` (reload button instead of a white screen); the lazy map import reloads once on a missing chunk after a deploy, and `main.tsx` handles `vite:preloadError`.
 - **Styling** — Tailwind with the custom tokens below; dark UI throughout (the `/schedule` "paper sheet" is the one light exception).
 - **Line endings** — Windows checkout with `core.autocrlf=true` (CRLF on disk, LF in the repo).
 

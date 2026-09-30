@@ -14,11 +14,27 @@ import { VademecumPage } from './pages/VademecumPage'
 import { MobileHomePage } from './pages/mobile/MobileHomePage'
 import { MobileCalendarPage } from './pages/mobile/MobileCalendarPage'
 import { MobileCrewPage } from './pages/mobile/MobileCrewPage'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 // FireMapPage ciągnie Leaflet + markercluster — ładuj leniwie, żeby nie
 // powiększać głównego bundla dla tras, które mapy nie używają.
+// Po deployu stary plik chunka znika — nieudany import raz przeładowuje stronę
+// (świeży index.html wskaże nowe pliki), zamiast zostawić biały ekran.
+const CHUNK_RELOAD_KEY = 'wsp-chunk-reload'
 const FireMapPage = lazy(() =>
-  import('./pages/FireMapPage').then(m => ({ default: m.FireMapPage })),
+  import('./pages/FireMapPage')
+    .then(m => {
+      try { sessionStorage.removeItem(CHUNK_RELOAD_KEY) } catch { /* private mode */ }
+      return { default: m.FireMapPage }
+    })
+    .catch(err => {
+      let reloaded = false
+      try { reloaded = sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1' } catch { /* private mode */ }
+      if (reloaded) throw err // drugi raz z rzędu — pokaż ErrorBoundary
+      try { sessionStorage.setItem(CHUNK_RELOAD_KEY, '1') } catch { /* private mode */ }
+      window.location.reload()
+      return new Promise<never>(() => {})
+    }),
 )
 
 function MapFallback() {
@@ -31,6 +47,7 @@ function MapFallback() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -58,5 +75,6 @@ export default function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   )
 }

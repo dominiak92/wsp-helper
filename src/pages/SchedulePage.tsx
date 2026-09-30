@@ -46,6 +46,7 @@ export function SchedulePage() {
   const [entries, setEntries] = useState<Record<string, Record<string, HourCode>>>({})
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ personId: string; date: string; x: number; y: number } | null>(null)
 
   const now = new Date()
@@ -70,13 +71,17 @@ export function SchedulePage() {
       setMembers(list)
       setEntries(map)
       setLoading(false)
+    }).catch(() => {
+      if (cancelled) return
+      setSaveError('Nie udało się wczytać grafiku — sprawdź połączenie i odśwież stronę.')
+      setLoading(false)
     })
     return () => { cancelled = true }
   }, [])
 
   const months = [quarter * 3, quarter * 3 + 1, quarter * 3 + 2]
 
-  function setEntry(personId: string, date: string, code: HourCode | null) {
+  function applyLocal(personId: string, date: string, code: HourCode | null) {
     setEntries(prev => {
       const next = { ...prev }
       const forPerson = { ...(next[personId] ?? {}) }
@@ -84,7 +89,20 @@ export function SchedulePage() {
       next[personId] = forPerson
       return next
     })
-    setWorkHour(personId, date, code)
+  }
+
+  // Optymistycznie: pokaż od razu, a przy błędzie zapisu cofnij i poinformuj
+  async function setEntry(personId: string, date: string, code: HourCode | null) {
+    const previous = entries[personId]?.[date] ?? null
+    applyLocal(personId, date, code)
+    try {
+      await setWorkHour(personId, date, code)
+      setSaveError(null)
+    } catch {
+      applyLocal(personId, date, previous)
+      const who = members.find(m => m.id === personId)?.name ?? ''
+      setSaveError(`Nie zapisano wpisu (${who}, ${date}) — sprawdź połączenie i spróbuj ponownie.`)
+    }
   }
 
   async function handleImport() {
@@ -141,6 +159,13 @@ export function SchedulePage() {
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div className="flex items-center justify-between gap-3 px-3 sm:px-6 py-2 bg-red-950/60 border-b border-red-900/60 text-sm text-red-200 print:hidden">
+          <span>{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="px-2 py-1 text-red-300 hover:text-white" aria-label="Zamknij komunikat">✕</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center flex-1">

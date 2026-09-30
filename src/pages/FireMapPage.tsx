@@ -46,6 +46,7 @@ import {
   navArrowIcon, makeFeatureIcon, makeClusterIcon, featurePopupHtml, alertPopupHtml,
 } from '../components/map/mapMarkup'
 import { WalkieTalkieIcon } from '../components/map/WalkieTalkieIcon'
+import { escapeHtml, encodeJsArg } from '../lib/html'
 
 const SHARE_MS = 30 * 60 * 1000
 const SHARE_KEY = 'wsp-share-until'
@@ -222,6 +223,28 @@ export function FireMapPage() {
   useEffect(() => { userPosRef.current = userPos }, [userPos])
   useEffect(() => { followingRef.current = following }, [following])
   useEffect(() => { navModeRef.current = navMode }, [navMode])
+
+  // Nie wygaszaj ekranu podczas nawigacji (Wake Lock: Chrome/Android, Safari ≥ 16.4).
+  // System zwalnia blokadę po schowaniu karty — odnawiamy ją po powrocie.
+  useEffect(() => {
+    if (!navMode || !('wakeLock' in navigator)) return
+    let sentinel: WakeLockSentinel | null = null
+    let active = true
+    const acquire = async () => {
+      if (!active || document.visibilityState !== 'visible') return
+      try {
+        sentinel = await navigator.wakeLock.request('screen')
+      } catch { /* odmowa (np. tryb oszczędzania baterii) — nawigacja działa dalej */ }
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') acquire() }
+    acquire()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      active = false
+      document.removeEventListener('visibilitychange', onVisible)
+      sentinel?.release().catch(() => {})
+    }
+  }, [navMode])
   useEffect(() => { editModeRef.current = editMode }, [editMode])
   useEffect(() => { addKindRef.current = addKind }, [addKind])
   useEffect(() => { drawingRoadRef.current = drawingRoad }, [drawingRoad])
@@ -513,7 +536,7 @@ export function FireMapPage() {
         const lat = e.latlng.lat.toFixed(6)
         const lng = e.latlng.lng.toFixed(6)
         const coords = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`
-        const safeName = encodeURIComponent(name)
+        const safeName = encodeJsArg(name)
         const btn = (sm: string, label: string, bg: string, color: string) =>
           `<button onclick="window.__wspNavigateTo(${lat},${lng},decodeURIComponent('${safeName}'),'${sm}')" ` +
           `style="width:100%;padding:6px 10px;border-radius:12px;border:none;font-size:11px;` +
@@ -524,8 +547,8 @@ export function FireMapPage() {
           // header row with close button
           '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">',
           '<div>',
-          `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${name}</div>`,
-          subtitle ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${subtitle}</div>` : '',
+          `<div style="font-size:13px;font-weight:600;color:#f1f5f9;line-height:1.35">${escapeHtml(name)}</div>`,
+          subtitle ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${escapeHtml(subtitle)}</div>` : '',
           `<div style="font-size:10px;color:#475569;margin-top:4px;font-variant-numeric:tabular-nums">${coords}</div>`,
           '</div>',
           '<button onclick="window.__wspClosePopup?.()" style="flex-shrink:0;margin-top:-2px;width:22px;height:22px;background:rgba(255,255,255,0.12);border:none;border-radius:50%;color:#cbd5e1;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button>',
@@ -701,7 +724,7 @@ export function FireMapPage() {
           icon: makeFeatureIcon(f.kind, f.confirmed, f.icon),
           draggable: editMode,
         })
-        marker.bindTooltip(f.label, {
+        marker.bindTooltip(escapeHtml(f.label), {
           permanent: true, direction: 'right', offset: [14, 0], className: 'feature-label',
         })
         if (editMode) {
@@ -731,14 +754,14 @@ export function FireMapPage() {
           weight: 5, opacity: 0.9,
           dashArray: f.confirmed ? undefined : '8 6',
         })
-        line.bindTooltip(f.label, { permanent: true, direction: 'center', className: 'feature-label' })
+        line.bindTooltip(escapeHtml(f.label), { permanent: true, direction: 'center', className: 'feature-label' })
         if (editMode) {
           line.on('click', () => setEditing({
             id: f.id, kind: f.kind, label: f.label,
             description: f.description ?? '', geometry: f.geometry, icon: f.icon,
           }))
         } else {
-          line.bindPopup(`<strong style="font-size:13px">${KIND_META.road.emoji} ${f.label}</strong>`, { maxWidth: 220 })
+          line.bindPopup(`<strong style="font-size:13px">${KIND_META.road.emoji} ${escapeHtml(f.label)}</strong>`, { maxWidth: 220 })
         }
         group.addLayer(line)
       }
@@ -801,7 +824,7 @@ export function FireMapPage() {
         iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -16],
       })
       const m = L.marker([a.lat, a.lng], { icon, zIndexOffset: 2000 })
-      m.bindTooltip(a.description, { permanent: true, direction: 'right', offset: [14, 0], className: 'feature-label' })
+      m.bindTooltip(escapeHtml(a.description), { permanent: true, direction: 'right', offset: [14, 0], className: 'feature-label' })
       m.bindPopup(alertPopupHtml(a), { className: 'wsp-popup', maxWidth: 260 })
       group.addLayer(m)
     })
@@ -840,10 +863,10 @@ export function FireMapPage() {
       const name = `${loc.displayName || loc.userLogin}${self ? ' (Ty)' : ''}`
       const label = loc.vehicle ? `${name} · 🚒 ${loc.vehicle}` : name
       const m = L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1500 })
-      m.bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -size / 2 + 4], className: 'feature-label' })
+      m.bindTooltip(escapeHtml(label), { permanent: true, direction: 'top', offset: [0, -size / 2 + 4], className: 'feature-label' })
       m.bindPopup(
-        `<div style="font-family:sans-serif"><strong style="color:#f1f5f9">${name}</strong>` +
-        (loc.vehicle ? `<div style="font-size:11px;color:#cbd5e1;margin-top:3px">🚒 ${loc.vehicle}</div>` : '') +
+        `<div style="font-family:sans-serif"><strong style="color:#f1f5f9">${escapeHtml(name)}</strong>` +
+        (loc.vehicle ? `<div style="font-size:11px;color:#cbd5e1;margin-top:3px">🚒 ${escapeHtml(loc.vehicle)}</div>` : '') +
         '<div style="font-size:10px;color:#94a3b8;margin-top:2px">udostępnia lokalizację</div></div>',
         { className: 'wsp-popup' },
       )
@@ -1080,7 +1103,7 @@ export function FireMapPage() {
       iconSize: [13, 13], iconAnchor: [6, 6], className: '',
     })
     destMarkerRef.current = L.marker(dest, { icon })
-      .bindPopup(`<strong>${name.split(',')[0]}</strong>`)
+      .bindPopup(`<strong>${escapeHtml(name.split(',')[0])}</strong>`)
       .addTo(map)
 
     try {
@@ -1114,7 +1137,7 @@ export function FireMapPage() {
     lines.forEach(pts => {
       if (pts.length < 2) return
       const line = L.polyline(pts, { color: '#f97316', weight: 6, opacity: 0.95 }).addTo(map)
-      line.bindPopup(`<strong style="font-size:13px">${name}</strong>`, { maxWidth: 220 })
+      line.bindPopup(`<strong style="font-size:13px">${escapeHtml(name)}</strong>`, { maxWidth: 220 })
       roadLayersRef.current.push(line)
       pts.forEach(p => {
         bounds.extend(p)
@@ -1160,8 +1183,8 @@ export function FireMapPage() {
         color: '#818cf8', weight: 2.5, opacity: 0.95, fillColor: '#818cf8', fillOpacity: 0.12,
       }).addTo(map)
       poly.bindPopup(
-        `<strong style="font-size:13px">${c.label}</strong>` +
-        (c.range ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">leśnictwo ${c.range}</div>` : ''),
+        `<strong style="font-size:13px">${escapeHtml(c.label)}</strong>` +
+        (c.range ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px">leśnictwo ${escapeHtml(c.range)}</div>` : ''),
         { className: 'wsp-popup', maxWidth: 200 },
       )
       roadLayersRef.current.push(poly)

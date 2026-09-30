@@ -1,6 +1,6 @@
 // CRUD dla godzin służbowych (tabela work_hours) — używane przez kalkulator
 // godzin i podstronę pełnego grafiku. Obie strony dzielą te same dane.
-import { supabase } from './supabase'
+import { supabase, throwIfError, NETWORK_ERROR_MSG } from './supabase'
 import { buildWorkHoursRows, isHourCode, type HourCode } from './hours'
 
 export interface WorkHoursEntry {
@@ -11,7 +11,7 @@ export interface WorkHoursEntry {
 
 // Wczytaj wszystkie wpisy godzin jako mapę personId → (date → code)
 export async function fetchWorkHours(): Promise<Record<string, Record<string, HourCode>>> {
-  const { data } = await supabase.from('work_hours').select('person_id, date, code')
+  const { data } = throwIfError(await supabase.from('work_hours').select('person_id, date, code'))
   const map: Record<string, Record<string, HourCode>> = {}
   for (const row of data ?? []) {
     if (!isHourCode(row.code)) continue
@@ -21,14 +21,12 @@ export async function fetchWorkHours(): Promise<Record<string, Record<string, Ho
   return map
 }
 
-// Zapisz/usuń jeden wpis
+// Zapisz/usuń jeden wpis — rzuca przy błędzie, żeby UI mógł cofnąć zmianę
 export async function setWorkHour(personId: string, date: string, code: HourCode | null): Promise<void> {
   if (code) {
-    const { error } = await supabase.from('work_hours').upsert({ person_id: personId, date, code })
-    if (error) console.error('[supabase] upsert work_hours:', error)
+    throwIfError(await supabase.from('work_hours').upsert({ person_id: personId, date, code }), NETWORK_ERROR_MSG)
   } else {
-    const { error } = await supabase.from('work_hours').delete().eq('person_id', personId).eq('date', date)
-    if (error) console.error('[supabase] delete work_hours:', error)
+    throwIfError(await supabase.from('work_hours').delete().eq('person_id', personId).eq('date', date), NETWORK_ERROR_MSG)
   }
 }
 

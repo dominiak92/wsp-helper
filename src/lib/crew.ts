@@ -418,7 +418,9 @@ export function restorePersonToSlot(a: ShiftAssignment, personId: string, slot: 
 
 // User zgłasza własną nieobecność: zapamiętaj slot, ściągnij ze składu, ustaw nieobecność.
 export function applySelfAbsence(a: ShiftAssignment, personId: string, type: AbsenceType): ShiftAssignment {
-  const slot = findPersonSlot(a, personId) ?? { kind: 'reserve' as const }
+  // Powtórne zgłoszenie (np. ponowienie po błędzie sieci) nie może nadpisać zapamiętanego
+  // miejsca „rezerwą" — osoby już nie ma w składzie, więc zachowaj poprzedni slot.
+  const slot = findPersonSlot(a, personId) ?? a.selfAbsences?.[personId] ?? { kind: 'reserve' as const }
   const cleared = removePersonFromAssignment(a, personId)
   return {
     ...cleared,

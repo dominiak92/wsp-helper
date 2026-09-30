@@ -25,6 +25,7 @@ export function ReportAbsencePanel({
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [okMsg, setOkMsg] = useState<string | null>(null)
+  const [errMsg, setErrMsg] = useState<string | null>(null)
 
   const a = date ? dayAssignment(date) : null
   const myAbs = a?.absenceMap?.[myPersonId] ?? null
@@ -33,12 +34,15 @@ export function ReportAbsencePanel({
   async function handleSubmit() {
     if (!date || !type) return
     setBusy(true)
+    setErrMsg(null)
     try {
       await onSubmit(date, type, note)
       setNote('')
       setType(null)
       setOkMsg('Zgłoszono nieobecność — dyżurny powiadomiony')
       setTimeout(() => setOkMsg(null), 4000)
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : 'Nie udało się zgłosić nieobecności.')
     } finally {
       setBusy(false)
     }
@@ -46,10 +50,13 @@ export function ReportAbsencePanel({
 
   async function handleWithdraw() {
     setBusy(true)
+    setErrMsg(null)
     try {
       await onWithdraw(date)
       setOkMsg('Nieobecność wycofana — wracasz do składu')
       setTimeout(() => setOkMsg(null), 4000)
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : 'Nie udało się wycofać nieobecności.')
     } finally {
       setBusy(false)
     }
@@ -57,6 +64,12 @@ export function ReportAbsencePanel({
 
   return (
     <div className="space-y-2">
+      {errMsg && (
+        <div className="flex items-center gap-2 bg-red-950/40 border border-red-900/50 rounded-xl px-4 py-3">
+          <UserX className="w-4 h-4 text-red-400 shrink-0" />
+          <p className="text-sm text-red-300">{errMsg}</p>
+        </div>
+      )}
       {okMsg && (
         <div className="flex items-center gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-xl px-4 py-3">
           <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />

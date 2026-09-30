@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, AUTO_CREW_VEHICLE_IDS, ABSENCE_LABELS, parseShiftAssignment, withGuests, resolveName } from '../../lib/crew'
+import { Badge8h } from '../../components/Partial8h'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -441,6 +442,7 @@ export function MobileCalendarPage() {
                           {eventBadge}
                           {orBadge}
                           <StatusPill status={status} />
+                          {status?.kind !== 'absent' && assignmentMap.get(date)?.partial8hIds?.includes(myPerson.id) && <Badge8h />}
                         </div>
                       </button>
                     )

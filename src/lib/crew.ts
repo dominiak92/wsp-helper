@@ -146,7 +146,10 @@ export interface ShiftAssignment {
 // Build Person entries for an assignment's guests so name lookups / DnD work
 // uniformly. Guests have no roles and never count as absent.
 export function guestsAsPersons(a: ShiftAssignment | null | undefined): Person[] {
-  return (a?.guests ?? []).map(g => ({ id: g.id, name: g.name, roles: [], absence: null, isGuest: true }))
+  return (a?.guests ?? []).map(g => ({
+    id: g.id, name: g.name, roles: [], absence: null, isGuest: true,
+    partial8h: !!a?.partial8hIds?.includes(g.id),
+  }))
 }
 
 // Merge an assignment's guests into a roster list for display.
@@ -272,6 +275,35 @@ export function generateCrew(personnel: Person[]): ShiftAssignment {
   }
 }
 
+// Nowe losowanie z zachowaniem ustawień dnia, których generator nie dotyczy:
+// goście (wracają do rezerwy), obecność 8h, obiad i samozgłoszone nieobecności
+// (bez nich strażak traci „Cofnij" na telefonie).
+export function regenerateCrew(personnel: Person[], prev: ShiftAssignment | null): ShiftAssignment {
+  const base = generateCrew(personnel)
+  const guests = prev?.guests ?? []
+  const guestIds = new Set(guests.map(g => g.id))
+
+  const partial8hIds = [
+    ...personnel.filter(p => p.partial8h && !p.absence && !p.isGuest).map(p => p.id),
+    ...(prev?.partial8hIds ?? []).filter(id => guestIds.has(id)),
+  ]
+  const selfAbsences = Object.fromEntries(
+    Object.entries(prev?.selfAbsences ?? {}).filter(([id]) => base.absenceMap?.[id]),
+  )
+
+  const next: ShiftAssignment = {
+    ...base,
+    partial8hIds: partial8hIds.length ? partial8hIds : undefined,
+    selfAbsences: Object.keys(selfAbsences).length ? selfAbsences : undefined,
+  }
+  if (prev?.dinner !== undefined) next.dinner = prev.dinner
+  if (guests.length) {
+    next.guests = guests
+    next.unassignedIds = [...next.unassignedIds, ...guests.map(g => g.id)]
+  }
+  return next
+}
+
 export function removePersonFromAssignment(a: ShiftAssignment, personId: string): ShiftAssignment {
   return {
     ...a,
@@ -309,6 +341,30 @@ export function findPersonSlot(a: ShiftAssignment, personId: string): CrewSlot |
   }
   if (a.unassignedIds.includes(personId)) return { kind: 'reserve' }
   return null
+}
+
+// Czytelna etykieta miejsca w obsadzie, np. „Ratownik · GBA 2,5/16".
+export function slotLabel(slot: CrewSlot | null): string {
+  if (!slot) return 'Poza obsadą'
+  switch (slot.kind) {
+    case 'shiftCommander': return 'Dowódca zmiany'
+    case 'dutyOfficer': return 'Dyżurny'
+    case 'reserve': return 'Rezerwa'
+    case 'vehicle': {
+      const role = slot.role === 'commander' ? 'Dowódca zastępu' : slot.role === 'driver' ? 'Kierowca' : 'Ratownik'
+      return `${role} · ${CREW_VEHICLE_NAMES[slot.vehicleId]}`
+    }
+  }
+}
+
+// Osoby obecne tylko 8h na tej służbie (kolejność z partial8hIds). Pomija nieobecnych
+// i id, których nie ma w `persons` (np. usunięci z personelu).
+export function partial8hPersons(a: ShiftAssignment | null | undefined, persons: Person[]): Person[] {
+  if (!a?.partial8hIds?.length) return []
+  return a.partial8hIds
+    .filter(id => !a.absenceMap?.[id])
+    .map(id => persons.find(p => p.id === id))
+    .filter((p): p is Person => !!p)
 }
 
 // Wstaw osobę z powrotem na zapisany slot. Jeśli slot jest już zajęty (ktoś inny

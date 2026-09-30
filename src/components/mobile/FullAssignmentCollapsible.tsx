@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES } from '../../lib/crew'
+import { Badge8h } from '../Partial8h'
 
 // ── Collapsible full assignment ───────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ export function FullAssignmentCollapsible({ personnel, assignment, myPersonId }:
   }
 
   const isMe = (id: string | null) => !!id && id === myPersonId
+  const is8h = (id: string | null) => !!id && !!assignment.partial8hIds?.includes(id)
 
   return (
     <div>
@@ -38,9 +40,9 @@ export function FullAssignmentCollapsible({ personnel, assignment, myPersonId }:
           <div className="space-y-2 mt-1">
             {/* Special roles */}
             <div className="bg-surface-800 rounded-xl border border-slate-700/40 divide-y divide-slate-800/60 overflow-hidden">
-              <RowInline label="Dowódca zmiany" value={name(assignment.shiftCommanderId)} Icon={Star} iconClass="text-brand-400" isMe={isMe(assignment.shiftCommanderId)} />
+              <RowInline label="Dowódca zmiany" value={name(assignment.shiftCommanderId)} Icon={Star} iconClass="text-brand-400" isMe={isMe(assignment.shiftCommanderId)} is8h={is8h(assignment.shiftCommanderId)} />
               {assignment.dutyOfficerIds.map(id => (
-                <RowInline key={id} label="Dyżurny" value={name(id)} Icon={ClipboardList} iconClass="text-amber-400" isMe={isMe(id)} />
+                <RowInline key={id} label="Dyżurny" value={name(id)} Icon={ClipboardList} iconClass="text-amber-400" isMe={isMe(id)} is8h={is8h(id)} />
               ))}
             </div>
 
@@ -60,7 +62,7 @@ export function FullAssignmentCollapsible({ personnel, assignment, myPersonId }:
                   </p>
                   <div className="divide-y divide-slate-800/60">
                     {rows.map((r, i) => (
-                      <RowInline key={i} label={r.label} value={name(r.id)} Icon={r.Icon} iconClass={r.iconClass} isMe={isMe(r.id)} />
+                      <RowInline key={i} label={r.label} value={name(r.id)} Icon={r.Icon} iconClass={r.iconClass} isMe={isMe(r.id)} is8h={is8h(r.id)} />
                     ))}
                   </div>
                 </div>
@@ -85,6 +87,7 @@ export function FullAssignmentCollapsible({ personnel, assignment, myPersonId }:
                       )}
                     >
                       {name(id)}
+                      {is8h(id) && <Badge8h className="ml-1.5 align-middle" />}
                     </span>
                   ))}
                 </div>
@@ -96,12 +99,13 @@ export function FullAssignmentCollapsible({ personnel, assignment, myPersonId }:
   )
 }
 
-function RowInline({ label, value, Icon, iconClass, isMe }: {
+function RowInline({ label, value, Icon, iconClass, isMe, is8h }: {
   label: string
   value: string
   Icon?: LucideIcon
   iconClass?: string
   isMe?: boolean
+  is8h?: boolean
 }) {
   return (
     <div className={cn(
@@ -112,9 +116,12 @@ function RowInline({ label, value, Icon, iconClass, isMe }: {
         {Icon && <Icon className={cn('w-3 h-3 shrink-0', iconClass)} />}
         {label}
       </span>
-      <span className={cn('text-sm font-semibold truncate text-right', isMe ? 'text-brand-200' : 'text-white')}>
-        {isMe && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-400 mr-1.5 mb-0.5 shrink-0" />}
-        {value}
+      <span className="flex items-center justify-end gap-1.5 min-w-0">
+        <span className={cn('text-sm font-semibold truncate text-right', isMe ? 'text-brand-200' : 'text-white')}>
+          {isMe && <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-400 mr-1.5 mb-0.5 shrink-0" />}
+          {value}
+        </span>
+        {is8h && <Badge8h />}
       </span>
     </div>
   )

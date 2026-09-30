@@ -1,6 +1,7 @@
 import type { Person, ShiftAssignment } from '../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, resolveName, withGuests } from '../lib/crew'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, withGuests } from '../lib/crew'
 import { cn } from '../lib/utils'
+import { Badge8h } from './Partial8h'
 
 interface Props {
   personnel: Person[]
@@ -33,14 +34,16 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
 
   // Roster + ad-hoc guests, for name resolution
   const persons = withGuests(personnel, assignment)
+  const nameOf = (id: string | null) => (id && persons.find(p => p.id === id)?.name) || '—'
+  const is8h = (id: string | null) => !!id && !!assignment.partial8hIds?.includes(id)
 
   return (
     <div className="px-3 sm:px-4 pb-6 pt-3 space-y-3">
       {/* Special roles */}
       <Card label="Role specjalne" labelColor="text-slate-400">
-        <Row label="Dowódca zmiany" value={resolveName(persons,assignment.shiftCommanderId)} valueColor="text-brand-300" />
+        <Row label="Dowódca zmiany" value={nameOf(assignment.shiftCommanderId)} is8h={is8h(assignment.shiftCommanderId)} valueColor="text-brand-300" />
         {assignment.dutyOfficerIds.map(id => (
-          <Row key={id} label="Dyżurny" value={resolveName(persons,id)} valueColor="text-amber-300" />
+          <Row key={id} label="Dyżurny" value={nameOf(id)} is8h={is8h(id)} valueColor="text-amber-300" />
         ))}
       </Card>
 
@@ -56,7 +59,7 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
           return (
             <Card key={v.vehicleId} label={vehicleName} labelColor="text-emerald-400">
               {rows.map((r, i) => (
-                <Row key={i} label={r.label} value={resolveName(persons,r.id)} />
+                <Row key={i} label={r.label} value={nameOf(r.id)} is8h={is8h(r.id)} />
               ))}
             </Card>
           )
@@ -68,8 +71,9 @@ export function DutyAssignmentView({ personnel, assignment, loading, hideAbsent 
         <Card label="Rezerwa" labelColor="text-slate-400">
           <div className="flex flex-wrap gap-2 px-3 py-3">
             {assignment.unassignedIds.map(id => (
-              <span key={id} className="text-sm text-slate-300 bg-surface-900 rounded-lg px-3 py-1.5 border border-slate-700">
-                {resolveName(persons,id)}
+              <span key={id} className="inline-flex items-center gap-1.5 text-sm text-slate-300 bg-surface-900 rounded-lg px-3 py-1.5 border border-slate-700">
+                {nameOf(id)}
+                {is8h(id) && <Badge8h />}
               </span>
             ))}
           </div>
@@ -108,15 +112,19 @@ function Card({ label, labelColor, children }: {
   )
 }
 
-function Row({ label, value, valueColor = 'text-white' }: {
+function Row({ label, value, is8h = false, valueColor = 'text-white' }: {
   label: string
   value: string
+  is8h?: boolean
   valueColor?: string
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-4 py-2.5">
       <span className="text-xs text-slate-500 shrink-0">{label}</span>
-      <span className={cn('text-sm font-semibold truncate text-right', valueColor)}>{value}</span>
+      <span className="flex items-center justify-end gap-1.5 min-w-0">
+        <span className={cn('text-sm font-semibold truncate text-right', valueColor)}>{value}</span>
+        {is8h && <Badge8h />}
+      </span>
     </div>
   )
 }

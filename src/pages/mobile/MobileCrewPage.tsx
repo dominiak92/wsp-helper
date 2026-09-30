@@ -9,9 +9,10 @@ import type { Person, RoleType, AbsenceType, ShiftAssignment } from '../../lib/c
 import { parseShiftAssignment, guestsAsPersons } from '../../lib/crew'
 import {
   ABSENCE_LABELS, ABSENCE_ORDER, CREW_VEHICLE_NAMES, VEHICLE_SEATS,
-  generateCrew, removePersonFromAssignment, isPersonInAssignment,
+  regenerateCrew, removePersonFromAssignment, isPersonInAssignment,
 } from '../../lib/crew'
 import { supabase } from '../../lib/supabase'
+import { Badge8h } from '../../components/Partial8h'
 
 // ── Slot helpers ───────────────────────────────────────────────────────────────
 
@@ -193,12 +194,8 @@ export function MobileCrewPage() {
   }
 
   function handleGenerate() {
-    const base = generateCrew(personnel)
-    // Re-attach any ad-hoc guests to the reserve so they survive regeneration.
-    const guests = assignment?.guests ?? []
-    applyAssignment(guests.length
-      ? { ...base, guests, unassignedIds: [...base.unassignedIds, ...guests.map(g => g.id)] }
-      : base)
+    // Keeps guests, 8h flags, dinner and self-reported absences across a re-roll
+    applyAssignment(regenerateCrew(personnel, assignment))
   }
 
   function updateAbsence(personId: string, absence: AbsenceType | null) {
@@ -452,9 +449,10 @@ export function MobileCrewPage() {
                 {assignment.unassignedIds.map(id => (
                   <span
                     key={id}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-surface-900 border border-slate-700 text-slate-400"
+                    className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-surface-900 border border-slate-700 text-slate-400"
                   >
                     {personnel.find(p => p.id === id)?.name ?? '—'}
+                    {assignment.partial8hIds?.includes(id) && <Badge8h />}
                   </span>
                 ))}
               </div>

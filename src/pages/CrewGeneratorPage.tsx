@@ -6,7 +6,7 @@ import { cn } from '../lib/utils'
 import {
   Person, RoleType, AbsenceType, ShiftAssignment,
   ABSENCE_LABELS, ABSENCE_ORDER, ROLE_SORT_ORDER,
-  DEFAULT_PERSONNEL, generateCrew, resolveName, applyDrop, isPersonInAssignment, removePersonFromAssignment,
+  DEFAULT_PERSONNEL, regenerateCrew, resolveName, applyDrop, isPersonInAssignment, removePersonFromAssignment,
   parseShiftAssignment, withGuests,
 } from '../lib/crew'
 import { supabase } from '../lib/supabase'
@@ -248,13 +248,8 @@ export function CrewGeneratorPage() {
   }
 
   function handleGenerate() {
-    const base = generateCrew(personnel)
-    // Auto-generation works off the roster only — re-attach any ad-hoc guests
-    // to the reserve so they are not lost when regenerating.
-    const guests = assignment?.guests ?? []
-    applyAssignment(guests.length
-      ? { ...base, guests, unassignedIds: [...base.unassignedIds, ...guests.map(g => g.id)] }
-      : base)
+    // Keeps guests, 8h flags, dinner and self-reported absences across a re-roll
+    applyAssignment(regenerateCrew(personnel, assignment))
   }
 
   function addGuest() {

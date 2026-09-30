@@ -20,6 +20,8 @@ import { CrewAbsencesCollapsible } from '../../components/mobile/CrewAbsencesCol
 import { VehicleReadinessStrip } from '../../components/mobile/VehicleReadinessStrip'
 import { FullAssignmentCollapsible } from '../../components/mobile/FullAssignmentCollapsible'
 import { ReportAbsencePanel } from '../../components/mobile/ReportAbsencePanel'
+import { Badge8h, Partial8hCard } from '../../components/Partial8h'
+import { partial8hPersons } from '../../lib/crew'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -326,6 +328,7 @@ export function MobileHomePage() {
     .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))
   const availableCount = personnel.length - absentPersonnel.length
   const total = personnel.length
+  const partial8hCount = partial8hPersons(assignment, personnel).length
 
   // Upcoming duties where user is absent (saved assignment exists but user not in it)
   const upcomingAbsences: { date: string; label: string }[] = []
@@ -557,7 +560,11 @@ export function MobileHomePage() {
                 {myRole.vehicle && (
                   <p className="text-xs text-slate-400 mt-0.5">{myRole.vehicle}</p>
                 )}
+                {myPerson.partial8h && (
+                  <p className="text-xs font-semibold text-amber-300 mt-1">Tej służby jesteś tylko na 8h</p>
+                )}
               </div>
+              {myPerson.partial8h && <Badge8h className="ml-auto text-xs" />}
             </div>
           ) : isAbsentNow ? (
             <div className="bg-surface-800 rounded-xl border border-red-900/40 p-4 flex items-center gap-3">
@@ -778,6 +785,9 @@ export function MobileHomePage() {
                 <span className="text-3xl font-bold tabular-nums text-emerald-400">{availableCount}</span>
                 <span className="text-sm text-slate-500">/ {total} dostępnych</span>
               </div>
+              {partial8hCount > 0 && (
+                <p className="text-xs font-semibold text-amber-300 mt-0.5">w tym {partial8hCount} na 8h</p>
+              )}
               {total > 0 && (
                 <div className="mt-2 h-2 rounded-full bg-surface-700 overflow-hidden">
                   <div
@@ -802,6 +812,9 @@ export function MobileHomePage() {
           <VehicleReadinessStrip assignment={assignment} personnel={personnel} />
         </div>
       </div>
+
+      {/* Osoby obecne tylko 8h — widoczne bez rozwijania */}
+      <Partial8hCard assignment={assignment} persons={personnel} myPersonId={myPerson?.id ?? null} />
 
       {/* Full assignment summary — under Stan obsady */}
       {assignment && (

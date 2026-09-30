@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   parseShiftAssignment, generateCrew, applyDrop, applySelfAbsence, withdrawSelfAbsence,
   emptyAssignment, findPersonSlot, isPersonInAssignment, CREW_VEHICLE_IDS, DEFAULT_PERSONNEL,
+  partial8hPersons, guestsAsPersons, slotLabel, regenerateCrew,
   type ShiftAssignment, type CrewVehicleId,
 } from './crew'
 
@@ -65,6 +66,35 @@ describe('generateCrew', () => {
   })
 })
 
+describe('regenerateCrew', () => {
+  it('keeps 8h flags, dinner, guests and still-valid self absences', () => {
+    const personnel = DEFAULT_PERSONNEL.map(p =>
+      p.id === 'maciej_s' ? { ...p, partial8h: true }
+      : p.id === 'pawel_t' ? { ...p, absence: 'W' as const }
+      : p,
+    )
+    const prev: ShiftAssignment = {
+      ...emptyAssignment(),
+      dinner: false,
+      guests: [{ id: 'guest_1', name: 'Gość' }],
+      partial8hIds: ['maciej_s', 'guest_1'],
+      selfAbsences: { pawel_t: { kind: 'reserve' }, artur_r: { kind: 'reserve' } }, // artur_r no longer absent
+    }
+    const next = regenerateCrew(personnel, prev)
+    expect(next.partial8hIds?.sort()).toEqual(['guest_1', 'maciej_s'])
+    expect(next.dinner).toBe(false)
+    expect(next.guests).toEqual(prev.guests)
+    expect(next.unassignedIds).toContain('guest_1')
+    expect(next.selfAbsences).toEqual({ pawel_t: { kind: 'reserve' } })
+  })
+
+  it('works for a first roll without a previous assignment', () => {
+    const next = regenerateCrew(DEFAULT_PERSONNEL, null)
+    expect(next.partial8hIds).toBeUndefined()
+    expect(next).not.toHaveProperty('dinner')
+  })
+})
+
 describe('applyDrop', () => {
   it('moves a reserve person into an empty driver seat', () => {
     const a = { ...emptyAssignment(), unassignedIds: ['x'] }
@@ -85,6 +115,31 @@ describe('applyDrop', () => {
     const a = { ...emptyAssignment(), unassignedIds: ['c'] }
     const next = applyDrop(a, 'unassigned:c', 'v:gba:commander')
     expect(next.shiftCommanderId).toBe('c')
+  })
+})
+
+describe('8h presence', () => {
+  const persons = [
+    { id: 'a', name: 'A', roles: [], absence: null },
+    { id: 'b', name: 'B', roles: [], absence: null },
+  ]
+
+  it('lists partial-8h people in order, skipping absent and unknown ids', () => {
+    const a = { ...emptyAssignment(), partial8hIds: ['b', 'ghost', 'a'], absenceMap: { a: 'W' as const } }
+    expect(partial8hPersons(a, persons).map(p => p.id)).toEqual(['b'])
+    expect(partial8hPersons(emptyAssignment(), persons)).toEqual([])
+    expect(partial8hPersons(null, persons)).toEqual([])
+  })
+
+  it('marks guests on 8h', () => {
+    const a = { ...emptyAssignment(), guests: [{ id: 'g', name: 'Gość' }], partial8hIds: ['g'] }
+    expect(guestsAsPersons(a)[0].partial8h).toBe(true)
+  })
+
+  it('describes where a person sits', () => {
+    expect(slotLabel({ kind: 'vehicle', vehicleId: 'gba', role: 'rescuer' })).toBe('Ratownik · GBA 2,5/16')
+    expect(slotLabel({ kind: 'dutyOfficer' })).toBe('Dyżurny')
+    expect(slotLabel(null)).toBe('Poza obsadą')
   })
 })
 

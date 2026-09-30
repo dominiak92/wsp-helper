@@ -13,8 +13,9 @@ import {
 } from '../lib/duty'
 import { cn } from '../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../lib/crew'
-import { ABSENCE_LABELS, ABSENCE_ORDER, parseShiftAssignment } from '../lib/crew'
+import { ABSENCE_LABELS, ABSENCE_ORDER, parseShiftAssignment, withGuests, partial8hPersons } from '../lib/crew'
 import { DutyAssignmentView } from '../components/DutyAssignmentView'
+import { Partial8hCard } from '../components/Partial8h'
 import { DailyWeatherCard } from '../components/DailyWeatherWidget'
 import { useAuth } from '../lib/auth'
 import type { WeatherReading, WeatherData } from '../lib/weather'
@@ -31,10 +32,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function StatCard({
   value,
   label,
+  hint,
   accent = 'slate',
 }: {
   value: string | number
   label: string
+  hint?: string
   accent?: 'green' | 'red' | 'slate'
 }) {
   const colors = { green: 'text-emerald-400', red: 'text-red-400', slate: 'text-white' }
@@ -42,6 +45,7 @@ function StatCard({
     <div className="bg-surface-800 rounded-xl border border-slate-700/40 p-4 flex flex-col gap-1">
       <span className={cn('text-2xl font-bold tabular-nums', colors[accent])}>{value}</span>
       <span className="text-xs font-medium text-slate-400">{label}</span>
+      {hint && <span className="text-[11px] font-semibold text-amber-300">{hint}</span>}
     </div>
   )
 }
@@ -335,6 +339,7 @@ export function DashboardPage() {
     .filter(p => p.absence)
     .sort((a, b) => ABSENCE_ORDER.indexOf(a.absence!) - ABSENCE_ORDER.indexOf(b.absence!))
   const total = personnel.length
+  const partial8hCount = partial8hPersons(assignment, withGuests(personnel, assignment)).length
   const isAdmin = user?.role === 'admin'
 
   return (
@@ -369,7 +374,12 @@ export function DashboardPage() {
             <SectionLabel>Stan obsady</SectionLabel>
             <div className="grid grid-cols-3 gap-3">
               <StatCard value={total} label="Ogółem" />
-              <StatCard value={availableCount} label="Dostępnych" accent="green" />
+              <StatCard
+                value={availableCount}
+                label="Dostępnych"
+                hint={partial8hCount > 0 ? `w tym ${partial8hCount} na 8h` : undefined}
+                accent="green"
+              />
               <StatCard
                 value={absentPersonnel.length}
                 label="Nieobecnych"
@@ -385,6 +395,9 @@ export function DashboardPage() {
               </div>
             )}
           </div>
+
+          {/* Osoby obecne tylko 8h — wyróżnione, żeby nikt nie liczył na nie przez całą dobę */}
+          <Partial8hCard assignment={assignment} persons={withGuests(personnel, assignment)} />
 
           {/* Obiad */}
           {assignment && (

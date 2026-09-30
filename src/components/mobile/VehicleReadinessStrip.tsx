@@ -1,7 +1,7 @@
 import { Shield, Truck, HeartPulse, Plane } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, VEHICLE_EXTRA_RESCUERS } from '../../lib/crew'
+import { CREW_VEHICLE_NAMES, CREW_VEHICLE_IDS, VEHICLE_SEATS, VEHICLE_EXTRA_RESCUERS, resolveName } from '../../lib/crew'
 
 // ── Vehicle readiness strip ───────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ export function VehicleReadinessStrip({ assignment, personnel }: { assignment: S
         <div className="flex items-center gap-3 px-4 py-2.5 border-t border-slate-800/60">
           <span className="text-xs font-semibold w-24 shrink-0 truncate text-slate-400">Rezerwa</span>
           <div className="flex-1 text-xs text-slate-400 truncate">
-            {assignment.unassignedIds.map(id => personnel.find(p => p.id === id)?.name ?? '—').join(', ')}
+            {assignment.unassignedIds.map(id => resolveName(personnel, id)).join(', ')}
           </div>
           <span className="text-xs font-bold tabular-nums text-slate-400 shrink-0">
             {assignment.unassignedIds.length}

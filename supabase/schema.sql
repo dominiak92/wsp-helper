@@ -1,5 +1,8 @@
 -- WSP Command Center — schemat bazy danych
 -- Wklej w: Supabase → SQL Editor → New query
+--
+-- UWAGA: to migawka startowa (bootstrap). NIE uruchamiaj całości ponownie na produkcji
+-- (create trigger / create policy nie są idempotentne). Nowe zmiany → supabase/migrations/.
 
 -- Tabela: stan osobowy
 create table if not exists personnel (
@@ -146,7 +149,7 @@ create policy "public write live_locations"
   on live_locations for all using (true);
 
 -- Tabela: godziny służbowe żołnierzy (kalkulator godzin / rozliczenie 28-dniowe)
--- Jeden kod na osobę na dzień. code ∈ '24' | '8' | 'W' | 'WH' | '8W' | 'L4' | 'oddelegowanie'
+-- Jeden kod na osobę na dzień. code ∈ '24' | '8' | 'W' | 'WH' | '8W' | 'L4' | 'UN' | 'oddelegowanie'
 create table if not exists work_hours (
   person_id  text not null,
   date       date not null,

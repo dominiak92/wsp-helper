@@ -9,13 +9,21 @@
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
+      "Bash(npm test)",
+      "Bash(npm run test:*)",
+      "Bash(npx tsc --noEmit:*)",
+      "Bash(npx vitest:*)",
       "PowerShell(npm run lint)",
       "PowerShell(npm run build)",
       "PowerShell(npm run dev)",
       "PowerShell(npm run preview)",
       "PowerShell(git status:*)",
       "PowerShell(git diff:*)",
-      "PowerShell(git log:*)"
+      "PowerShell(git log:*)",
+      "PowerShell(npm test)",
+      "PowerShell(npm run test:*)",
+      "PowerShell(npx tsc --noEmit:*)",
+      "PowerShell(npx vitest:*)"
     ]
   }
 }

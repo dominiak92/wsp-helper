@@ -1,3 +1,6 @@
+// Reference-only row types for some Supabase tables. NOT wired into createClient
+// (src/lib/supabase.ts is untyped) and currently not imported anywhere.
+// See AGENTS.md → "Where the schema lives" before relying on or extending this file.
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 interface PersonnelRow {

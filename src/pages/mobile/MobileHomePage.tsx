@@ -11,7 +11,7 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
 import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons, withdrawSelfAbsence } from '../../lib/crew'
-import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Undo2, CalendarPlus } from 'lucide-react'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Undo2, CalendarPlus, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 import type { WeatherData } from '../../lib/weather'
@@ -206,16 +206,34 @@ export function MobileHomePage() {
 
   useEffect(() => { fetchUpcomingEvents() }, [])
 
-  // Notatka widoczna dla wszystkich → calendar_events (tabela nie ma kolumny autora,
-  // więc autor jest dopisany do treści)
+  // Notatka widoczna dla wszystkich → calendar_events. Imię autora dopisane do treści
+  // (widać je w obu kalendarzach), login w `created_by` pozwala usunąć własną notatkę.
   async function publishNote(date: string, text: string) {
-    const author = user?.displayName ?? user?.login
-    const label = author ? `${text} — ${author}` : text
-    throwIfError(
-      await supabase.from('calendar_events').insert({ event_date: date, label }),
-      'Nie udało się dodać notatki — sprawdź połączenie i spróbuj ponownie.',
-    )
+    if (!user) return
+    const author = user.displayName ?? user.login
+    const label = `${text} — ${author}`
+    const failMsg = 'Nie udało się dodać notatki — sprawdź połączenie i spróbuj ponownie.'
+    let res = await supabase.from('calendar_events').insert({ event_date: date, label, created_by: user.login })
+    // Migracja created_by jeszcze nieuruchomiona (PGRST204: brak kolumny) — zapisz bez autora
+    if (res.error?.code === 'PGRST204') {
+      res = await supabase.from('calendar_events').insert({ event_date: date, label })
+    }
+    throwIfError(res, failMsg)
+    sendPushTrigger({ type: 'public_note', senderLogin: user.login, senderName: author, message: text, eventDate: date })
     await fetchUpcomingEvents()
+  }
+
+  const [noteError, setNoteError] = useState<string | null>(null)
+  async function deleteNote(ev: CalendarEvent) {
+    if (!user || ev.created_by !== user.login) return
+    if (!window.confirm('Usunąć tę notatkę dla wszystkich?')) return
+    const { error } = await supabase.from('calendar_events').delete().eq('id', ev.id).eq('created_by', user.login)
+    if (error) {
+      setNoteError('Nie udało się usunąć notatki — sprawdź połączenie.')
+      return
+    }
+    setNoteError(null)
+    setUpcomingEvents(prev => prev.filter(e => e.id !== ev.id))
   }
 
   function fetchWeather() {
@@ -564,13 +582,24 @@ export function MobileHomePage() {
               {upcomingEvents.map(ev => (
                 <div key={ev.id} className="flex items-start gap-2 bg-red-950/30 border border-red-900/50 rounded-lg px-2.5 py-2">
                   <CalendarDays className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-red-200 leading-tight">{ev.label}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-red-200 leading-tight break-words">{ev.label}</p>
                     <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{formatDateLong(ev.event_date)}</p>
                   </div>
+                  {user && ev.created_by === user.login && (
+                    <button
+                      onClick={() => deleteNote(ev)}
+                      className="-m-1.5 p-1.5 text-slate-500 hover:text-red-400 transition-colors shrink-0"
+                      title="Usuń moją notatkę"
+                      aria-label="Usuń moją notatkę"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
+            {noteError && <p className="mt-1.5 text-[11px] text-red-400">{noteError}</p>}
           </div>
         )}
       </div>

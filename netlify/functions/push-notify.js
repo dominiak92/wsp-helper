@@ -87,7 +87,7 @@ export const handler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON' }
   }
 
-  const { type, senderLogin, senderName, message, targetLogin } = body
+  const { type, senderLogin, senderName, message, targetLogin, eventDate } = body
   console.log(`[push-notify] type=${type} targetLogin=${targetLogin ?? '-'} senderLogin=${senderLogin ?? '-'}`)
 
   // Zbuduj filtr Supabase
@@ -113,6 +113,9 @@ export const handler = async (event) => {
       return { statusCode: 400, body: 'Missing targetLogin for confirmed type' }
     }
     filterParam = `user_login=eq.${encodeURIComponent(targetLogin)}`
+  } else if (type === 'public_note') {
+    // Notatka widoczna dla wszystkich — do każdego subskrybenta poza autorem
+    filterParam = senderLogin ? `user_login=neq.${encodeURIComponent(senderLogin)}` : ''
   } else {
     console.error('[push-notify] Nieznany type:', type)
     return { statusCode: 400, body: `Unknown type: ${type}` }
@@ -141,12 +144,25 @@ export const handler = async (event) => {
     }
   }
 
+  // 'YYYY-MM-DD' → 'DD.MM' (bez Intl — format nie zależy od wersji ICU)
+  const shortDate = (key) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key ?? ''))
+    return m ? `${m[3]}.${m[2]}` : ''
+  }
+
   const pushPayload = type === 'new_message'
     ? JSON.stringify({
         title: '📨 Wiadomość do dyżurnego',
         body: `${senderName ?? senderLogin}: ${(message ?? '').substring(0, 100)}`,
         url: '/dashboard',
         tag: 'duty-message',
+      })
+    : type === 'public_note'
+    ? JSON.stringify({
+        title: `📌 Notatka od ${senderName ?? senderLogin ?? 'załogi'}`,
+        body: `${shortDate(eventDate) ? shortDate(eventDate) + ': ' : ''}${(message ?? '').substring(0, 120)}`,
+        url: '/mobile',
+        tag: `public-note-${Date.now()}`, // osobne powiadomienie dla każdej notatki
       })
     : JSON.stringify({
         title: '✅ Wiadomość potwierdzona',

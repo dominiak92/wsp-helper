@@ -83,11 +83,12 @@ export async function unsubscribePush(userLogin: string): Promise<void> {
 
 // Fire-and-forget — push jest best-effort, nie blokuje głównego flow
 export function sendPushTrigger(payload: {
-  type: 'new_message' | 'confirmed'
+  type: 'new_message' | 'confirmed' | 'public_note'
   senderLogin?: string
   senderName?: string
   message?: string
   targetLogin?: string
+  eventDate?: string // public_note: dzień notatki (YYYY-MM-DD)
 }): void {
   fetch('/.netlify/functions/push-notify', {
     method: 'POST',

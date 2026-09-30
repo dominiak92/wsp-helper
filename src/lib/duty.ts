@@ -13,6 +13,7 @@ export interface CalendarEvent {
   id: string
   event_date: string // YYYY-MM-DD
   label: string
+  created_by?: string | null // login autora notatki z telefonu (null: admin / starsze wpisy)
 }
 
 export function ymdKey(y: number, m: number, d: number): string {

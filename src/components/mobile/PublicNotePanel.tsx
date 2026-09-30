@@ -101,7 +101,7 @@ export function PublicNotePanel({ onPublish }: {
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] text-slate-500">Zobaczą ją wszyscy w „Zdarzeniach”.</p>
+          <p className="text-[11px] text-slate-500">Zobaczą ją wszyscy w „Zdarzeniach” i dostaną powiadomienie.</p>
           <button
             onClick={handlePublish}
             disabled={busy || !date || !text.trim()}

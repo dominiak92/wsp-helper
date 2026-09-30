@@ -38,7 +38,7 @@ function resolveUserStatus(
     if (v.commanderId === personId)
       return { kind: 'assigned', role: 'Dowódca zastępu', vehicle: vName }
     if (v.driverId === personId)
-      return { kind: 'assigned', role: 'Kierowca', vehicle: vName }
+      return { kind: 'assigned', role: 'Kierowca-ratownik', vehicle: vName }
     if (v.rescuerIds.includes(personId))
       return { kind: 'assigned', role: 'Ratownik', vehicle: vName }
   }

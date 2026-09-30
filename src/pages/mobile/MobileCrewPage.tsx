@@ -408,7 +408,7 @@ export function MobileCrewPage() {
                     onChange={handleSlotChange}
                   />
                   <SlotRow
-                    label="Kierowca"
+                    label="Kierowca-ratownik"
                     value={v.driverId}
                     slotKey={`${pfx}:driver`}
                     personnel={availablePersonnel}

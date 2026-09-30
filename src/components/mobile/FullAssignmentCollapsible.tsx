@@ -51,7 +51,7 @@ export function FullAssignmentCollapsible({ personnel, assignment, myPersonId }:
               const vName = CREW_VEHICLE_NAMES[v.vehicleId as keyof typeof CREW_VEHICLE_NAMES] ?? v.vehicleId
               const rows: { label: string; id: string; Icon: LucideIcon; iconClass: string }[] = []
               if (v.commanderId) rows.push({ label: 'Dowódca zastępu', id: v.commanderId, Icon: Shield, iconClass: 'text-purple-400' })
-              if (v.driverId) rows.push({ label: 'Kierowca', id: v.driverId, Icon: Truck, iconClass: 'text-emerald-400' })
+              if (v.driverId) rows.push({ label: 'Kierowca-ratownik', id: v.driverId, Icon: Truck, iconClass: 'text-emerald-400' })
               v.rescuerIds.forEach(id => rows.push({ label: 'Ratownik', id, Icon: HeartPulse, iconClass: 'text-sky-400' }))
               if (!rows.length) return null
               return (

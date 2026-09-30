@@ -351,7 +351,7 @@ export function slotLabel(slot: CrewSlot | null): string {
     case 'dutyOfficer': return 'Dyżurny'
     case 'reserve': return 'Rezerwa'
     case 'vehicle': {
-      const role = slot.role === 'commander' ? 'Dowódca zastępu' : slot.role === 'driver' ? 'Kierowca' : 'Ratownik'
+      const role = slot.role === 'commander' ? 'Dowódca zastępu' : slot.role === 'driver' ? 'Kierowca-ratownik' : 'Ratownik'
       return `${role} · ${CREW_VEHICLE_NAMES[slot.vehicleId]}`
     }
   }

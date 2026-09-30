@@ -9,6 +9,12 @@
   directory    = "netlify/functions"
   node_bundler = "esbuild"
 
+# Pobieranie zagrożenia pożarowego (traxelektronik → weather_cache).
+# Cron w UTC: co 30 min 06:05–15:35 UTC = ok. 8–17:30 czasu polskiego latem, 7–16:30 zimą;
+# funkcja sama pomija przebiegi, gdy dzisiejszy odczyt 9:00/13:00 jest już zapisany.
+[functions."weather-fetch"]
+  schedule = "5,35 6-15 * * *"
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

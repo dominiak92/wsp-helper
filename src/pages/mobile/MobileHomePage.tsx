@@ -10,8 +10,8 @@ import {
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/utils'
 import type { Person, ShiftAssignment, RoleType, AbsenceType } from '../../lib/crew'
-import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons, emptyAssignment, applySelfAbsence, withdrawSelfAbsence } from '../../lib/crew'
-import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Undo2, CalendarOff } from 'lucide-react'
+import { CREW_VEHICLE_NAMES, ABSENCE_LABELS, ABSENCE_ORDER, isPersonInAssignment, parseShiftAssignment, guestsAsPersons, withdrawSelfAbsence } from '../../lib/crew'
+import { UserCircle, UserX, CalendarX, MessageSquare, Send, CheckCircle, Users, Utensils, CalendarDays, X, Clock, Star, Shield, Truck, HeartPulse, ClipboardList, Undo2, CalendarPlus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CalendarEvent } from '../../lib/duty'
 import type { WeatherData } from '../../lib/weather'
@@ -19,7 +19,7 @@ import { WeatherCollapsible } from '../../components/mobile/WeatherCollapsible'
 import { CrewAbsencesCollapsible } from '../../components/mobile/CrewAbsencesCollapsible'
 import { VehicleReadinessStrip } from '../../components/mobile/VehicleReadinessStrip'
 import { FullAssignmentCollapsible } from '../../components/mobile/FullAssignmentCollapsible'
-import { ReportAbsencePanel } from '../../components/mobile/ReportAbsencePanel'
+import { PublicNotePanel } from '../../components/mobile/PublicNotePanel'
 import { Badge8h, Partial8hCard } from '../../components/Partial8h'
 import { partial8hPersons } from '../../lib/crew'
 
@@ -110,7 +110,7 @@ export function MobileHomePage() {
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
   const [loading, setLoading] = useState(true)
   const [announcement, setAnnouncement] = useState<string | null>(null)
-  const [activeAction, setActiveAction] = useState<'message' | 'absence' | null>(null)
+  const [activeAction, setActiveAction] = useState<'message' | 'note' | null>(null)
   const [msgText, setMsgText] = useState('')
   const [sendingMsg, setSendingMsg] = useState(false)
   const [msgSentOk, setMsgSentOk] = useState(false)
@@ -194,19 +194,29 @@ export function MobileHomePage() {
 
   useEffect(() => { reload() }, [reload])
 
-  useEffect(() => {
-    const today = new Date()
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    supabase
+  async function fetchUpcomingEvents() {
+    const { data } = await supabase
       .from('calendar_events')
       .select('*')
-      .gte('event_date', todayStr)
+      .gte('event_date', todayYmdKey())
       .order('event_date')
       .limit(5)
-      .then(({ data }) => {
-        if (data) setUpcomingEvents(data as CalendarEvent[])
-      })
-  }, [])
+    if (data) setUpcomingEvents(data as CalendarEvent[])
+  }
+
+  useEffect(() => { fetchUpcomingEvents() }, [])
+
+  // Notatka widoczna dla wszystkich → calendar_events (tabela nie ma kolumny autora,
+  // więc autor jest dopisany do treści)
+  async function publishNote(date: string, text: string) {
+    const author = user?.displayName ?? user?.login
+    const label = author ? `${text} — ${author}` : text
+    throwIfError(
+      await supabase.from('calendar_events').insert({ event_date: date, label }),
+      'Nie udało się dodać notatki — sprawdź połączenie i spróbuj ponownie.',
+    )
+    await fetchUpcomingEvents()
+  }
 
   function fetchWeather() {
     setWeatherLoading(true)
@@ -398,12 +408,6 @@ export function MobileHomePage() {
     }
   }
 
-  // Obsada danego dnia z już załadowanych danych (bieżąca w `assignment`, przyszłe w `savedMap`)
-  function dayAssignment(date: string): ShiftAssignment | null {
-    if (date === dutyDate) return assignment
-    return savedMap.get(date) ?? null
-  }
-
   // Pobierz najświeższy zapis obsady dla danego dnia (tuż przed zapisem, by nie nadpisać zmian dyżurnego)
   // Rzuca przy błędzie odczytu — inaczej brak sieci wyglądałby jak „brak obsady"
   // i zapis poniżej nadpisałby całą obsadę dnia pustą.
@@ -428,28 +432,8 @@ export function MobileHomePage() {
     sendPushTrigger({ type: 'new_message', senderLogin: user.login, senderName: user.displayName, message })
   }
 
-  // User zgłasza nieobecność: ściąga się ze składu danego dnia i informuje dyżurnego
-  async function submitAbsence(date: string, type: AbsenceType, note: string) {
-    if (!user || !myPersonId) return
-    const { id, parsed } = await fetchLatestAssignmentRow(date)
-    const base = parsed ?? emptyAssignment()
-    const next = applySelfAbsence(base, myPersonId, type)
-    if (id) {
-      throwIfError(await supabase.from('duty_assignments').update({ assignment_json: next }).eq('id', id), NETWORK_ERROR_MSG)
-    } else {
-      throwIfError(await supabase.from('duty_assignments').delete().eq('duty_date', date), NETWORK_ERROR_MSG)
-      throwIfError(await supabase.from('duty_assignments').insert({ duty_date: date, assignment_json: next }), NETWORK_ERROR_MSG)
-    }
-    const trimmed = note.trim()
-    // Obsada jest już zapisana — odśwież nawet, gdy powiadomienie nie wyszło (żeby nie zgłaszać drugi raz)
-    try {
-      await notifyDuty(`🚫 Zgłoszenie nieobecności — ${user.displayName}\n${formatDateShortWithDay(date)}: ${ABSENCE_LABELS[type]}${trimmed ? `\n${trimmed}` : ''}`)
-    } finally {
-      await Promise.all([reload(), fetchMyMessages()])
-    }
-  }
-
-  // User wycofuje własną nieobecność i wraca na swoje poprzednie miejsce w składzie
+  // User wycofuje nieobecność zgłoszoną wcześniej z telefonu (samo zgłaszanie usunięto —
+  // „Cofnij" zostaje, żeby istniejące zgłoszenia dało się wycofać) i wraca na swoje miejsce
   async function withdrawAbsence(date: string) {
     if (!user || !myPersonId) return
     const { id, parsed } = await fetchLatestAssignmentRow(date)
@@ -701,16 +685,16 @@ export function MobileHomePage() {
           </div>
         </button>
         <button
-          onClick={() => setActiveAction(a => (a === 'absence' ? null : 'absence'))}
+          onClick={() => setActiveAction(a => (a === 'note' ? null : 'note'))}
           className={cn(
             'rounded-xl border px-3 py-3 text-left transition-colors flex items-center gap-2.5',
-            activeAction === 'absence' ? 'border-brand-500 bg-brand-950/30' : 'border-slate-700/40 bg-surface-800 hover:border-slate-600',
+            activeAction === 'note' ? 'border-brand-500 bg-brand-950/30' : 'border-slate-700/40 bg-surface-800 hover:border-slate-600',
           )}
         >
-          <CalendarOff className="w-4 h-4 text-amber-400 shrink-0" />
+          <CalendarPlus className="w-4 h-4 text-amber-400 shrink-0" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white leading-tight">Zgłoś nieobecność</p>
-            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">wybierz dzień i typ</p>
+            <p className="text-sm font-medium text-white leading-tight">Notatka</p>
+            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">widoczna dla wszystkich</p>
           </div>
         </button>
       </div>
@@ -742,16 +726,8 @@ export function MobileHomePage() {
         </div>
       )}
 
-      {/* Panel: zgłoś nieobecność */}
-      {activeAction === 'absence' && myPersonId && (
-        <ReportAbsencePanel
-          dutyKeys={nextDutyKeys(8)}
-          myPersonId={myPersonId}
-          dayAssignment={dayAssignment}
-          onSubmit={submitAbsence}
-          onWithdraw={withdrawAbsence}
-        />
-      )}
+      {/* Panel: notatka widoczna dla wszystkich (→ Zdarzenia u góry) */}
+      {activeAction === 'note' && <PublicNotePanel onPublish={publishNote} />}
 
       {/* Potwierdzenie wysłania + zachęta do powiadomień */}
       {msgSentOk && (

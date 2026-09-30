@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  currentOrNextDutyDate, todayYmdKey, formatDateShort, formatDateLong,
+  currentOrNextDutyDate, dutyTiming, DUTY_TIMING_LABEL, formatDateShort, formatDateLong,
 } from '../lib/duty'
 import type { Person, ShiftAssignment, VehicleAssignment, RoleType, AbsenceType } from '../lib/crew'
 import { parseShiftAssignment, guestsAsPersons } from '../lib/crew'
@@ -139,7 +139,7 @@ function BayCard({ bay, va, hasAssignment, name }: BayCardProps) {
 
 export function GaragePage() {
   const dutyDate = currentOrNextDutyDate()
-  const isToday = dutyDate === todayYmdKey()
+  const timing = dutyTiming(dutyDate)
 
   const [personnel, setPersonnel] = useState<Person[]>([])
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
@@ -200,7 +200,7 @@ export function GaragePage() {
       <div className="flex items-start justify-between gap-4 pb-5 border-b border-slate-800 mb-6">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
-            {isToday ? 'Dzisiejsza służba' : 'Następna służba'}
+            {DUTY_TIMING_LABEL[timing]}
           </p>
           <h1 className="text-2xl font-bold text-white">Garaż</h1>
           <p className="text-xs text-slate-500 mt-0.5">

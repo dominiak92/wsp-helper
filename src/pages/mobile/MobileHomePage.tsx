@@ -4,7 +4,7 @@ import { DailyWeatherCollapsible } from '../../components/DailyWeatherWidget'
 import { PushBell } from '../../components/PushBell'
 import { sendPushTrigger, isSubscribed, isPushSupported } from '../../lib/pushNotifications'
 import {
-  currentOrNextDutyDate, todayYmdKey, nextDutyKeys,
+  currentOrNextDutyDate, todayYmdKey, nextDutyKeys, dutyTiming, DUTY_TIMING_LABEL,
   formatDateShort, formatDateLong, formatDateShortWithDay,
 } from '../../lib/duty'
 import { useAuth } from '../../lib/auth'
@@ -92,7 +92,7 @@ interface DutyMsg {
 export function MobileHomePage() {
   const { user } = useAuth()
   const dutyDate = currentOrNextDutyDate()
-  const isToday = dutyDate === todayYmdKey()
+  const timing = dutyTiming(dutyDate)
 
   const [personnel, setPersonnel] = useState<Person[]>([])
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
@@ -197,7 +197,7 @@ export function MobileHomePage() {
       .then(r => (r.ok ? r.json() : null))
       .then((data: WeatherData | null) => {
         if (data) {
-          const today = new Date().toLocaleDateString('en-CA')
+          const today = todayYmdKey()
           const slotIsToday = (r: WeatherData['morning']) =>
             !!r?.updatedAt?.startsWith(today)
           const cleaned: WeatherData = {
@@ -517,7 +517,7 @@ export function MobileHomePage() {
       )}>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
-            {isToday ? 'Dzisiejsza służba' : 'Następna służba'}
+            {DUTY_TIMING_LABEL[timing]}
           </p>
           <h2 className="text-2xl font-bold text-white">{formatDateShort(dutyDate)}</h2>
           <p className="text-xs text-slate-500 mt-0.5">{formatDateLong(dutyDate)}</p>

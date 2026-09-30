@@ -7,6 +7,8 @@ import { sendPushTrigger } from '../lib/pushNotifications'
 import {
   currentOrNextDutyDate,
   previousDutyDate,
+  dutyTiming,
+  DUTY_TIMING_LABEL,
   todayYmdKey,
   formatDateShort,
   formatDateLong,
@@ -203,7 +205,7 @@ export function DashboardPage() {
   const { user } = useAuth()
   const dutyDate = currentOrNextDutyDate()
   const prevDate = previousDutyDate(dutyDate)
-  const isToday = dutyDate === todayYmdKey()
+  const timing = dutyTiming(dutyDate)
 
   const [personnel, setPersonnel] = useState<Person[]>([])
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
@@ -285,7 +287,7 @@ export function DashboardPage() {
       .then(r => (r.ok ? r.json() : null))
       .then((data: WeatherData | null) => {
         if (data) {
-          const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+          const today = todayYmdKey()
           const slotIsToday = (r: WeatherData['morning']) =>
             !!r?.updatedAt?.startsWith(today)
           const cleaned: WeatherData = {
@@ -349,7 +351,7 @@ export function DashboardPage() {
       <div className="flex items-start justify-between gap-4 px-4 sm:px-6 pt-4 sm:pt-5 pb-4 border-b border-slate-800 shrink-0">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">
-            {isToday ? 'Dzisiejsza służba' : 'Następna służba'}
+            {DUTY_TIMING_LABEL[timing]}
           </p>
           <h1 className="text-2xl font-bold text-white">{formatDateShort(dutyDate)}</h1>
           <p className="text-xs text-slate-500 mt-0.5">{formatDateLong(dutyDate)}</p>

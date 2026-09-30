@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Cloud, Droplets, Wind, ChevronDown } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { todayYmdKey } from '../lib/duty'
 
 interface HourlyForecast {
   time: string[]
@@ -61,7 +62,7 @@ function useDailyWeather() {
       .then(r => (r.ok ? r.json() : null))
       .then(json => {
         if (json?.hourly) {
-          const today = new Date().toLocaleDateString('en-CA')
+          const today = todayYmdKey()
           const idx = (json.hourly.time as string[])
             .map((t, i) => ({ t, i }))
             .filter(({ t }) => t.startsWith(today))

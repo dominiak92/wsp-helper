@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   isDutyDay, isDutyDayKey, isBillingStartKey, billingPeriodStartKey, addDaysKey,
   nextDutyKeys, currentOrNextDutyDate, previousDutyDate, nextDutyDate,
-  formatDateShort, formatDateLong,
+  formatDateShort, formatDateLong, dutyTiming,
 } from './duty'
 
 describe('duty cycle (every 4 days, anchored 2026-05-01)', () => {
@@ -72,6 +72,32 @@ describe('currentOrNextDutyDate', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 4, 2, 23, 30))
     expect(currentOrNextDutyDate()).toBe('2026-05-05')
+  })
+})
+
+describe('handover at 7:30', () => {
+  // 2026-05-05 is a duty day; the shift runs 05-05 07:30 → 05-06 07:30
+  it('keeps the running shift current after midnight until 7:30', () => {
+    expect(currentOrNextDutyDate(new Date(2026, 4, 6, 0, 5))).toBe('2026-05-05')
+    expect(currentOrNextDutyDate(new Date(2026, 4, 6, 7, 29))).toBe('2026-05-05')
+    expect(currentOrNextDutyDate(new Date(2026, 4, 6, 7, 30))).toBe('2026-05-09')
+  })
+
+  it('shows the day’s shift as today even before it starts', () => {
+    expect(currentOrNextDutyDate(new Date(2026, 4, 5, 6, 0))).toBe('2026-05-05')
+    expect(dutyTiming('2026-05-05', new Date(2026, 4, 5, 6, 0))).toBe('today')
+  })
+
+  it('labels the running shift as ongoing, then the following one as next', () => {
+    expect(dutyTiming('2026-05-05', new Date(2026, 4, 6, 3, 0))).toBe('ongoing')
+    expect(dutyTiming('2026-05-09', new Date(2026, 4, 6, 8, 0))).toBe('next')
+  })
+
+  it('crosses a month boundary', () => {
+    // 2026-05-29 is a duty day → still current at 2026-05-30 02:00
+    expect(currentOrNextDutyDate(new Date(2026, 4, 30, 2, 0))).toBe('2026-05-29')
+    // 2026-06-30 is a duty day → still current at 2026-07-01 07:00
+    expect(currentOrNextDutyDate(new Date(2026, 6, 1, 7, 0))).toBe('2026-06-30')
   })
 })
 

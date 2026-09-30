@@ -24,15 +24,44 @@ export function todayYmdKey(): string {
   return ymdKey(t.getFullYear(), t.getMonth(), t.getDate())
 }
 
-export function currentOrNextDutyDate(): string {
-  const d = new Date()
+// Zmiana służby o 7:30 — do tej godziny trwa jeszcze służba z poprzedniego dnia.
+// Uwaga: netlify/functions/push-notify.js ma kopię tej logiki (strefa Europe/Warsaw).
+export const HANDOVER_HOUR = 7
+export const HANDOVER_MINUTE = 30
+
+function isBeforeHandover(now: Date): boolean {
+  return now.getHours() * 60 + now.getMinutes() < HANDOVER_HOUR * 60 + HANDOVER_MINUTE
+}
+
+// Bieżąca (trwająca) albo najbliższa służba. Służba trwa od 7:30 w dniu służby
+// do 7:30 dnia następnego, więc po północy nadal wskazuje wczorajszą datę.
+export function currentOrNextDutyDate(now: Date = new Date()): string {
+  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (isBeforeHandover(now)) base.setDate(base.getDate() - 1)
   for (let i = 0; i <= 3; i++) {
-    const nd = new Date(d)
-    nd.setDate(d.getDate() + i)
+    const nd = new Date(base)
+    nd.setDate(base.getDate() + i)
     if (isDutyDay(nd.getFullYear(), nd.getMonth(), nd.getDate()))
       return ymdKey(nd.getFullYear(), nd.getMonth(), nd.getDate())
   }
-  return ymdKey(d.getFullYear(), d.getMonth(), d.getDate())
+  return ymdKey(base.getFullYear(), base.getMonth(), base.getDate())
+}
+
+// Jak opisać służbę z `currentOrNextDutyDate` w nagłówku strony:
+// 'today' — dzień służby to dziś, 'ongoing' — służba z wczoraj trwa do 7:30, 'next' — kolejna.
+export type DutyTiming = 'today' | 'ongoing' | 'next'
+
+export function dutyTiming(dutyDate: string, now: Date = new Date()): DutyTiming {
+  const today = ymdKey(now.getFullYear(), now.getMonth(), now.getDate())
+  if (dutyDate === today) return 'today'
+  if (dutyDate < today && isBeforeHandover(now)) return 'ongoing'
+  return 'next'
+}
+
+export const DUTY_TIMING_LABEL: Record<DutyTiming, string> = {
+  today: 'Dzisiejsza służba',
+  ongoing: 'Trwająca służba (do 7:30)',
+  next: 'Następna służba',
 }
 
 // Najbliższe `count` dni służby (YYYY-MM-DD), licząc od `from` włącznie

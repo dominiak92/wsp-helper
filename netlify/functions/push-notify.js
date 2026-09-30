@@ -1,19 +1,29 @@
 import webpush from 'web-push'
 
 // Dzień służby (current/next) liczony w strefie Europe/Warsaw — serwer chodzi w UTC,
-// a logika dyżuru (anchor 2026-05-01, co 4 dni) jest oparta o lokalną datę jak w src/lib/duty.ts
-function currentOrNextDutyDateWarsaw() {
+// a logika dyżuru (anchor 2026-05-01, co 4 dni) jest oparta o lokalną datę jak w src/lib/duty.ts.
+// Kopia currentOrNextDutyDate: służba trwa do 7:30 następnego dnia (HANDOVER w duty.ts).
+function currentOrNextDutyDateWarsaw(now = new Date()) {
   const REF_UTC = Date.UTC(2026, 4, 1)
-  const todayWarsaw = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Warsaw' }) // 'YYYY-MM-DD'
-  const [y, m, d] = todayWarsaw.split('-').map(Number)
+  // formatToParts zamiast toLocaleDateString('en-CA') — format en-CA zależy od wersji ICU
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Warsaw', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+    }).formatToParts(now).map(p => [p.type, p.value]),
+  )
+  const y = Number(parts.year), m = Number(parts.month), d0 = Number(parts.day)
+  const beforeHandover = Number(parts.hour) * 60 + Number(parts.minute) < 7 * 60 + 30
+  const d = beforeHandover ? d0 - 1 : d0 // Date.UTC normalizuje d=0 na koniec poprzedniego miesiąca
+  const key = t => {
+    const nd = new Date(t)
+    return `${nd.getUTCFullYear()}-${String(nd.getUTCMonth() + 1).padStart(2, '0')}-${String(nd.getUTCDate()).padStart(2, '0')}`
+  }
   for (let i = 0; i <= 3; i++) {
     const t = Date.UTC(y, m - 1, d + i)
-    if (((t - REF_UTC) / 86400000) % 4 === 0) {
-      const nd = new Date(t)
-      return `${nd.getUTCFullYear()}-${String(nd.getUTCMonth() + 1).padStart(2, '0')}-${String(nd.getUTCDate()).padStart(2, '0')}`
-    }
+    if (((t - REF_UTC) / 86400000) % 4 === 0) return key(t)
   }
-  return todayWarsaw
+  return key(Date.UTC(y, m - 1, d)) // nieosiągalne — co 4. dzień jest dniem służby
 }
 
 // Loginy dyżurnych wyznaczonych na dziś (slot obsady, nie stała rola) — do powiadomień push

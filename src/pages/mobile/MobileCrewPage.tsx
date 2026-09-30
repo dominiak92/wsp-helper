@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Zap, Save, RefreshCw, Check, ChevronDown, ChevronUp } from 'lucide-react'
 import {
-  currentOrNextDutyDate, todayYmdKey,
+  currentOrNextDutyDate, dutyTiming,
   formatDateShort, formatDateLong,
 } from '../../lib/duty'
 import { cn } from '../../lib/utils'
@@ -114,7 +114,7 @@ function SlotRow({
 
 export function MobileCrewPage() {
   const dutyDate = currentOrNextDutyDate()
-  const isToday = dutyDate === todayYmdKey()
+  const timing = dutyTiming(dutyDate)
 
   const [personnel, setPersonnel] = useState<Person[]>([])
   const [assignment, setAssignment] = useState<ShiftAssignment | null>(null)
@@ -244,7 +244,7 @@ export function MobileCrewPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-            {isToday ? 'Obsada dzisiejszej służby' : 'Obsada następnej służby'}
+            {timing === 'today' ? 'Obsada dzisiejszej służby' : timing === 'ongoing' ? 'Obsada trwającej służby' : 'Obsada następnej służby'}
           </p>
           <h2 className="text-xl font-bold text-white mt-0.5">{formatDateShort(dutyDate)}</h2>
           <p className="text-xs text-slate-500">{formatDateLong(dutyDate)}</p>

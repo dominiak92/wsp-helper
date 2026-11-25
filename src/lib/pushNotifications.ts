@@ -84,6 +84,7 @@ export async function unsubscribePush(userLogin: string): Promise<void> {
 // Fire-and-forget — push jest best-effort, nie blokuje głównego flow
 export function sendPushTrigger(payload: {
   type: 'new_message' | 'confirmed' | 'public_note'
+    | 'qualification_pending' | 'qualification_approved' | 'qualification_rejected'
   senderLogin?: string
   senderName?: string
   message?: string

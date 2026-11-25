@@ -8,6 +8,7 @@ import {
   BookOpen,
   Map,
   Table2,
+  CalendarClock,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
@@ -25,6 +26,7 @@ const navGroups = [
       { label: 'Generator opisów', icon: ClipboardList, path: '/incident-generator' },
       { label: 'Kalendarz służb', icon: CalendarDays, path: '/duty-calendar' },
       { label: 'Grafik godzinowy', icon: Table2, path: '/schedule' },
+      { label: 'Terminy', icon: CalendarClock, path: '/qualifications' },
       { label: 'Garaż', icon: Truck, path: '/garage' },
       { label: 'Vademecum', icon: BookOpen, path: '/vademecum' },
       { label: 'Mapa p.poż.', icon: Map, path: '/map' },

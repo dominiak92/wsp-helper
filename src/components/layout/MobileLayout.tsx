@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
-import { Home, CalendarDays, Users, Map } from 'lucide-react'
+import { Home, CalendarDays, Users, Map, CalendarClock } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
 
@@ -22,6 +22,7 @@ export function MobileLayout() {
     { to: '/mobile', label: 'Dziś', icon: Home, end: true },
     { to: '/mobile/calendar', label: 'Kalendarz', icon: CalendarDays, end: false },
     { to: '/mobile/map', label: 'Mapa', icon: Map, end: false },
+    { to: '/mobile/qualifications', label: 'Terminy', icon: CalendarClock, end: false },
     ...(user.role !== 'user'
       ? [{ to: '/mobile/crew-generator', label: 'Obsada', icon: Users, end: false }]
       : []),

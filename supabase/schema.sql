@@ -165,3 +165,56 @@ create policy "public read work_hours"
 
 create policy "public write work_hours"
   on work_hours for all using (true);
+
+-- Tabela: terminy ważności (komora dymowa, medyk/KPP, badania okresowe + własne)
+-- Migracja z danymi startowymi: migrations/202611251200_qualifications.sql
+create table if not exists qualifications (
+  id                  uuid primary key default gen_random_uuid(),
+  person_id           text not null references personnel(id) on delete cascade,
+  kind                text not null,                 -- 'komora' | 'medyk' | 'badania' | 'custom'
+  label               text,                          -- nazwa własnego terminu (kind = 'custom')
+  valid_until         date,                          -- ważne do (włącznie)
+  remind_days         integer not null default 182,  -- ile dni wcześniej przypominać
+  pending_valid_until date,                          -- nowa data zgłoszona przez strażaka, czeka na zatwierdzenie
+  pending_by          text,
+  pending_at          timestamptz,
+  approved_by         text,
+  approved_at         timestamptz,
+  notified_stage      text,                          -- ostatni wysłany push: 'window' | 'month' | 'week' | 'expired'
+  commander_notified  text,                          -- ostatni push do dowódców zmiany: 'window' | 'expired'
+  created_at          timestamptz default now(),
+  updated_at          timestamptz default now()
+);
+
+create unique index if not exists qualifications_person_kind_uniq
+  on qualifications (person_id, kind) where kind <> 'custom';
+
+-- Ustawienia terminów (jeden wiersz): ile dni wcześniej powiadamiać dowódców zmiany
+create table if not exists qualification_settings (
+  id                    integer primary key default 1 check (id = 1),
+  commander_remind_days integer not null default 182,
+  updated_by            text,
+  updated_at            timestamptz default now()
+);
+
+insert into qualification_settings (id) values (1) on conflict (id) do nothing;
+
+alter table qualification_settings enable row level security;
+
+create policy "public read qualification_settings"
+  on qualification_settings for select using (true);
+
+create policy "public write qualification_settings"
+  on qualification_settings for all using (true);
+
+create trigger qualifications_updated_at
+  before update on qualifications
+  for each row execute function update_updated_at();
+
+alter table qualifications enable row level security;
+
+create policy "public read qualifications"
+  on qualifications for select using (true);
+
+create policy "public write qualifications"
+  on qualifications for all using (true);

@@ -19,6 +19,7 @@ import { ABSENCE_LABELS, ABSENCE_ORDER, parseShiftAssignment, withGuests, partia
 import { DutyAssignmentView } from '../components/DutyAssignmentView'
 import { Partial8hCard } from '../components/Partial8h'
 import { DailyWeatherCard } from '../components/DailyWeatherWidget'
+import { QualificationsAlert } from '../components/qualifications/QualificationsAlert'
 import { useAuth } from '../lib/auth'
 import type { WeatherReading, WeatherData } from '../lib/weather'
 import { FIRE_STYLES, parseFireLevel } from '../lib/weather'
@@ -371,6 +372,15 @@ export function DashboardPage() {
 
         {/* LEFT — info sidebar */}
         <div className="px-4 sm:px-5 py-5 space-y-5 lg:overflow-y-auto lg:border-r lg:border-slate-800">
+
+          {/* Kończące się terminy załogi + zgłoszenia do zatwierdzenia */}
+          <QualificationsAlert
+            myPersonId={personnel.find(p => p.login === user?.login)?.id ?? null}
+            names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
+            showCrew
+            canApprove={isAdmin}
+            to="/qualifications"
+          />
 
           {/* Stan obsady */}
           <div>

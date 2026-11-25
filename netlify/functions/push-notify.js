@@ -1,29 +1,16 @@
 import webpush from 'web-push'
+// Dzień służby (current/next) w strefie Europe/Warsaw — kopia logiki z src/lib/duty.ts
+import { currentOrNextDutyDateWarsaw } from './_shared/dutyDate.js'
 
-// Dzień służby (current/next) liczony w strefie Europe/Warsaw — serwer chodzi w UTC,
-// a logika dyżuru (anchor 2026-05-01, co 4 dni) jest oparta o lokalną datę jak w src/lib/duty.ts.
-// Kopia currentOrNextDutyDate: służba trwa do 7:30 następnego dnia (HANDOVER w duty.ts).
-function currentOrNextDutyDateWarsaw(now = new Date()) {
-  const REF_UTC = Date.UTC(2026, 4, 1)
-  // formatToParts zamiast toLocaleDateString('en-CA') — format en-CA zależy od wersji ICU
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Warsaw', year: 'numeric', month: 'numeric', day: 'numeric',
-      hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
-    }).formatToParts(now).map(p => [p.type, p.value]),
+// Loginy dowódców zmiany (mogą zatwierdzać terminy, obok admina) — do powiadomień o nowym zgłoszeniu.
+// Kopia isApprover z src/lib/qualifications.ts.
+async function resolveApproverLogins(supabaseUrl, supabaseKey) {
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/personnel?roles=cs.{SHIFT_COMMANDER}&select=login`,
+    { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
   )
-  const y = Number(parts.year), m = Number(parts.month), d0 = Number(parts.day)
-  const beforeHandover = Number(parts.hour) * 60 + Number(parts.minute) < 7 * 60 + 30
-  const d = beforeHandover ? d0 - 1 : d0 // Date.UTC normalizuje d=0 na koniec poprzedniego miesiąca
-  const key = t => {
-    const nd = new Date(t)
-    return `${nd.getUTCFullYear()}-${String(nd.getUTCMonth() + 1).padStart(2, '0')}-${String(nd.getUTCDate()).padStart(2, '0')}`
-  }
-  for (let i = 0; i <= 3; i++) {
-    const t = Date.UTC(y, m - 1, d + i)
-    if (((t - REF_UTC) / 86400000) % 4 === 0) return key(t)
-  }
-  return key(Date.UTC(y, m - 1, d)) // nieosiągalne — co 4. dzień jest dniem służby
+  if (!res.ok) return []
+  return (await res.json()).map(r => r.login).filter(Boolean)
 }
 
 // Loginy dyżurnych wyznaczonych na dziś (slot obsady, nie stała rola) — do powiadomień push
@@ -116,6 +103,21 @@ export const handler = async (event) => {
   } else if (type === 'public_note') {
     // Notatka widoczna dla wszystkich — do każdego subskrybenta poza autorem
     filterParam = senderLogin ? `user_login=neq.${encodeURIComponent(senderLogin)}` : ''
+  } else if (type === 'qualification_pending') {
+    // Nowa data terminu do zatwierdzenia — admin/oficer + dowódcy zmiany (po loginie), bez zgłaszającego
+    let approvers = []
+    try {
+      approvers = await resolveApproverLogins(SUPABASE_URL, SUPABASE_KEY)
+    } catch (err) {
+      console.error('[push-notify] Nie udało się ustalić dowódców zmiany:', err.message)
+    }
+    filterParam = approvers.length
+      ? `or=(user_role.in.(admin,officer),user_login.in.(${approvers.map(l => encodeURIComponent(l)).join(',')}))`
+      : 'user_role=in.(admin,officer)'
+    if (senderLogin) filterParam += `&user_login=neq.${encodeURIComponent(senderLogin)}`
+  } else if (type === 'qualification_approved' || type === 'qualification_rejected') {
+    if (!targetLogin) return { statusCode: 400, body: `Missing targetLogin for ${type}` }
+    filterParam = `user_login=eq.${encodeURIComponent(targetLogin)}`
   } else {
     console.error('[push-notify] Nieznany type:', type)
     return { statusCode: 400, body: `Unknown type: ${type}` }
@@ -163,6 +165,20 @@ export const handler = async (event) => {
         body: `${shortDate(eventDate) ? shortDate(eventDate) + ': ' : ''}${(message ?? '').substring(0, 120)}`,
         url: '/mobile',
         tag: `public-note-${Date.now()}`, // osobne powiadomienie dla każdej notatki
+      })
+    : type === 'qualification_pending'
+    ? JSON.stringify({
+        title: '📋 Nowy termin do zatwierdzenia',
+        body: `${senderName ?? senderLogin}: ${(message ?? '').substring(0, 120)}`,
+        url: '/mobile/qualifications',
+        tag: `qual-pending-${Date.now()}`,
+      })
+    : type === 'qualification_approved' || type === 'qualification_rejected'
+    ? JSON.stringify({
+        title: type === 'qualification_approved' ? '✅ Termin zatwierdzony' : '↩️ Termin odrzucony',
+        body: (message ?? '').substring(0, 120),
+        url: '/mobile/qualifications',
+        tag: `qual-decision-${Date.now()}`,
       })
     : JSON.stringify({
         title: '✅ Wiadomość potwierdzona',

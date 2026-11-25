@@ -22,6 +22,8 @@ import { FullAssignmentCollapsible } from '../../components/mobile/FullAssignmen
 import { PublicNotePanel } from '../../components/mobile/PublicNotePanel'
 import { Badge8h, Partial8hCard } from '../../components/Partial8h'
 import { partial8hPersons } from '../../lib/crew'
+import { isApprover } from '../../lib/qualifications'
+import { QualificationsAlert } from '../../components/qualifications/QualificationsAlert'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -490,6 +492,17 @@ export function MobileHomePage() {
           <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-100 leading-relaxed whitespace-pre-wrap break-words">{announcement}</p>
         </div>
+      )}
+
+      {/* Kończące się terminy (komora/medyk/badania) — moje; dowódca zmiany widzi też załogę */}
+      {myPerson && (
+        <QualificationsAlert
+          myPersonId={myPerson.id}
+          names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
+          showCrew={isApprover(myPerson.roles, user?.role) || assignment?.shiftCommanderId === myPerson.id}
+          canApprove={isApprover(myPerson.roles, user?.role)}
+          to="/mobile/qualifications"
+        />
       )}
 
       {/* Dyżurny dnia: wiadomości od załogi (do potwierdzenia) */}

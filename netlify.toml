@@ -15,6 +15,11 @@
 [functions."weather-fetch"]
   schedule = "5,35 6-15 * * *"
 
+# Push-przypomnienia o terminach (komora / medyk / badania / własne) + podsumowanie
+# dla dowódcy zmiany w dzień służby. 07:00 UTC = 8:00 zimą, 9:00 latem — po zmianie o 7:30.
+[functions."qualifications-remind"]
+  schedule = "0 7 * * *"
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

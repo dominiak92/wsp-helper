@@ -611,8 +611,9 @@ export function FireMapPage() {
           if (e.latlng.distanceTo(navDest.dest) < ARRIVE_M) {
             endNavigationRef.current?.()
             setArrivedToast(true)
-          } else if (!reroutingRef.current && routePtsRef.current.length > 0 && Date.now() - lastRerouteAtRef.current > 8000) {
-            // Zjazd z trasy? Przelicz trasę z bieżącej pozycji
+          } else if (!reroutingRef.current && Date.now() - lastRerouteAtRef.current > 8000) {
+            // Zjazd z trasy? Przelicz trasę z bieżącej pozycji. Brak trasy (nieudane
+            // pobranie) daje minD = Infinity, więc próba jest ponawiana co 8 s.
             let minD = Infinity
             for (const p of routePtsRef.current) {
               const d = e.latlng.distanceTo(p)
@@ -1026,7 +1027,7 @@ export function FireMapPage() {
       routeLayerRef.current = L.polyline(pts, { color: '#3b82f6', weight: 5, opacity: 0.9 }).addTo(map)
       routePtsRef.current = pts
     } catch {
-      routePtsRef.current = []
+      // Zostaw poprzednią trasę (jeśli była) — handler GPS ponowi próbę
     }
   }, [])
 
@@ -1076,7 +1077,9 @@ export function FireMapPage() {
     destMarkerRef.current = L.marker(dest, { icon }).addTo(map)
 
     setSearchState('loading')
+    reroutingRef.current = true // handler GPS nie dubluje pierwszego pobrania trasy
     await drawNavRoute(userPosRef.current ?? STATION, dest)
+    reroutingRef.current = false
     setSearchState('idle')
     if (userPosRef.current) map.setView(userPosRef.current, NAV_ZOOM, { animate: true })
   }, [drawNavRoute])

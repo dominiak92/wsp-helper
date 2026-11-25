@@ -9,7 +9,7 @@ import {
   DEFAULT_PERSONNEL, regenerateCrew, resolveName, applyDrop, isPersonInAssignment, removePersonFromAssignment,
   parseShiftAssignment, withGuests,
 } from '../lib/crew'
-import { supabase } from '../lib/supabase'
+import { supabase, LOAD_ERROR_MSG } from '../lib/supabase'
 import { PersonnelRow, AddPersonForm } from '../components/crew/PersonnelPanel'
 import type { DragCtx } from '../components/crew/AssignmentBoard'
 import { getPersonAtSlotKey, VehicleCard, SpecialRoleCard } from '../components/crew/AssignmentBoard'
@@ -59,6 +59,8 @@ export function CrewGeneratorPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showPrevDuty, setShowPrevDuty] = useState(false)
   const [prevAssignment, setPrevAssignment] = useState<ShiftAssignment | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
   // Standalone mode (no specific duty date) — load personnel with global absence flags
   useEffect(() => {
@@ -85,8 +87,15 @@ export function CrewGeneratorPage() {
   // Absence for a given date lives exclusively in assignment.absenceMap, not in personnel table.
   useEffect(() => {
     if (!dutyDate) return
+    // Spóźniona odpowiedź dla poprzedniej daty (szybkie „Następna służba") nie może
+    // nadpisać stanu nowej daty — inaczej obsada B trafiłaby pod datę C.
+    let cancelled = false
     setDataLoading(true)
+    setLoadError(null)
     setAssignment(null)
+    setPrevAssignment(null)
+    setIsDirty(false)
+    setSaveError(null)
     // Reset the cached row id — otherwise navigating to a date without a saved
     // assignment would keep the previous date's id and persistToSupabase would
     // UPDATE the wrong row instead of inserting a new one.
@@ -106,8 +115,18 @@ export function CrewGeneratorPage() {
         .eq('duty_date', prevDate)
         .order('created_at', { ascending: false })
         .limit(1),
-    ]).then(([{ data: pData }, { data: aData }, { data: prevData }]) => {
-      const row = aData?.[0]
+    ]).then(([pRes, aRes, { data: prevData }]) => {
+      if (cancelled) return
+      // Nieudany odczyt wyglądałby jak „brak obsady" — a „Generuj" + „Zapisz" skasowałyby
+      // wtedy prawdziwą obsadę. Pokaż błąd i zablokuj edycję do ponownego wczytania.
+      if (pRes.error || aRes.error) {
+        console.error('[supabase] load crew:', pRes.error ?? aRes.error)
+        setLoadError(LOAD_ERROR_MSG)
+        setDataLoading(false)
+        return
+      }
+      const pData = pRes.data
+      const row = aRes.data?.[0]
       let loadedAssignment: ShiftAssignment | null = null
       const parsed = parseShiftAssignment(row?.assignment_json)
       if (parsed) {
@@ -131,12 +150,18 @@ export function CrewGeneratorPage() {
       const prevParsed = parseShiftAssignment(prevData?.[0]?.assignment_json)
       if (prevParsed) setPrevAssignment(prevParsed)
       setDataLoading(false)
+    }, err => {
+      if (cancelled) return
+      console.error('[supabase] load crew:', err)
+      setLoadError(LOAD_ERROR_MSG)
+      setDataLoading(false)
     })
-  }, [dutyDate])
+    return () => { cancelled = true }
+  }, [dutyDate, reloadToken])
 
   // Persist to Supabase — called explicitly via "Zapisz" button or after generate
   async function persistToSupabase(a: ShiftAssignment) {
-    if (!dutyDate) return
+    if (!dutyDate || loadError) return
     setSaving(true)
     setSavedOk(false)
     setSaveError(null)
@@ -252,7 +277,13 @@ export function CrewGeneratorPage() {
     }
   }
 
+  // Zmiana daty kasuje niezapisane zmiany — zapytaj najpierw
+  function confirmLeave(): boolean {
+    return !isDirty || confirm('Obsada ma niezapisane zmiany. Porzucić je?')
+  }
+
   function handleGenerate() {
+    if (loadError) return
     // Keeps guests, 8h flags, dinner and self-reported absences across a re-roll
     applyAssignment(regenerateCrew(personnel, assignment))
   }
@@ -384,7 +415,7 @@ export function CrewGeneratorPage() {
         <div className="flex items-center gap-2 min-w-0">
           {dutyDate && (
             <button
-              onClick={() => navigate('/duty-calendar')}
+              onClick={() => confirmLeave() && navigate('/duty-calendar')}
               className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-700 transition-colors shrink-0"
               title="Wróć do kalendarza"
             >
@@ -418,7 +449,7 @@ export function CrewGeneratorPage() {
                 <span className="hidden sm:inline">Poprzednia służba</span>
               </button>
               <button
-                onClick={() => navigate(`/crew-generator?date=${nextDutyDate(dutyDate)}`)}
+                onClick={() => confirmLeave() && navigate(`/crew-generator?date=${nextDutyDate(dutyDate)}`)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-surface-700 hover:bg-surface-600 text-slate-400 hover:text-white transition-colors"
               >
                 <span className="hidden sm:inline">Następna służba</span>
@@ -459,7 +490,8 @@ export function CrewGeneratorPage() {
           )}
           <button
             onClick={handleGenerate}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium transition-colors"
+            disabled={dataLoading || !!loadError}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:hover:bg-brand-600 text-white text-sm font-medium transition-colors"
           >
             <Zap className="w-4 h-4" />
             <span className="hidden sm:inline">{assignment ? 'Nowe losowanie' : 'Generuj obsadę'}</span>
@@ -535,6 +567,17 @@ export function CrewGeneratorPage() {
           {dataLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : loadError ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4 pb-16 text-center">
+              <p className="text-sm text-red-400 max-w-sm">{loadError}</p>
+              <button
+                onClick={() => setReloadToken(t => t + 1)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-white text-sm font-medium transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Spróbuj ponownie
+              </button>
             </div>
           ) : !assignment ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-700 gap-4 pb-16">

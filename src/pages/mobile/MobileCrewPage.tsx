@@ -11,7 +11,7 @@ import {
   ABSENCE_LABELS, ABSENCE_ORDER, CREW_VEHICLE_NAMES, VEHICLE_SEATS,
   regenerateCrew, removePersonFromAssignment, isPersonInAssignment,
 } from '../../lib/crew'
-import { supabase } from '../../lib/supabase'
+import { supabase, LOAD_ERROR_MSG } from '../../lib/supabase'
 import { Badge8h } from '../../components/Partial8h'
 
 // ── Slot helpers ───────────────────────────────────────────────────────────────
@@ -123,9 +123,15 @@ export function MobileCrewPage() {
   const [savedOk, setSavedOk] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [showAbsences, setShowAbsences] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const assignmentIdRef = useRef<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setLoadError(null)
     Promise.all([
       supabase.from('personnel').select('*'),
       supabase
@@ -134,8 +140,18 @@ export function MobileCrewPage() {
         .eq('duty_date', dutyDate)
         .order('created_at', { ascending: false })
         .limit(1),
-    ]).then(([{ data: pData }, { data: aData }]) => {
-      const row = aData?.[0]
+    ]).then(([pRes, aRes]) => {
+      if (cancelled) return
+      // Nieudany odczyt wyglądałby jak „brak obsady" — „Generuj" + „Zapisz" skasowałyby
+      // wtedy prawdziwą obsadę. Pokaż błąd i zablokuj edycję do ponownego wczytania.
+      if (pRes.error || aRes.error) {
+        console.error('[supabase] load crew:', pRes.error ?? aRes.error)
+        setLoadError(LOAD_ERROR_MSG)
+        setLoading(false)
+        return
+      }
+      const pData = pRes.data
+      const row = aRes.data?.[0]
       const loaded = parseShiftAssignment(row?.assignment_json)
       if (loaded) assignmentIdRef.current = row!.id
       if (pData && pData.length > 0) {
@@ -153,12 +169,20 @@ export function MobileCrewPage() {
       }
       if (loaded) setAssignment(loaded)
       setLoading(false)
+    }, err => {
+      if (cancelled) return
+      console.error('[supabase] load crew:', err)
+      setLoadError(LOAD_ERROR_MSG)
+      setLoading(false)
     })
-  }, [dutyDate])
+    return () => { cancelled = true }
+  }, [dutyDate, reloadToken])
 
   async function persistToSupabase(a: ShiftAssignment) {
+    if (loadError) return
     setSaving(true)
     setSavedOk(false)
+    setSaveError(null)
     try {
       const currentId = assignmentIdRef.current
       if (currentId) {
@@ -168,7 +192,8 @@ export function MobileCrewPage() {
           .eq('id', currentId)
         if (error) throw error
       } else {
-        await supabase.from('duty_assignments').delete().eq('duty_date', dutyDate)
+        const del = await supabase.from('duty_assignments').delete().eq('duty_date', dutyDate)
+        if (del.error) throw del.error
         const { data: inserted, error } = await supabase
           .from('duty_assignments')
           .insert({ duty_date: dutyDate, assignment_json: a })
@@ -182,6 +207,7 @@ export function MobileCrewPage() {
       setTimeout(() => setSavedOk(false), 2500)
     } catch (err) {
       console.error('[supabase] save duty_assignment:', err)
+      setSaveError('Nie zapisano obsady — sprawdź połączenie i kliknij „Zapisz” ponownie.')
     } finally {
       setSaving(false)
     }
@@ -194,6 +220,7 @@ export function MobileCrewPage() {
   }
 
   function handleGenerate() {
+    if (loadError) return
     // Keeps guests, 8h flags, dinner and self-reported absences across a re-roll
     applyAssignment(regenerateCrew(personnel, assignment))
   }
@@ -232,6 +259,20 @@ export function MobileCrewPage() {
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="px-4 py-10 flex flex-col items-center gap-4 text-center">
+        <p className="text-sm text-red-400">{loadError}</p>
+        <button
+          onClick={() => setReloadToken(t => t + 1)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-white text-sm font-medium transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" /> Spróbuj ponownie
+        </button>
+      </div>
+    )
+  }
+
   const availablePersonnel = personnel.filter(p => !p.absence)
   const absentPersonnel = personnel
     .filter(p => p.absence)
@@ -248,6 +289,7 @@ export function MobileCrewPage() {
           </p>
           <h2 className="text-xl font-bold text-white mt-0.5">{formatDateShort(dutyDate)}</h2>
           <p className="text-xs text-slate-500">{formatDateLong(dutyDate)}</p>
+          {saveError && <p className="text-xs text-red-400 mt-1">{saveError}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0 mt-1">
           {isDirty && (

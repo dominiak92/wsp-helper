@@ -4,7 +4,7 @@ import { DailyWeatherCollapsible } from '../../components/DailyWeatherWidget'
 import { PushBell } from '../../components/PushBell'
 import { sendPushTrigger, isSubscribed, isPushSupported } from '../../lib/pushNotifications'
 import {
-  currentOrNextDutyDate, todayYmdKey, nextDutyKeys, dutyTiming, DUTY_TIMING_LABEL,
+  currentOrNextDutyDate, todayYmdKey, addDaysKey, dutyTiming, DUTY_TIMING_LABEL,
   formatDateShort, formatDateLong, formatDateShortWithDay,
 } from '../../lib/duty'
 import { useAuth } from '../../lib/auth'
@@ -138,8 +138,9 @@ export function MobileHomePage() {
   const isDutyOfficer = !!(myPersonId && assignment?.dutyOfficerIds.includes(myPersonId))
 
   const reload = useCallback(() => {
-    const upcomingKeys = nextDutyKeys(16) // next 16 duty days
-    const [firstKey, ...restKeys] = upcomingKeys
+    // Kolejne służby liczone od `dutyDate`, nie od dzisiejszej daty — między północą
+    // a 7:30 trwa jeszcze wczorajsza służba i to jej obsadę trzeba pokazać.
+    const restKeys = Array.from({ length: 15 }, (_, i) => addDaysKey(dutyDate, (i + 1) * 4))
 
     return Promise.all([
       supabase.from('personnel').select('*'),
@@ -147,7 +148,7 @@ export function MobileHomePage() {
       supabase
         .from('duty_assignments')
         .select('assignment_json')
-        .eq('duty_date', firstKey ?? dutyDate)
+        .eq('duty_date', dutyDate)
         .order('created_at', { ascending: false })
         .limit(1),
       // upcoming saved assignments for absence detection

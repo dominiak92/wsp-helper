@@ -16,3 +16,6 @@ export function throwIfError<T extends { error: { message: string } | null }>(re
 }
 
 export const NETWORK_ERROR_MSG = 'Nie udało się zapisać — sprawdź połączenie i spróbuj ponownie.'
+
+// Nieudany odczyt obsady — edycja/zapis zablokowane, żeby nie nadpisać prawdziwych danych pustymi
+export const LOAD_ERROR_MSG = 'Nie udało się wczytać obsady — sprawdź połączenie i spróbuj ponownie.'

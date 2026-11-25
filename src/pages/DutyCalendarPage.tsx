@@ -221,7 +221,7 @@ function MonthCalendar({ year, month, holidays, savedDates, eventDates, onDutyDa
 
 export function DutyCalendarPage() {
   const navigate = useNavigate()
-  const [year, setYear] = useState(2026)
+  const [year, setYear] = useState(() => new Date().getFullYear())
   const [savedDates, setSavedDates] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const holidays = useMemo(() => getHolidays(year), [year])

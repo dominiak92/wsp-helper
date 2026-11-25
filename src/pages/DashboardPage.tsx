@@ -373,15 +373,6 @@ export function DashboardPage() {
         {/* LEFT — info sidebar */}
         <div className="px-4 sm:px-5 py-5 space-y-5 lg:overflow-y-auto lg:border-r lg:border-slate-800">
 
-          {/* Kończące się terminy załogi + zgłoszenia do zatwierdzenia */}
-          <QualificationsAlert
-            myPersonId={personnel.find(p => p.login === user?.login)?.id ?? null}
-            names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
-            showCrew
-            canApprove={isAdmin}
-            to="/qualifications"
-          />
-
           {/* Stan obsady */}
           <div>
             <SectionLabel>Stan obsady</SectionLabel>
@@ -411,6 +402,15 @@ export function DashboardPage() {
 
           {/* Osoby obecne tylko 8h — wyróżnione, żeby nikt nie liczył na nie przez całą dobę */}
           <Partial8hCard assignment={assignment} persons={withGuests(personnel, assignment)} />
+
+          {/* Kończące się terminy załogi + zgłoszenia do zatwierdzenia (zwinięte) */}
+          <QualificationsAlert
+            myPersonId={personnel.find(p => p.login === user?.login)?.id ?? null}
+            names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
+            showCrew
+            canApprove={isAdmin}
+            to="/qualifications"
+          />
 
           {/* Obiad */}
           {assignment && (

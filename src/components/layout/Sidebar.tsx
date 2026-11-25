@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
+import { useQualificationsBadge } from '../../lib/useQualificationsBadge'
 
 const navGroups = [
   {
@@ -40,6 +41,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed }: SidebarProps) {
   const { user, signOut } = useAuth()
+  const qualBadge = useQualificationsBadge()
 
   return (
     <aside
@@ -92,7 +94,12 @@ export function Sidebar({ collapsed }: SidebarProps) {
                     }
                     title={collapsed ? item.label : undefined}
                   >
-                    <item.icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="relative flex-shrink-0">
+                      <item.icon className="w-4 h-4" />
+                      {item.path === '/qualifications' && qualBadge && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-2 ring-surface-900" aria-label="wymaga uwagi" />
+                      )}
+                    </span>
                     {!collapsed && <span className="flex-1">{item.label}</span>}
                   </NavLink>
                 </li>

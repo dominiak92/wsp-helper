@@ -8,12 +8,13 @@ import type { RoleType } from '../lib/crew'
 import { sendPushTrigger } from '../lib/pushNotifications'
 import {
   type Qualification, type QualKind, type QualLevel, type StandardQualKind,
-  STANDARD_QUAL_KINDS, QUAL_KIND_LABELS, COMMANDER_REMIND_DAYS, REMIND_DAYS_OPTIONS,
+  STANDARD_QUAL_KINDS, QUAL_KIND_LABELS, COMMANDER_REMIND_DAYS,
   fetchQualifications, setValidUntil, submitPending, approvePending, rejectPending,
-  setRemindDays, addCustom, updateCustom, deleteQualification,
+  setRemindDays, addCustom, updateCustom, deleteQualification, setPlannedOn, compareAttention,
   fetchCommanderRemindDays, saveCommanderRemindDays,
-  qualLevel, qualTitle, isApprover, compareUrgency, daysLeft, formatQualDate, formatRemaining, formatRemindDays,
+  qualLevel, qualTitle, isApprover, compareUrgency, daysLeft, formatQualDate, formatRemainingShort,
 } from '../lib/qualifications'
+import { ReminderSettings } from '../components/qualifications/ReminderSettings'
 import { QualItemRow, type QualEditMode } from '../components/qualifications/QualItemRow'
 import { AddCustomQualForm } from '../components/qualifications/AddCustomQualForm'
 import { QualTile, RemainingBar, LevelSummary } from '../components/qualifications/QualVisuals'
@@ -41,15 +42,17 @@ interface PersonQualActions {
   addCustom: (personId: string, label: string, date: string, remind: number) => Promise<void>
   updateCustom: (q: Qualification, date: string, remind: number) => Promise<void>
   remove: (q: Qualification) => Promise<void>
+  plan: (target: Qualification | { person_id: string; kind: StandardQualKind }, plannedOn: string | null) => Promise<void>
 }
 
-function PersonQualList({ personId, quals, today, standardMode, ownCustom, canEditRemind, actions }: {
+function PersonQualList({ personId, quals, today, standardMode, ownCustom, canEditRemind, canPlan, actions }: {
   personId: string
   quals: Qualification[]
   today: string
   standardMode: QualEditMode   // jak zmienia się data komory/medyka/badań
   ownCustom: boolean           // własne terminy: pełna edycja bez zatwierdzania
   canEditRemind: boolean
+  canPlan: boolean             // zapis na termin (sam strażak albo zatwierdzający)
   actions: PersonQualActions
 }) {
   const custom = quals.filter(q => q.kind === 'custom').sort(compareUrgency)
@@ -70,6 +73,8 @@ function PersonQualList({ personId, quals, today, standardMode, ownCustom, canEd
             onSetDate={(date, remind) => actions.setDate(q ?? { person_id: personId, kind }, date, remind)}
             onRequestDate={date => actions.requestDate(q ?? { person_id: personId, kind }, date)}
             onRemindChange={days => (q ? actions.setRemind(q, days) : Promise.resolve())}
+            canPlan={canPlan}
+            onPlan={plannedOn => actions.plan(q ?? { person_id: personId, kind }, plannedOn)}
           />
         )
       })}
@@ -86,6 +91,8 @@ function PersonQualList({ personId, quals, today, standardMode, ownCustom, canEd
           onRequestDate={() => Promise.resolve()}
           onRemindChange={days => actions.setRemind(q, days)}
           onDelete={() => actions.remove(q)}
+          canPlan={canPlan}
+          onPlan={plannedOn => actions.plan(q, plannedOn)}
         />
       ))}
       {customMode === 'direct' && (
@@ -110,10 +117,9 @@ export function QualificationsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [openPersonId, setOpenPersonId] = useState<string | null>(null)
-  const [crewView, setCrewView] = useState<'dates' | 'people'>('dates')
+  const [crewView, setCrewView] = useState<'people' | 'dates'>('people')
   const [levelFilter, setLevelFilter] = useState<QualLevel | null>(null)
   const [commanderDays, setCommanderDays] = useState(COMMANDER_REMIND_DAYS)
-  const [settingBusy, setSettingBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoadError(null)
@@ -177,6 +183,8 @@ export function QualificationsPage() {
     addCustom: (personId, label, date, remind) => run(() => addCustom(personId, label, date, remind)),
     updateCustom: (q, date, remind) => run(() => updateCustom(q.id, q.label ?? '', date, remind)),
     remove: q => run(() => deleteQualification(q.id)),
+    plan: (target, plannedOn) => run(() =>
+      setPlannedOn('id' in target ? { id: target.id } : target, plannedOn, user.login)),
   }
 
   async function decide(q: Qualification, approve: boolean) {
@@ -204,16 +212,8 @@ export function QualificationsPage() {
   }
 
   async function changeCommanderDays(days: number) {
-    setSettingBusy(true)
-    setActionError(null)
-    try {
-      await saveCommanderRemindDays(days, user!.login)
-      setCommanderDays(days)
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Nie udało się zapisać ustawienia.')
-    } finally {
-      setSettingBusy(false)
-    }
+    await saveCommanderRemindDays(days, user!.login)
+    setCommanderDays(days)
   }
 
   function showPerson(personId: string) {
@@ -254,23 +254,25 @@ export function QualificationsPage() {
   const crewPeople = canSeeCrew ? people.filter(p => p.id !== me?.id || isAdmin) : []
   const crewIds = new Set(crewPeople.map(p => p.id))
   const crewQuals = quals.filter(q => crewIds.has(q.person_id) && q.valid_until)
-  const levelCounts = { expired: 0, critical: 0, soon: 0, ok: 0, missing: 0 } as Record<QualLevel, number>
+  const levelCounts: Record<QualLevel, number> = { expired: 0, critical: 0, soon: 0, planned: 0, ok: 0, missing: 0 }
   for (const q of crewQuals) levelCounts[qualLevel(q, today)]++
 
   const timeline = crewQuals
     .filter(q => !levelFilter || qualLevel(q, today) === levelFilter)
     .sort(compareUrgency)
 
+  // Na górze ten, kto ma najpilniejszy NIEZAŁATWIONY termin; zaplanowane schodzą niżej
+  const byAttention = (a: Qualification, b: Qualification) => compareAttention(a, b, today)
   const peopleCards = crewPeople
     .map(p => {
       const pq = quals.filter(q => q.person_id === p.id)
-      return { person: p, quals: pq, soonest: [...pq].filter(q => q.valid_until).sort(compareUrgency)[0] }
+      return { person: p, quals: pq, soonest: [...pq].filter(q => q.valid_until).sort(byAttention)[0] }
     })
     .filter(c => !levelFilter || c.quals.some(q => q.valid_until && qualLevel(q, today) === levelFilter))
     .sort((a, b) => {
       if (!a.soonest) return b.soonest ? 1 : a.person.name.localeCompare(b.person.name, 'pl')
       if (!b.soonest) return -1
-      return compareUrgency(a.soonest, b.soonest) || a.person.name.localeCompare(b.person.name, 'pl')
+      return byAttention(a.soonest, b.soonest) || a.person.name.localeCompare(b.person.name, 'pl')
     })
 
   return (
@@ -345,6 +347,7 @@ export function QualificationsPage() {
             standardMode={isAdmin ? 'direct' : 'request'}
             ownCustom
             canEditRemind
+            canPlan
             actions={actions}
           />
           {!isAdmin && (
@@ -364,7 +367,7 @@ export function QualificationsPage() {
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Załoga — wszystkie terminy</p>
             <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
-              {([['dates', 'Wg daty'], ['people', 'Wg osób']] as const).map(([v, label]) => (
+              {([['people', 'Wg osób'], ['dates', 'Wg daty']] as const).map(([v, label]) => (
                 <button
                   key={v}
                   onClick={() => setCrewView(v)}
@@ -378,24 +381,6 @@ export function QualificationsPage() {
               ))}
             </div>
           </div>
-
-          {/* Jedna wartość dla wszystkich strażaków — kiedy dowódcy zmiany dostają powiadomienie */}
-          {approver && (
-            <label className="flex flex-wrap items-center gap-2 bg-surface-800 rounded-xl border border-slate-700/40 px-3 py-2.5">
-              <span className="text-xs text-slate-300 flex-1 min-w-[12rem]">
-                Powiadomienie dla dowódców zmiany o terminie każdego strażaka:
-              </span>
-              <select
-                value={commanderDays}
-                disabled={settingBusy}
-                onChange={e => changeCommanderDays(Number(e.target.value))}
-                className="rounded-lg border border-slate-700 bg-surface-900 px-2.5 py-1.5 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
-              >
-                {(REMIND_DAYS_OPTIONS.includes(commanderDays) ? REMIND_DAYS_OPTIONS : [...REMIND_DAYS_OPTIONS, commanderDays].sort((a, b) => a - b))
-                  .map(d => <option key={d} value={d}>{formatRemindDays(d)}</option>)}
-              </select>
-            </label>
-          )}
 
           <LevelSummary counts={levelCounts} active={levelFilter} onSelect={setLevelFilter} />
 
@@ -425,10 +410,13 @@ export function QualificationsPage() {
                               <Clock className="w-3 h-3" /> {formatQualDate(q.pending_valid_until)}
                             </span>
                           )}
+                          {level === 'planned' && q.planned_on && (
+                            <span className="ml-2 text-sky-300">📅 zapisany na {formatQualDate(q.planned_on)}</span>
+                          )}
                         </p>
                       </div>
-                      <span className={cn('text-sm font-bold tabular-nums shrink-0', style.text)}>
-                        {formatRemaining(daysLeft(q, today))}
+                      <span className={cn('text-sm font-bold tabular-nums shrink-0 whitespace-nowrap', style.text)}>
+                        {formatRemainingShort(daysLeft(q, today))}
                       </span>
                     </div>
                     <RemainingBar q={q} today={today} className="mt-1.5 ml-5" />
@@ -439,34 +427,61 @@ export function QualificationsPage() {
           ) : (
             <div className="space-y-2">
               {peopleCards.length === 0 && <p className="text-sm text-slate-500">Brak terminów.</p>}
-              {peopleCards.map(({ person, quals: pq }) => {
+              {peopleCards.map(({ person, quals: pq, soonest }) => {
                 const open = openPersonId === person.id
                 const custom = pq.filter(q => q.kind === 'custom').sort(compareUrgency)
                 const direct = approver && (isAdmin || person.id !== me?.id)
+                const level = soonest ? qualLevel(soonest, today) : 'missing'
+                const style = LEVEL_STYLES[level]
+                // Kropki pozostałych terminów — szybki rzut oka bez rozwijania
+                const others = pq.filter(q => q.valid_until && q.id !== soonest?.id).sort(compareUrgency)
                 return (
-                  <div key={person.id} className="bg-surface-800 rounded-xl border border-slate-700/40 overflow-hidden">
+                  <div key={person.id} className={cn('bg-surface-800 rounded-xl border overflow-hidden', open ? 'border-slate-600' : style.border)}>
                     <button
                       onClick={() => setOpenPersonId(open ? null : person.id)}
                       className="w-full px-3 py-2.5 text-left"
                     >
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-white flex-1 truncate">{person.name}</p>
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', style.dot)} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-white truncate">{person.name}</p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            {soonest ? <>
+                              {level === 'planned' ? 'Zapisany: ' : 'Najbliżej: '}
+                              <span className="text-slate-200">{qualTitle(soonest)}</span> · {formatQualDate(soonest.valid_until)}
+                              {soonest.planned_on && level === 'planned' && <span className="text-sky-300"> · 📅 {formatQualDate(soonest.planned_on).slice(0, 5)}</span>}
+                            </> : 'Brak dat'}
+                          </p>
+                        </div>
                         {pq.some(q => q.pending_valid_until) && (
-                          <span className="text-[10px] text-brand-300 bg-brand-950/50 border border-brand-900/50 rounded px-1.5 py-0.5">do zatwierdzenia</span>
+                          <Clock className="w-3.5 h-3.5 text-brand-300 shrink-0" aria-label="do zatwierdzenia" />
                         )}
-                        {open ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                        <span className={cn('text-base font-bold tabular-nums shrink-0 whitespace-nowrap', style.text)}>
+                          {soonest ? formatRemainingShort(daysLeft(soonest, today)) : '—'}
+                        </span>
+                        {open ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
                       </div>
-                      <div className="mt-2 grid grid-cols-3 gap-1.5">
-                        {STANDARD_QUAL_KINDS.map(kind => (
-                          <QualTile key={kind} title={SHORT_KIND[kind]} q={pq.find(x => x.kind === kind) ?? null} today={today} />
-                        ))}
-                        {custom.map(q => (
-                          <QualTile key={q.id} title={qualTitle(q)} q={q} today={today} />
+                      <div className="mt-2 flex items-center gap-2 pl-5">
+                        <RemainingBar q={soonest ?? null} today={today} className="flex-1" />
+                        {others.map(q => (
+                          <span
+                            key={q.id}
+                            title={`${qualTitle(q)}: ${formatQualDate(q.valid_until)}`}
+                            className={cn('w-2 h-2 rounded-full shrink-0', LEVEL_STYLES[qualLevel(q, today)].dot)}
+                          />
                         ))}
                       </div>
                     </button>
                     {open && (
-                      <div className="px-3 pb-3">
+                      <div className="px-3 pb-3 space-y-3">
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {STANDARD_QUAL_KINDS.map(kind => (
+                            <QualTile key={kind} title={SHORT_KIND[kind]} q={pq.find(x => x.kind === kind) ?? null} today={today} />
+                          ))}
+                          {custom.map(q => (
+                            <QualTile key={q.id} title={qualTitle(q)} q={q} today={today} />
+                          ))}
+                        </div>
                         <PersonQualList
                           personId={person.id}
                           quals={pq}
@@ -474,6 +489,7 @@ export function QualificationsPage() {
                           standardMode={direct ? 'direct' : 'readonly'}
                           ownCustom={false}
                           canEditRemind={direct}
+                          canPlan={direct}
                           actions={actions}
                         />
                       </div>
@@ -485,6 +501,17 @@ export function QualificationsPage() {
           )}
         </section>
       )}
+
+      {/* Od kiedy i jak często przypominać — moje terminy + (dowódca) terminy strażaków */}
+      <ReminderSettings
+        login={user.login}
+        myPersonId={me?.id ?? null}
+        myQuals={myQuals}
+        isCommander={approver}
+        commanderDays={commanderDays}
+        onCommanderDaysChange={changeCommanderDays}
+        onChanged={load}
+      />
     </div>
   )
 }

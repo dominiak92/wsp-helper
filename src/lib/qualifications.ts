@@ -40,6 +40,8 @@ export interface Qualification {
   pending_at: string | null
   approved_by: string | null
   approved_at: string | null
+  planned_on?: string | null        // zapis na termin (np. komora 12.03); brak kolumny w starszej bazie → undefined
+  planned_by?: string | null
 }
 
 export type QualStatus = 'expired' | 'soon' | 'ok' | 'missing'
@@ -70,13 +72,49 @@ export function qualTitle(q: Pick<Qualification, 'kind' | 'label'>): string {
   return q.kind === 'custom' ? (q.label?.trim() || 'Własny termin') : QUAL_KIND_LABELS[q.kind]
 }
 
-// Poziom do kolorów: jak status, ale „soon” dzieli się na pilne (≤ CRITICAL_DAYS) i zwykłe
-export type QualLevel = 'expired' | 'critical' | 'soon' | 'ok' | 'missing'
+// Aktualny zapis na termin (dzień zapisu jeszcze nie minął)
+export function isPlanned(q: { planned_on?: string | null }, today: string): boolean {
+  return !!q.planned_on && q.planned_on >= today
+}
 
-export function qualLevel(q: Pick<Qualification, 'valid_until' | 'remind_days'>, today: string): QualLevel {
+// Zapis, którego dzień minął, a nowej daty ważności nadal brak — „wpisz nową datę”
+export function plannedPassed(q: { planned_on?: string | null }, today: string): boolean {
+  return !!q.planned_on && q.planned_on < today
+}
+
+// Poziom do kolorów: jak status, ale „soon” dzieli się na pilne (≤ CRITICAL_DAYS) i zwykłe,
+// a termin w oknie / po terminie z aktualnym zapisem to „planned” (już załatwiane)
+export type QualLevel = 'expired' | 'critical' | 'soon' | 'planned' | 'ok' | 'missing'
+
+export function qualLevel(
+  q: Pick<Qualification, 'valid_until' | 'remind_days'> & { planned_on?: string | null },
+  today: string,
+): QualLevel {
   const status = qualStatus(q, today)
+  if ((status === 'soon' || status === 'expired') && isPlanned(q, today)) return 'planned'
   if (status !== 'soon') return status
   return (daysLeft(q, today) ?? 0) <= CRITICAL_DAYS ? 'critical' : 'soon'
+}
+
+// Kolejność „co najpilniejsze”: najpierw wg poziomu (po terminie → do 30 dni → kończy się →
+// zaplanowane → ważne → brak), potem wg daty — do sortowania osób u dowódcy
+const LEVEL_RANK: Record<QualLevel, number> = { expired: 0, critical: 1, soon: 2, planned: 3, ok: 4, missing: 5 }
+
+export function compareAttention(a: Qualification, b: Qualification, today: string): number {
+  return LEVEL_RANK[qualLevel(a, today)] - LEVEL_RANK[qualLevel(b, today)] || compareUrgency(a, b)
+}
+
+// Kropka na zakładce „Terminy”: mój termin po terminie / do 30 dni (bez zapisu),
+// a dla zatwierdzającego także ktoś z załogi po terminie (bez zapisu) albo zgłoszenie do zatwierdzenia
+export function needsAttention(
+  quals: Qualification[], myPersonId: string | null, approver: boolean, isAdmin: boolean, today: string,
+): boolean {
+  return quals.some(q => {
+    const level = qualLevel(q, today)
+    if (q.person_id === myPersonId) return level === 'expired' || level === 'critical'
+    if (!approver) return false
+    return level === 'expired' || !!q.pending_valid_until
+  }) || (isAdmin && quals.some(q => !!q.pending_valid_until))
 }
 
 // Ile zostało z okna przypomnienia (0–1) — szerokość paska; poza oknem pełny pasek
@@ -145,6 +183,15 @@ export function formatRemaining(days: number | null): string {
   return rest ? `${lat(years)} ${rest} mies.` : lat(years)
 }
 
+// Jeszcze krócej, do wąskich kafelków (jedna linia): powyżej roku „2,8 roku” / „2 lata”
+export function formatRemainingShort(days: number | null): string {
+  if (days === null || days <= 60) return formatRemaining(days)
+  const months = Math.round(days / 30.44)
+  if (months < 12) return `${months} mies.`
+  const tenths = Math.round(months / 1.2) // lata z dokładnością do 0,1
+  return tenths % 10 === 0 ? lat(tenths / 10) : `${Math.floor(tenths / 10)},${tenths % 10} roku`
+}
+
 export function formatRemindDays(days: number): string {
   if (days === 182) return 'pół roku wcześniej'
   if (days === 365) return 'rok wcześniej'
@@ -178,7 +225,7 @@ export async function setValidUntil(
     approved_by: byLogin,
     approved_at: new Date().toISOString(),
     notified_stage: null,
-    commander_notified: null,
+    commander_notified: null, planned_on: null, planned_by: null,
   }
   if ('id' in target) {
     throwIfError(await supabase.from('qualifications').update(fields).eq('id', target.id), NETWORK_ERROR_MSG)
@@ -219,7 +266,7 @@ export async function approvePending(q: Qualification, byLogin: string): Promise
         approved_by: byLogin,
         approved_at: new Date().toISOString(),
         notified_stage: null,
-        commander_notified: null,
+        commander_notified: null, planned_on: null, planned_by: null,
       })
       .eq('id', q.id)
       .eq('pending_valid_until', q.pending_valid_until)
@@ -257,8 +304,67 @@ export async function updateCustom(id: string, label: string, validUntil: string
   throwIfError(
     await supabase
       .from('qualifications')
-      .update({ label, valid_until: validUntil, remind_days: remindDays, notified_stage: null, commander_notified: null })
+      .update({ label, valid_until: validUntil, remind_days: remindDays, notified_stage: null, commander_notified: null, planned_on: null, planned_by: null })
       .eq('id', id),
+    NETWORK_ERROR_MSG,
+  )
+}
+
+// ── Jak często przypominać (notification_prefs, jeden wiersz na login) ─────────
+// Kopia domyślnych w netlify/functions/_shared/qualReminders.js — trzymaj w zgodzie.
+
+export const DEFAULT_OWN_REPEAT_DAYS = 30
+export const DEFAULT_CREW_REPEAT_DAYS = 7
+export const CREW_ON_DUTY = -1 // dowódca: w dni, gdy jestem dowódcą zmiany w obsadzie
+
+// 0 = tylko kluczowe momenty (początek okresu, 30 dni, 7 dni, po terminie)
+export const OWN_REPEAT_OPTIONS: { value: number; label: string }[] = [
+  { value: 7, label: 'co tydzień' },
+  { value: 14, label: 'co 2 tygodnie' },
+  { value: 30, label: 'co miesiąc' },
+  { value: 0, label: 'tylko w kluczowych momentach' },
+]
+
+// 0 = tylko gdy komuś zacznie się okres przypomnienia (albo minie termin)
+export const CREW_REPEAT_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: 'codziennie' },
+  { value: 7, label: 'co tydzień' },
+  { value: 14, label: 'co 2 tygodnie' },
+  { value: 30, label: 'co miesiąc' },
+  { value: CREW_ON_DUTY, label: 'w dni, gdy jestem dowódcą zmiany' },
+  { value: 0, label: 'tylko gdy dojdzie nowy termin' },
+]
+
+export interface NotificationPrefs {
+  own_repeat_days: number
+  crew_repeat_days: number
+}
+
+export async function fetchNotificationPrefs(login: string): Promise<NotificationPrefs> {
+  const { data } = await supabase
+    .from('notification_prefs')
+    .select('own_repeat_days, crew_repeat_days')
+    .eq('user_login', login)
+    .maybeSingle()
+  return {
+    own_repeat_days: data?.own_repeat_days ?? DEFAULT_OWN_REPEAT_DAYS,
+    crew_repeat_days: data?.crew_repeat_days ?? DEFAULT_CREW_REPEAT_DAYS,
+  }
+}
+
+export async function saveNotificationPrefs(login: string, prefs: Partial<NotificationPrefs>): Promise<void> {
+  throwIfError(
+    await supabase
+      .from('notification_prefs')
+      .upsert({ user_login: login, ...prefs, updated_at: new Date().toISOString() }, { onConflict: 'user_login' }),
+    'Nie udało się zapisać ustawień — sprawdź połączenie.',
+  )
+}
+
+// „Zaczynaj przypominać” dla wszystkich terminów jednej osoby naraz
+export async function setRemindDaysForPerson(personId: string, remindDays: number): Promise<void> {
+  throwIfError(
+    await supabase.from('qualifications').update({ remind_days: remindDays }).eq('person_id', personId),
     NETWORK_ERROR_MSG,
   )
 }
@@ -281,6 +387,23 @@ export async function saveCommanderRemindDays(days: number, byLogin: string): Pr
       .upsert({ id: 1, commander_remind_days: days, updated_by: byLogin, updated_at: new Date().toISOString() }),
     NETWORK_ERROR_MSG,
   )
+}
+
+// Zapis na termin — bez zatwierdzania (to tylko plan). null = usuń zapis.
+export async function setPlannedOn(
+  target: { id: string } | { person_id: string; kind: StandardQualKind },
+  plannedOn: string | null,
+  byLogin: string,
+): Promise<void> {
+  const fields = { planned_on: plannedOn, planned_by: plannedOn ? byLogin : null }
+  if ('id' in target) {
+    throwIfError(await supabase.from('qualifications').update(fields).eq('id', target.id), NETWORK_ERROR_MSG)
+  } else {
+    throwIfError(
+      await supabase.from('qualifications').insert({ ...target, remind_days: DEFAULT_REMIND_DAYS, ...fields }),
+      NETWORK_ERROR_MSG,
+    )
+  }
 }
 
 export async function deleteQualification(id: string): Promise<void> {

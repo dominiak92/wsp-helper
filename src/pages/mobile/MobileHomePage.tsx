@@ -494,17 +494,6 @@ export function MobileHomePage() {
         </div>
       )}
 
-      {/* Kończące się terminy (komora/medyk/badania) — moje; dowódca zmiany widzi też załogę */}
-      {myPerson && (
-        <QualificationsAlert
-          myPersonId={myPerson.id}
-          names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
-          showCrew={isApprover(myPerson.roles, user?.role) || assignment?.shiftCommanderId === myPerson.id}
-          canApprove={isApprover(myPerson.roles, user?.role)}
-          to="/mobile/qualifications"
-        />
-      )}
-
       {/* Dyżurny dnia: wiadomości od załogi (do potwierdzenia) */}
       {isDutyOfficer && visibleReceived.length > 0 && (
         <div>
@@ -703,6 +692,17 @@ export function MobileHomePage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Kończące się terminy (komora/medyk/badania) — zwinięte; dowódca zmiany widzi też załogę */}
+      {myPerson && (
+        <QualificationsAlert
+          myPersonId={myPerson.id}
+          names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
+          showCrew={isApprover(myPerson.roles, user?.role) || assignment?.shiftCommanderId === myPerson.id}
+          canApprove={isApprover(myPerson.roles, user?.role)}
+          to="/mobile/qualifications"
+        />
       )}
       </section>
 

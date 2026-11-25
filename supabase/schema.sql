@@ -182,6 +182,8 @@ create table if not exists qualifications (
   approved_at         timestamptz,
   notified_stage      text,                          -- ostatni wysłany push: 'window' | 'month' | 'week' | 'expired'
   commander_notified  text,                          -- ostatni push do dowódców zmiany: 'window' | 'expired'
+  planned_on          date,                          -- zapis na termin (np. komora 12.03) — migrations/202611251600
+  planned_by          text,
   created_at          timestamptz default now(),
   updated_at          timestamptz default now()
 );
@@ -206,6 +208,24 @@ create policy "public read qualification_settings"
 
 create policy "public write qualification_settings"
   on qualification_settings for all using (true);
+
+-- Tabela: jak często przypominać (per użytkownik) — migrations/202611251500_notification_prefs.sql
+create table if not exists notification_prefs (
+  user_login        text primary key,
+  own_repeat_days   integer not null default 30,  -- moje terminy: powtarzaj co N dni (0 = tylko kluczowe momenty)
+  own_last_sent     date,
+  crew_repeat_days  integer not null default 7,   -- dowódcy: co N dni; 0 = tylko nowe; -1 = w dni mojej służby
+  crew_last_sent    date,
+  updated_at        timestamptz default now()
+);
+
+alter table notification_prefs enable row level security;
+
+create policy "public read notification_prefs"
+  on notification_prefs for select using (true);
+
+create policy "public write notification_prefs"
+  on notification_prefs for all using (true);
 
 create trigger qualifications_updated_at
   before update on qualifications

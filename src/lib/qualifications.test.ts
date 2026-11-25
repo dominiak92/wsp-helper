@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   daysBetweenKeys, qualStatus, qualTitle, isApprover, urgentQualifications,
   formatDaysLeft, formatQualDate, formatRemindDays, type Qualification,
-  qualLevel, remainingFraction, formatRemaining,
+  qualLevel, remainingFraction, formatRemaining, formatRemainingShort,
+  isPlanned, plannedPassed, compareAttention, needsAttention,
 } from './qualifications'
 
 function q(partial: Partial<Qualification>): Qualification {
@@ -92,6 +93,44 @@ describe('qualLevel / remainingFraction', () => {
   })
 })
 
+describe('planned (zapis na termin)', () => {
+  const today = '2026-11-25'
+  it('turns an expiring or expired item into "planned" while the planned day is ahead', () => {
+    expect(qualLevel(q({ valid_until: '2026-12-20', planned_on: '2026-12-10' }), today)).toBe('planned')
+    expect(qualLevel(q({ valid_until: '2026-11-01', planned_on: today }), today)).toBe('planned')
+    expect(qualLevel(q({ valid_until: '2028-01-01', planned_on: '2026-12-10' }), today)).toBe('ok')
+  })
+  it('falls back to the normal level once the planned day has passed', () => {
+    const item = q({ valid_until: '2026-12-20', planned_on: '2026-11-20' })
+    expect(qualLevel(item, today)).toBe('critical')
+    expect(plannedPassed(item, today)).toBe(true)
+    expect(isPlanned(item, today)).toBe(false)
+  })
+  it('sorts by attention: unplanned urgent items before planned ones', () => {
+    const expiredPlanned = q({ id: 'a', valid_until: '2026-11-01', planned_on: '2026-12-01' })
+    const soon = q({ id: 'b', valid_until: '2027-03-01' })
+    expect([expiredPlanned, soon].sort((x, y) => compareAttention(x, y, today)).map(i => i.id)).toEqual(['b', 'a'])
+  })
+})
+
+describe('needsAttention (kropka na zakładce)', () => {
+  const today = '2026-11-25'
+  const mine = (over: Partial<Qualification>) => q({ person_id: 'me', ...over })
+  const other = (over: Partial<Qualification>) => q({ person_id: 'p2', ...over })
+  it('flags my expired or ≤30-day items unless planned', () => {
+    expect(needsAttention([mine({ valid_until: '2026-12-10' })], 'me', false, false, today)).toBe(true)
+    expect(needsAttention([mine({ valid_until: '2027-03-01' })], 'me', false, false, today)).toBe(false)
+    expect(needsAttention([mine({ valid_until: '2026-12-10', planned_on: '2026-12-01' })], 'me', false, false, today)).toBe(false)
+  })
+  it('flags crew problems and pending approvals only for approvers', () => {
+    const crew = [other({ valid_until: '2026-11-01' })]
+    expect(needsAttention(crew, 'me', false, false, today)).toBe(false)
+    expect(needsAttention(crew, 'me', true, false, today)).toBe(true)
+    expect(needsAttention([other({ valid_until: '2028-01-01', pending_valid_until: '2031-01-01' })], 'me', true, false, today)).toBe(true)
+    expect(needsAttention([mine({ valid_until: '2028-01-01', pending_valid_until: '2031-01-01' })], 'me', true, false, today)).toBe(false)
+  })
+})
+
 describe('formatRemaining', () => {
   it('switches from days to months and years', () => {
     expect(formatRemaining(57)).toBe('57 dni')
@@ -103,5 +142,13 @@ describe('formatRemaining', () => {
     expect(formatRemaining(794)).toBe('2 lata 2 mies.')
     expect(formatRemaining(1900)).toBe('5 lat 2 mies.')
     expect(formatRemaining(null)).toBe('—')
+  })
+  it('has a one-line short form for narrow tiles', () => {
+    expect(formatRemainingShort(57)).toBe('57 dni')
+    expect(formatRemainingShort(250)).toBe('8 mies.')
+    expect(formatRemainingShort(365)).toBe('1 rok')
+    expect(formatRemainingShort(730)).toBe('2 lata')
+    expect(formatRemainingShort(1035)).toBe('2,8 roku') // 34 months
+    expect(formatRemainingShort(-3)).toBe('−3 dni')
   })
 })

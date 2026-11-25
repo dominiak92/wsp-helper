@@ -2,10 +2,12 @@ import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { Home, CalendarDays, Users, Map, CalendarClock } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../lib/auth'
+import { useQualificationsBadge } from '../../lib/useQualificationsBadge'
 
 export function MobileLayout() {
   const { user, loading, signOut } = useAuth()
   const location = useLocation()
+  const qualBadge = useQualificationsBadge()
   const isMapPage = location.pathname === '/mobile/map'
 
   if (loading) {
@@ -72,7 +74,12 @@ export function MobileLayout() {
               )
             }
           >
-            <Icon className="w-5 h-5" />
+            <span className="relative">
+              <Icon className="w-5 h-5" />
+              {to === '/mobile/qualifications' && qualBadge && (
+                <span className="absolute -top-0.5 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-surface-900" aria-label="wymaga uwagi" />
+              )}
+            </span>
             {label}
           </NavLink>
         ))}

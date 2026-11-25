@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { DEFAULT_REMIND_DAYS, REMIND_DAYS_OPTIONS, formatRemindDays } from '../../lib/qualifications'
+import { FIELD_CLASS, DATE_INPUT_CLASS } from './qualStyles'
 
 // Własny termin (np. prawo jazdy C, uprawnienia na piłę) — nazwa + data + kiedy przypomnieć
 export function AddCustomQualForm({ onAdd }: {
@@ -42,34 +43,34 @@ export function AddCustomQualForm({ onAdd }: {
   }
 
   return (
-    <div className="bg-surface-800 rounded-xl border border-brand-800/60 p-3 space-y-2.5">
-      <label className="block">
+    <div className="bg-surface-800 rounded-xl border border-brand-800/60 p-3 space-y-2.5 min-w-0 overflow-hidden">
+      <label className="block min-w-0">
         <span className="text-[11px] text-slate-500">Nazwa</span>
         <input
           value={label}
           onChange={e => setLabel(e.target.value)}
           maxLength={60}
           placeholder="Np. prawo jazdy kat. C, uprawnienia na piłę…"
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-surface-900 px-3 py-2 text-sm text-white outline-none focus:border-brand-500 placeholder:text-slate-600"
+          className={`${FIELD_CLASS} placeholder:text-slate-600`}
           autoFocus
         />
       </label>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        <label className="block">
+        <label className="block min-w-0">
           <span className="text-[11px] text-slate-500">Ważne do</span>
           <input
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-surface-900 px-3 py-2 text-sm text-white outline-none focus:border-brand-500 [color-scheme:dark]"
+            className={DATE_INPUT_CLASS}
           />
         </label>
-        <label className="block">
+        <label className="block min-w-0">
           <span className="text-[11px] text-slate-500">Przypomnij</span>
           <select
             value={remindDays}
             onChange={e => setRemindDays(Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-surface-900 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+            className={FIELD_CLASS}
           >
             {REMIND_DAYS_OPTIONS.map(d => <option key={d} value={d}>{formatRemindDays(d)}</option>)}
           </select>

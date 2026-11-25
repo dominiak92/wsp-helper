@@ -61,12 +61,13 @@ export function QualificationsAlert({ myPersonId, names, showCrew, canApprove, t
 
   const iconLevel = worstLevel([...mine, ...crew].map(q => qualLevel(q, today)))
 
-  // Zwinięty nagłówek: zdanie o moim najpilniejszym terminie + kolorowe kropki z liczbami dla zmiany
+  // Zwinięty nagłówek: proste zdania. „Twoje najbliższe: Badania okresowe za 4 mies.”,
+  // „5 osobom zbliża się termin, w tym 2 po terminie”, „1 nowa data do zatwierdzenia”
   const myTop = mine[0]
   const myTopLevel = myTop ? qualLevel(myTop, today) : 'ok'
-  const crewCountsByLevel = LEVEL_ORDER
-    .map(level => ({ level, n: crew.filter(q => qualLevel(q, today) === level).length }))
-    .filter(c => c.n > 0)
+  const crewPeople = new Set(crew.map(q => q.person_id)).size
+  const crewExpiredPeople = new Set(crew.filter(q => qualLevel(q, today) === 'expired').map(q => q.person_id)).size
+  const crewLevel = worstLevel(crew.map(q => qualLevel(q, today)))
 
   return (
     <div>
@@ -77,25 +78,32 @@ export function QualificationsAlert({ myPersonId, names, showCrew, canApprove, t
       >
         <div className="flex items-start gap-2.5 min-w-0">
           <CalendarClock className={cn('w-4 h-4 shrink-0 mt-0.5', LEVEL_STYLES[iconLevel].text)} />
-          <div className="min-w-0 space-y-0.5">
+          <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium text-white">Terminy</p>
             {myTop && (
-              <p className="text-[12px] text-slate-400 truncate">
-                {qualTitle(myTop)}{' '}
-                <span className={cn('font-semibold', LEVEL_STYLES[myTopLevel].text)}>{myTopLevel === 'planned' && myTop.planned_on ? `zapisany na ${formatQualDate(myTop.planned_on).slice(0, 5)}` : describeShort(daysLeft(myTop, today))}</span>
-                {mine.length > 1 && <span className="text-slate-500"> i jeszcze {mine.length - 1}</span>}
+              <p className="text-[12px] text-slate-400 leading-snug">
+                Twoje najbliższe: <span className="text-slate-200">{qualTitle(myTop)}</span>{' '}
+                <span className={cn('font-semibold', LEVEL_STYLES[myTopLevel].text)}>
+                  {myTopLevel === 'planned' && myTop.planned_on
+                    ? `zapisany na ${formatQualDate(myTop.planned_on).slice(0, 5)}`
+                    : describeShort(daysLeft(myTop, today))}
+                </span>
               </p>
             )}
-            {(crewCountsByLevel.length > 0 || pending > 0) && (
-              <p className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] text-slate-400">
-                {crewCountsByLevel.length > 0 && <span>Zmiana</span>}
-                {crewCountsByLevel.map(({ level, n }) => (
-                  <span key={level} className="inline-flex items-center gap-1" title={LEVEL_STYLES[level].label}>
-                    <span className={cn('w-2 h-2 rounded-full', LEVEL_STYLES[level].dot)} />
-                    <span className={cn('font-semibold tabular-nums', LEVEL_STYLES[level].text)}>{n}</span>
-                  </span>
-                ))}
-                {pending > 0 && <span className="text-brand-300 font-medium">{pending} do zatwierdzenia</span>}
+            {crewPeople > 0 && (
+              <p className="text-[12px] text-slate-400 leading-snug">
+                <span className={cn('font-semibold', LEVEL_STYLES[crewLevel].text)}>{crewPeople}</span>{' '}
+                {crewPeople === 1 ? 'osobie' : 'osobom'} zbliża się termin
+                {crewExpiredPeople > 0 && <>, w tym <span className="font-semibold text-red-300">{crewExpiredPeople}</span> po terminie</>}
+              </p>
+            )}
+            {pending > 0 && (
+              <p className="text-[12px] text-brand-300 leading-snug">
+                {pending === 1
+                  ? '1 nowa data czeka'
+                  : [2, 3, 4].includes(pending % 10) && ![12, 13, 14].includes(pending % 100)
+                    ? `${pending} nowe daty czekają`
+                    : `${pending} nowych dat czeka`} na zatwierdzenie
               </p>
             )}
           </div>

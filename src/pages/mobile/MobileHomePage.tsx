@@ -693,17 +693,6 @@ export function MobileHomePage() {
           )}
         </div>
       )}
-
-      {/* Kończące się terminy (komora/medyk/badania) — zwinięte; dowódca zmiany widzi też całą zmianę */}
-      {myPerson && (
-        <QualificationsAlert
-          myPersonId={myPerson.id}
-          names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
-          showCrew={isApprover(myPerson.roles, user?.role) || assignment?.shiftCommanderId === myPerson.id}
-          canApprove={isApprover(myPerson.roles, user?.role)}
-          to="/mobile/qualifications"
-        />
-      )}
       </section>
 
       {/* ── AKCJE ── */}
@@ -898,6 +887,17 @@ export function MobileHomePage() {
         currentDutyDate={dutyDate}
         myPersonId={myPerson?.id ?? null}
       />
+
+      {/* Kończące się terminy (komora/medyk/badania), zwinięte; dowódca zmiany widzi też całą zmianę */}
+      {myPerson && (
+        <QualificationsAlert
+          myPersonId={myPerson.id}
+          names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}
+          showCrew={isApprover(myPerson.roles, user?.role) || assignment?.shiftCommanderId === myPerson.id}
+          canApprove={isApprover(myPerson.roles, user?.role)}
+          to="/mobile/qualifications"
+        />
+      )}
       </section>
 
       {/* ── WARUNKI ── */}

@@ -24,7 +24,7 @@ export function RemainingBar({ q, today, className }: {
   )
 }
 
-// Kafelek terminu w widoku załogi: nazwa, „zostało” dużą czcionką, data, pasek.
+// Kafelek terminu w widoku zmiany: nazwa, „zostało” dużą czcionką, data, pasek.
 // Każdy tekst w jednej linii, a pasek przyklejony do dołu (mt-auto) — kafelki w rzędzie
 // mają tę samą wysokość (grid rozciąga je), więc paski zawsze stoją równo.
 export function QualTile({ title, q, today }: {

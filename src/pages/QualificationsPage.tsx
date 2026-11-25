@@ -135,7 +135,7 @@ export function QualificationsPage() {
           .limit(1),
         fetchCommanderRemindDays(),
       ])
-      if (pRes.error) throw new Error('Nie udało się wczytać załogi — sprawdź połączenie.')
+      if (pRes.error) throw new Error('Nie udało się wczytać składu zmiany. Sprawdź połączenie.')
       setCommanderDays(cDays)
       setPeople((pRes.data ?? []).map(r => ({ id: r.id, name: r.name, login: r.login ?? null, roles: (r.roles ?? []) as RoleType[] })))
       setQuals(q)
@@ -154,7 +154,7 @@ export function QualificationsPage() {
 
   const me = people.find(p => p.login === user.login) ?? null
   const isAdmin = user.role === 'admin'
-  // Zatwierdza admin albo dowódca zmiany; załogę widzi też dzisiejszy dowódca zmiany z obsady
+  // Zatwierdza admin albo dowódca zmiany; całą zmianę widzi też dzisiejszy dowódca zmiany z obsady
   const approver = isApprover(me?.roles, user.role)
   const canSeeCrew = approver || (!!me && me.id === shiftCommanderId)
   const nameOf = (id: string) => people.find(p => p.id === id)?.name ?? id
@@ -176,7 +176,7 @@ export function QualificationsPage() {
         type: 'qualification_pending',
         senderLogin: user.login,
         senderName: user.displayName,
-        message: `${QUAL_KIND_LABELS[target.kind as StandardQualKind]} — nowa data ${formatQualDate(date)}`,
+        message: `${QUAL_KIND_LABELS[target.kind as StandardQualKind]}: nowa data ${formatQualDate(date)}`,
       })
     }),
     setRemind: (q, days) => run(() => setRemindDays(q.id, days)),
@@ -200,7 +200,7 @@ export function QualificationsPage() {
           targetLogin: target,
           message: approve
             ? `${qualTitle(q)}: ważne do ${formatQualDate(q.pending_valid_until)}`
-            : `${qualTitle(q)}: data ${formatQualDate(q.pending_valid_until)} nie została przyjęta — porozmawiaj z dowódcą zmiany`,
+            : `${qualTitle(q)}: data ${formatQualDate(q.pending_valid_until)} nie została przyjęta. Porozmawiaj z dowódcą zmiany`,
         })
       }
     } catch (e) {
@@ -250,7 +250,7 @@ export function QualificationsPage() {
     ? quals.filter(q => q.pending_valid_until && (isAdmin || q.person_id !== me?.id))
     : []
 
-  // ── Załoga ──
+  // ── Zmiana ──
   const crewPeople = canSeeCrew ? people.filter(p => p.id !== me?.id || isAdmin) : []
   const crewIds = new Set(crewPeople.map(p => p.id))
   const crewQuals = quals.filter(q => crewIds.has(q.person_id) && q.valid_until)
@@ -352,20 +352,20 @@ export function QualificationsPage() {
           />
           {!isAdmin && (
             <p className="mt-2 text-[11px] text-slate-500">
-              Po odnowieniu kliknij ✏️ i wpisz nową datę — zacznie obowiązywać po zatwierdzeniu przez dowódcę zmiany lub admina.
+              Po odnowieniu kliknij ✏️ i wpisz nową datę. Zacznie ona obowiązywać po zatwierdzeniu przez dowódcę zmiany lub admina.
               Na stronie głównej termin pojawi się, gdy zacznie się okres przypomnienia.
             </p>
           )}
         </section>
       ) : !isAdmin && (
-        <p className="text-sm text-slate-500">Twoje konto nie jest powiązane z nikim z załogi — poproś admina o uzupełnienie loginu.</p>
+        <p className="text-sm text-slate-500">Twoje konto nie jest powiązane z nikim ze zmiany. Poproś admina o uzupełnienie loginu.</p>
       )}
 
-      {/* Załoga — admin, dowódcy zmiany i dzisiejszy dowódca zmiany z obsady */}
+      {/* Zmiana — admin, dowódcy zmiany i dzisiejszy dowódca zmiany z obsady */}
       {canSeeCrew && (
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Załoga — wszystkie terminy</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Terminy zmiany</p>
             <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
               {([['people', 'Wg osób'], ['dates', 'Wg daty']] as const).map(([v, label]) => (
                 <button
@@ -457,7 +457,7 @@ export function QualificationsPage() {
                           <Clock className="w-3.5 h-3.5 text-brand-300 shrink-0" aria-label="do zatwierdzenia" />
                         )}
                         <span className={cn('text-base font-bold tabular-nums shrink-0 whitespace-nowrap', style.text)}>
-                          {soonest ? formatRemainingShort(daysLeft(soonest, today)) : '—'}
+                          {soonest ? formatRemainingShort(daysLeft(soonest, today)) : '-'}
                         </span>
                         {open ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
                       </div>

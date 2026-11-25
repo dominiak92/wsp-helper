@@ -132,7 +132,7 @@ export function QualItemRow({
           )}
           {planMissed && !q?.pending_valid_until && (
             <p className="inline-flex items-center gap-1 text-[11px] text-amber-300 bg-amber-950/40 border border-amber-900/50 rounded-md px-1.5 py-0.5">
-              <CalendarCheck className="w-3 h-3" /> Zapis na {formatQualDate(q!.planned_on!)} minął — wpisz nową datę ważności
+              <CalendarCheck className="w-3 h-3" /> Zapis na {formatQualDate(q!.planned_on!)} minął, wpisz nową datę ważności
             </p>
           )}
         </div>

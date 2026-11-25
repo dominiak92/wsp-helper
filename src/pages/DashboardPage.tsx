@@ -403,7 +403,7 @@ export function DashboardPage() {
           {/* Osoby obecne tylko 8h — wyróżnione, żeby nikt nie liczył na nie przez całą dobę */}
           <Partial8hCard assignment={assignment} persons={withGuests(personnel, assignment)} />
 
-          {/* Kończące się terminy załogi + zgłoszenia do zatwierdzenia (zwinięte) */}
+          {/* Kończące się terminy zmiany + zgłoszenia do zatwierdzenia (zwinięte) */}
           <QualificationsAlert
             myPersonId={personnel.find(p => p.login === user?.login)?.id ?? null}
             names={Object.fromEntries(personnel.map(p => [p.id, p.name]))}

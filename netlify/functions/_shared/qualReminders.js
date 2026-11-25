@@ -98,7 +98,7 @@ function personalMessage(items) {
   const icon = items.some(i => i.days < 0) ? '❗' : '⏳'
   return {
     title: items.length === 1
-      ? `${icon} ${qualTitle(items[0].q)} — ${describeDays(items[0].days)}`
+      ? `${icon} ${qualTitle(items[0].q)}: ${describeDays(items[0].days)}`
       : `${icon} Kończą się Twoje terminy (${items.length})`,
     body: items.map(i => `${qualTitle(i.q)}: ${formatDate(i.q.valid_until)} (${describeDays(i.days)})`).join('\n'),
   }
@@ -132,7 +132,7 @@ export function commanderStage(days, windowDays = COMMANDER_REMIND_DAYS) {
 
 function crewLines(items, namesById, today) {
   const lines = items.slice(0, 8).map(({ q, days }) =>
-    `${namesById[q.person_id] ?? q.person_id} — ${qualTitle(q)} ${formatDate(q.valid_until)} (${describeDays(days)})` +
+    `${namesById[q.person_id] ?? q.person_id}: ${qualTitle(q)} ${formatDate(q.valid_until)} (${describeDays(days)})` +
     (isPlanned(q, today) ? ` · zapisany ${formatDate(q.planned_on).slice(0, 5)}` : ''))
   if (items.length > 8) lines.push(`…i ${items.length - 8} więcej`)
   return lines
@@ -154,13 +154,13 @@ export function commanderAlerts(quals, namesById, today, windowDays = COMMANDER_
   return {
     stageById: Object.fromEntries(items.map(i => [i.q.id, i.stage])),
     title: items.length === 1
-      ? `${icon} ${namesById[items[0].q.person_id] ?? 'Strażak'}: ${qualTitle(items[0].q)} — ${describeDays(items[0].days)}`
-      : `${icon} Terminy załogi (${items.length}) — koniec w ciągu ${describeWindow(windowDays)}`,
+      ? `${icon} ${namesById[items[0].q.person_id] ?? 'Strażak'}: ${qualTitle(items[0].q)}: ${describeDays(items[0].days)}`
+      : `${icon} Terminy zmiany (${items.length}), koniec w ciągu ${describeWindow(windowDays)}`,
     body: crewLines(items, namesById, today).join('\n'),
   }
 }
 
-// Powtórka dla dowódcy: wszystkie terminy załogi w oknie dowódców + zgłoszenia. null = nic.
+// Powtórka dla dowódcy: wszystkie terminy zmiany w oknie dowódców + zgłoszenia. null = nic.
 export function crewDigest(quals, namesById, today, windowDays = COMMANDER_REMIND_DAYS) {
   const items = quals
     .filter(q => q.valid_until && commanderStage(daysBetweenKeys(today, q.valid_until), windowDays))
@@ -172,8 +172,8 @@ export function crewDigest(quals, namesById, today, windowDays = COMMANDER_REMIN
   if (pending) lines.push(`Do zatwierdzenia: ${pending}`)
   return {
     title: items.length
-      ? `📋 Terminy załogi: ${items.length} w ciągu ${describeWindow(windowDays)}`
-      : '📋 Terminy załogi do zatwierdzenia',
+      ? `📋 Terminy zmiany: ${items.length} w ciągu ${describeWindow(windowDays)}`
+      : '📋 Terminy zmiany do zatwierdzenia',
     body: lines.join('\n'),
   }
 }

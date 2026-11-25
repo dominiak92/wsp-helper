@@ -141,7 +141,7 @@ describe('formatRemaining', () => {
     expect(formatRemaining(365)).toBe('1 rok')
     expect(formatRemaining(794)).toBe('2 lata 2 mies.')
     expect(formatRemaining(1900)).toBe('5 lat 2 mies.')
-    expect(formatRemaining(null)).toBe('—')
+    expect(formatRemaining(null)).toBe('-')
   })
   it('has a one-line short form for narrow tiles', () => {
     expect(formatRemainingShort(57)).toBe('57 dni')

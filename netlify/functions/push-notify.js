@@ -161,7 +161,7 @@ export const handler = async (event) => {
       })
     : type === 'public_note'
     ? JSON.stringify({
-        title: `📌 Notatka od ${senderName ?? senderLogin ?? 'załogi'}`,
+        title: `📌 Notatka od ${senderName ?? senderLogin ?? 'zmiany'}`,
         body: `${shortDate(eventDate) ? shortDate(eventDate) + ': ' : ''}${(message ?? '').substring(0, 120)}`,
         url: '/mobile',
         tag: `public-note-${Date.now()}`, // osobne powiadomienie dla każdej notatki

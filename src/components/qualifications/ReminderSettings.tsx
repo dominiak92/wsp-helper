@@ -122,7 +122,7 @@ export function ReminderSettings({ login, myPersonId, myQuals, isCommander, comm
               {withCurrent(REMIND_DAYS_OPTIONS, commanderDays).map(d => <option key={d} value={d}>{formatRemindDays(d)}</option>)}
             </select>
           </Row>
-          <Row label="Powtarzaj powiadomienie" hint="moje ustawienie — lista terminów załogi">
+          <Row label="Powtarzaj powiadomienie" hint="moje ustawienie, dotyczy listy terminów zmiany">
             <select
               value={prefs.crew_repeat_days}
               disabled={busy}

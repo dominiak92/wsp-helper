@@ -67,7 +67,7 @@ describe('commanderAlerts / crewDigest', () => {
       q({ id: 'd', valid_until: '2027-01-21', commander_notified: 'window' }),
     ], names, today)
     expect(a.stageById).toEqual({ a: 'window', b: 'window' })
-    expect(a.title).toBe('📋 Terminy załogi (2) — koniec w ciągu pół roku')
+    expect(a.title).toBe('📋 Terminy zmiany (2), koniec w ciągu pół roku')
   })
   it('uses the one commander lead time set for everyone', () => {
     const a = commanderAlerts([q({ id: 'a', valid_until: '2027-01-09' }), q({ id: 'b', valid_until: '2027-05-25' })], names, today, 90)
@@ -78,8 +78,8 @@ describe('commanderAlerts / crewDigest', () => {
       q({ id: 'a', person_id: 'p2', kind: 'badania', valid_until: '2027-01-09', commander_notified: 'window' }),
       q({ id: 'b', valid_until: '2028-01-01', pending_valid_until: '2031-01-01' }),
     ], names, today)
-    expect(d.title).toBe('📋 Terminy załogi: 1 w ciągu pół roku')
-    expect(d.body).toBe('Michał Ł. — Badania okresowe 09.01.2027 (za 45 dni)\nDo zatwierdzenia: 1')
+    expect(d.title).toBe('📋 Terminy zmiany: 1 w ciągu pół roku')
+    expect(d.body).toBe('Michał Ł.: Badania okresowe 09.01.2027 (za 45 dni)\nDo zatwierdzenia: 1')
   })
 })
 
@@ -108,7 +108,7 @@ describe('planPushes', () => {
       lukasz: { crew_repeat_days: 30, crew_last_sent: '2026-11-11' }, // 14 of 30 → not yet
     }
     const plan = planPushes({ quals: settled, people, prefsByLogin, today })
-    expect(plan.pushes.map(p => [p.login, p.title])).toEqual([['michal', '⏳ Komora dymowa — za 57 dni']])
+    expect(plan.pushes.map(p => [p.login, p.title])).toEqual([['michal', '⏳ Komora dymowa: za 57 dni']])
     expect(plan.prefPatches).toEqual({ michal: { own_last_sent: today } })
   })
 
@@ -121,7 +121,7 @@ describe('planPushes', () => {
     const prefsByLogin = { michal: { own_repeat_days: 0 }, lukasz: { crew_repeat_days: -1 } }
     expect(planPushes({ quals: settled, people, prefsByLogin, today, dutyCommanderLogin: 'andrzej' }).pushes).toEqual([])
     const plan = planPushes({ quals: settled, people, prefsByLogin, today, dutyCommanderLogin: 'lukasz' })
-    expect(plan.pushes.map(p => [p.login, p.title])).toEqual([['lukasz', '📋 Terminy załogi: 1 w ciągu pół roku']])
+    expect(plan.pushes.map(p => [p.login, p.title])).toEqual([['lukasz', '📋 Terminy zmiany: 1 w ciągu pół roku']])
   })
 
   it('keeps quiet about planned items and reminds the day before the planned date', () => {

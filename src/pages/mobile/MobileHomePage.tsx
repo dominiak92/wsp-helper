@@ -296,7 +296,7 @@ export function MobileHomePage() {
     return () => clearInterval(interval)
   }, [myMessages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dyżurny dnia: wiadomości od załogi (wszystkie poza własnymi)
+  // Dyżurny dnia: wiadomości od zmiany (wszystkie poza własnymi)
   async function fetchReceivedMessages() {
     if (!user) return
     const { data } = await supabase
@@ -494,11 +494,11 @@ export function MobileHomePage() {
         </div>
       )}
 
-      {/* Dyżurny dnia: wiadomości od załogi (do potwierdzenia) */}
+      {/* Dyżurny dnia: wiadomości od zmiany (do potwierdzenia) */}
       {isDutyOfficer && visibleReceived.length > 0 && (
         <div>
           <SectionLabel>
-            Wiadomości od załogi
+            Wiadomości od zmiany
             {receivedMsgs.some(m => !m.read_at) && (
               <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold align-middle">
                 {receivedMsgs.filter(m => !m.read_at).length}
@@ -694,7 +694,7 @@ export function MobileHomePage() {
         </div>
       )}
 
-      {/* Kończące się terminy (komora/medyk/badania) — zwinięte; dowódca zmiany widzi też załogę */}
+      {/* Kończące się terminy (komora/medyk/badania) — zwinięte; dowódca zmiany widzi też całą zmianę */}
       {myPerson && (
         <QualificationsAlert
           myPersonId={myPerson.id}
@@ -890,7 +890,7 @@ export function MobileHomePage() {
         <FullAssignmentCollapsible personnel={personnel} assignment={assignment} myPersonId={myPerson?.id ?? null} />
       )}
 
-      {/* Nieobecności załogi (dziś + przyszłe służby) */}
+      {/* Nieobecności zmiany (dziś + przyszłe służby) */}
       <CrewAbsencesCollapsible
         personnel={personnel}
         savedMap={savedMap}

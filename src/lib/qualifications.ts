@@ -105,7 +105,7 @@ export function compareAttention(a: Qualification, b: Qualification, today: stri
 }
 
 // Kropka na zakładce „Terminy”: mój termin po terminie / do 30 dni (bez zapisu),
-// a dla zatwierdzającego także ktoś z załogi po terminie (bez zapisu) albo zgłoszenie do zatwierdzenia
+// a dla zatwierdzającego także ktoś ze zmiany po terminie (bez zapisu) albo zgłoszenie do zatwierdzenia
 export function needsAttention(
   quals: Qualification[], myPersonId: string | null, approver: boolean, isAdmin: boolean, today: string,
 ): boolean {
@@ -149,7 +149,7 @@ export function urgentQualifications<Q extends Qualification>(quals: Q[], today:
 
 // 'YYYY-MM-DD' → 'DD.MM.YYYY'
 export function formatQualDate(key: string | null): string {
-  if (!key) return '—'
+  if (!key) return '-'
   const [y, m, d] = key.split('-')
   return `${d}.${m}.${y}`
 }
@@ -172,7 +172,7 @@ function lat(n: number): string {
 
 // Krótko, do kafelków: „57 dni”, „8 mies.”, „2 lata 3 mies.”, „dziś”, „−3 dni”
 export function formatRemaining(days: number | null): string {
-  if (days === null) return '—'
+  if (days === null) return '-'
   if (days < 0) return `−${dni(-days)}`
   if (days === 0) return 'dziś'
   if (days <= 60) return dni(days)
@@ -203,7 +203,7 @@ export function formatRemindDays(days: number): string {
 export async function fetchQualifications(): Promise<Qualification[]> {
   const { data } = throwIfError(
     await supabase.from('qualifications').select('*').order('valid_until', { ascending: true }),
-    'Nie udało się wczytać terminów — sprawdź połączenie.',
+    'Nie udało się wczytać terminów. Sprawdź połączenie.',
   )
   return (data ?? []) as Qualification[]
 }
@@ -273,7 +273,7 @@ export async function approvePending(q: Qualification, byLogin: string): Promise
       .select('id'),
     NETWORK_ERROR_MSG,
   )
-  if (!data?.length) throw new Error('Zgłoszenie zmieniło się w międzyczasie — odśwież listę.')
+  if (!data?.length) throw new Error('Zgłoszenie zmieniło się w międzyczasie. Odśwież listę.')
 }
 
 export async function rejectPending(q: Qualification): Promise<void> {
@@ -357,7 +357,7 @@ export async function saveNotificationPrefs(login: string, prefs: Partial<Notifi
     await supabase
       .from('notification_prefs')
       .upsert({ user_login: login, ...prefs, updated_at: new Date().toISOString() }, { onConflict: 'user_login' }),
-    'Nie udało się zapisać ustawień — sprawdź połączenie.',
+    'Nie udało się zapisać ustawień. Sprawdź połączenie.',
   )
 }
 

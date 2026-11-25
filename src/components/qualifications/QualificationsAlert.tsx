@@ -5,13 +5,20 @@ import { cn } from '../../lib/utils'
 import { todayYmdKey } from '../../lib/duty'
 import {
   type Qualification, type QualLevel, fetchQualifications, fetchCommanderRemindDays, qualLevel, qualTitle,
-  daysLeft, compareUrgency, formatQualDate, formatRemainingShort, COMMANDER_REMIND_DAYS,
+  daysLeft, compareAttention, formatQualDate, formatRemainingShort, formatDaysLeft, COMMANDER_REMIND_DAYS,
 } from '../../lib/qualifications'
 import { LEVEL_STYLES, LEVEL_ORDER } from './qualStyles'
 import { RemainingBar } from './QualVisuals'
 
 // W oknie przypomnienia (lub po terminie) — tylko takie pokazujemy na stronie głównej
 const ALERT_LEVELS: QualLevel[] = ['expired', 'critical', 'soon', 'planned']
+
+// „za 4 mies.” / „za 57 dni” / „dziś” / „po terminie 3 dni” — do zdania w nagłówku
+function describeShort(days: number | null): string {
+  if (days === null) return ''
+  if (days <= 0) return formatDaysLeft(days)
+  return `za ${formatRemainingShort(days)}`
+}
 
 // Najgorszy poziom z listy — kolor licznika w zwiniętym nagłówku
 function worstLevel(levels: QualLevel[]): QualLevel {
@@ -20,7 +27,7 @@ function worstLevel(levels: QualLevel[]): QualLevel {
 
 // Zwijana przypominajka na stronie głównej. Zwinięta: tylko kolorowe liczniki (widać,
 // że coś jest), rozwinięta: lista. Strażak widzi swój termin dopiero w okresie przypomnienia
-// (domyślnie pół roku). Dowódca zmiany (i admin) widzi też załogę od progu dowódców,
+// (domyślnie pół roku). Dowódca zmiany (i admin) widzi też całą zmianę od progu dowódców,
 // zatwierdzający — zgłoszenia. Nic do pokazania → nic nie renderuje.
 export function QualificationsAlert({ myPersonId, names, showCrew, canApprove, to }: {
   myPersonId: string | null
@@ -41,45 +48,56 @@ export function QualificationsAlert({ myPersonId, names, showCrew, canApprove, t
 
   const today = todayYmdKey()
   const inWindow = (q: Qualification) => ALERT_LEVELS.includes(qualLevel(q, today))
-  const mine = quals.filter(q => q.person_id === myPersonId && inWindow(q)).sort(compareUrgency)
+  const mine = quals.filter(q => q.person_id === myPersonId && inWindow(q)).sort((a, b) => compareAttention(a, b, today))
   // Dowódca: termin każdego strażaka od wspólnego progu dowódców (lub wcześniej, jeśli strażak ma dłuższe okno)
   const crew = showCrew
     ? quals
         .filter(q => q.person_id !== myPersonId && (inWindow(q) || (daysLeft(q, today) ?? Infinity) <= commanderDays))
-        .sort(compareUrgency)
+        .sort((a, b) => compareAttention(a, b, today))
     : []
   const pending = canApprove ? quals.filter(q => q.pending_valid_until && q.person_id !== myPersonId).length : 0
 
   if (!mine.length && !crew.length && !pending) return null
 
-  const mineLevel = worstLevel(mine.map(q => qualLevel(q, today)))
-  const crewLevel = worstLevel(crew.map(q => qualLevel(q, today)))
-  const iconLevel = worstLevel([...(mine.length ? [mineLevel] : []), ...(crew.length ? [crewLevel] : [])])
+  const iconLevel = worstLevel([...mine, ...crew].map(q => qualLevel(q, today)))
 
-  const chips: { key: string; label: string; className: string }[] = [
-    ...(mine.length ? [{ key: 'mine', label: `Twoje: ${mine.length}`, className: cn(LEVEL_STYLES[mineLevel].tile, LEVEL_STYLES[mineLevel].text) }] : []),
-    ...(crew.length ? [{ key: 'crew', label: `Załoga: ${crew.length}`, className: cn(LEVEL_STYLES[crewLevel].tile, LEVEL_STYLES[crewLevel].text) }] : []),
-    ...(pending ? [{ key: 'pending', label: `Do zatwierdzenia: ${pending}`, className: 'bg-brand-950/50 border-brand-800/60 text-brand-300' }] : []),
-  ]
+  // Zwinięty nagłówek: zdanie o moim najpilniejszym terminie + kolorowe kropki z liczbami dla zmiany
+  const myTop = mine[0]
+  const myTopLevel = myTop ? qualLevel(myTop, today) : 'ok'
+  const crewCountsByLevel = LEVEL_ORDER
+    .map(level => ({ level, n: crew.filter(q => qualLevel(q, today) === level).length }))
+    .filter(c => c.n > 0)
 
   return (
     <div>
       <button
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-2 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
+        className="w-full flex items-center justify-between gap-3 bg-surface-800 rounded-xl border border-slate-700/40 px-4 py-3 text-left hover:border-slate-600 transition-colors"
       >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <CalendarClock className={cn('w-4 h-4 shrink-0', LEVEL_STYLES[iconLevel].text)} />
-          <div className="min-w-0">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <CalendarClock className={cn('w-4 h-4 shrink-0 mt-0.5', LEVEL_STYLES[iconLevel].text)} />
+          <div className="min-w-0 space-y-0.5">
             <p className="text-sm font-medium text-white">Terminy</p>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {chips.map(c => (
-                <span key={c.key} className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap', c.className)}>
-                  {c.label}
-                </span>
-              ))}
-            </div>
+            {myTop && (
+              <p className="text-[12px] text-slate-400 truncate">
+                {qualTitle(myTop)}{' '}
+                <span className={cn('font-semibold', LEVEL_STYLES[myTopLevel].text)}>{myTopLevel === 'planned' && myTop.planned_on ? `zapisany na ${formatQualDate(myTop.planned_on).slice(0, 5)}` : describeShort(daysLeft(myTop, today))}</span>
+                {mine.length > 1 && <span className="text-slate-500"> i jeszcze {mine.length - 1}</span>}
+              </p>
+            )}
+            {(crewCountsByLevel.length > 0 || pending > 0) && (
+              <p className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] text-slate-400">
+                {crewCountsByLevel.length > 0 && <span>Zmiana</span>}
+                {crewCountsByLevel.map(({ level, n }) => (
+                  <span key={level} className="inline-flex items-center gap-1" title={LEVEL_STYLES[level].label}>
+                    <span className={cn('w-2 h-2 rounded-full', LEVEL_STYLES[level].dot)} />
+                    <span className={cn('font-semibold tabular-nums', LEVEL_STYLES[level].text)}>{n}</span>
+                  </span>
+                ))}
+                {pending > 0 && <span className="text-brand-300 font-medium">{pending} do zatwierdzenia</span>}
+              </p>
+            )}
           </div>
         </div>
         <ChevronDown className={cn('w-4 h-4 text-slate-500 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
@@ -110,13 +128,13 @@ export function QualificationsAlert({ myPersonId, names, showCrew, canApprove, t
 
           {crew.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Załoga</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Zmiana</p>
               {crew.slice(0, 5).map(q => {
                 const style = LEVEL_STYLES[qualLevel(q, today)]
                 return (
                   <p key={q.id} className="flex items-center gap-2 text-xs">
                     <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', style.dot)} />
-                    <span className="text-slate-300 truncate">{names[q.person_id] ?? '?'} — {qualTitle(q)}</span>
+                    <span className="text-slate-300 truncate">{names[q.person_id] ?? '?'}: {qualTitle(q)}</span>
                     <span className={cn('ml-auto shrink-0 font-semibold tabular-nums whitespace-nowrap', style.text)}>
                       {formatRemainingShort(daysLeft(q, today))}
                     </span>
